@@ -24,13 +24,6 @@ const LOADING_MSGS = ["Analyzing brand identity...", "Mapping audience psycholog
 const SECTIONS = ["brandSummary", "toneOfVoice", "audiencePersona", "visualDirection", "copyDirection"];
 const SECTION_LABELS = { brandSummary: "Brand Summary", toneOfVoice: "Tone of Voice", audiencePersona: "Audience Persona", visualDirection: "Visual Direction", copyDirection: "Copy Direction" };
 
-const DEMO_CLIENTS = [
-  { id: "d1", name: "Coral & Co", status: "reviewing", stage: "Review Portal", progress: 60, date: "Mar 22", color: "#FF6B6B" },
-  { id: "d2", name: "Driftwood Surf", status: "production", stage: "Ad Production", progress: 85, date: "Mar 20", color: "#4ECDC4" },
-  { id: "d3", name: "Lumina Skin", status: "delivered", stage: "Delivered", progress: 100, date: "Mar 18", color: "#A78BFA" },
-  { id: "d4", name: "Viento Active", status: "onboarding", stage: "Intake Form", progress: 15, date: "Mar 23", color: "#F97316" },
-];
-
 const h = { fontFamily: "'Syne', sans-serif", fontWeight: 700, letterSpacing: "-0.02em" };
 
 function parseColors(s) { return s ? (s.match(/#[0-9A-Fa-f]{3,8}/g) || []) : []; }
@@ -251,22 +244,22 @@ function ClientDetail({ client, onBack, onUpdate }) {
 
 // ─── Intake Form ───
 function IntakeForm({ onSubmit }) {
-  const [f, setF] = useState({ brandName: "Koko Swimwear", tagline: "Made for the water", story: "Koko is a Bali-born swimwear brand built for women who live between the ocean and the city. Founded in Canggu by a creative who got tired of seeing the same mass-produced swimwear everywhere — Koko designs pieces that are bold enough to turn heads on the beach but refined enough to wear to a sunset bar. Every piece is designed locally in Bali, using sustainable fabrics and ethical production. We're not just selling bikinis — we're selling the feeling of freedom, confidence, and living life on your own terms.", personality: ["Bold", "Luxurious", "Youthful", "Sophisticated"], formality: 72, mood: 65, intensity: 78, audience: "Women aged 22-35 who travel frequently, care about aesthetics, and live an active lifestyle. They follow fashion creators on Instagram and TikTok, spend time in places like Bali, Byron Bay, Tulum, and the South of France. They want to look incredible in photos but also need swimwear that actually stays on when they surf or swim. They shop DTC brands, care about sustainability but won't sacrifice style for it.", ageRange: "25-34", competitors: "Frankies Bikinis, Monday Swimwear, Triangl, Vitamin A", deepestFears: "Looking basic or blending in. Buying something that looks amazing online but cheap in person. Missing out on their best years by playing it safe. Being stuck in a boring routine while everyone else is living their dream life. Aging out of feeling confident in swimwear.", deepestDesires: "To feel like the most magnetic person on the beach. To have a wardrobe that makes getting dressed feel exciting, not stressful. To live a life that looks as good as it feels — travel, freedom, beauty, adventure. To feel confident in their own skin without trying too hard. To be part of a community of women who get it.", objective: OBJECTIVES[0], keyMessage: "Swimwear that makes you feel like the main character", colors: "#1A1A2E, #E94560, #FFD60A, #F5F5DC", website: "kokobali.com", productImages: [],
-    voiceStyle: ["Confident", "Warm"], voiceGender: "Female", voiceAge: "20s-30s", voiceNotes: "Think: your cool older sister who's been everywhere. Not preachy, not try-hard. Natural, magnetic, slightly aspirational.",
-    musicMood: ["Dreamy", "Energetic"], musicGenres: ["Electronic", "Indie"], musicNotes: "Golden hour beach vibes mixed with fashion-forward energy. Think Peggy Gou DJ set at a Tulum beach club.",
-    videoPace: 65, videoEnergy: 70, videoTransitions: "Smooth", videoCuts: "Medium", videoNotes: "Start slow and atmospheric, build to an energetic middle, end on a confident hero shot. Match the pace to the music — let it breathe but keep it moving.",
-    uniqueFeatures: ["Designed in Bali using locally sourced sustainable fabrics", "Stays on during surfing, swimming, and cliff jumping — actually functional", "Reversible designs — two looks in one piece", "Small-batch drops so you're not wearing the same bikini as everyone else", "Inclusive sizing without compromising on cut or design"],
-    testimonials: ["I've never felt more confident on the beach. Every time I wear Koko I get asked where it's from. — @jessicatravel", "Finally a bikini that doesn't ride up when I actually swim. Game changer. — Sarah M.", "The quality is insane for the price. I own 4 sets now and they all still look brand new after a full summer. — @balibabe.co", "I wore my Koko set from the beach to a rooftop bar and got compliments both places. That's never happened before. — Mia R."],
-    influencerAge: "Mid 20s",
-    influencerEthnicity: "Mixed / ambiguous — could be Brazilian, Mediterranean, or Southeast Asian",
-    influencerGender: "Female",
-    influencerHairColor: "Dark brown with sun-kissed highlights",
-    influencerHairStyle: "Long, natural beach waves — effortless not styled",
-    influencerBodyType: "Athletic and toned but not fitness-model lean — real and aspirational",
-    influencerBeautyLevel: "Naturally beautiful without heavy makeup — sun-kissed skin, minimal glam, looks like she just came from the water",
-    influencerStyle: "Effortlessly cool — the kind of person who makes a simple bikini and sarong look editorial. Confident posture, magnetic energy, never posed or try-hard.",
-    influencerPersonality: "Adventurous, warm, quietly confident. She's the friend who always knows the best hidden beach. She doesn't seek attention but naturally draws it.",
-    influencerNotes: "Think someone you'd see on a Bali beach and want to know where she got her swimwear. Not a VS model — more like a well-traveled creative who happens to be stunning.",
+  const [f, setF] = useState({ brandName: "", tagline: "", story: "", personality: [], formality: 50, mood: 50, intensity: 50, audience: "", ageRange: "25-34", competitors: "", deepestFears: "", deepestDesires: "", objective: OBJECTIVES[0], keyMessage: "", colors: "", website: "", productImages: [],
+    voiceStyle: [], voiceGender: "Female", voiceAge: "20s-30s", voiceNotes: "",
+    musicMood: [], musicGenres: [], musicNotes: "",
+    videoPace: 50, videoEnergy: 50, videoTransitions: "Smooth", videoCuts: "Medium", videoNotes: "",
+    uniqueFeatures: [""],
+    testimonials: [""],
+    influencerAge: "",
+    influencerEthnicity: "",
+    influencerGender: "",
+    influencerHairColor: "",
+    influencerHairStyle: "",
+    influencerBodyType: "",
+    influencerBeautyLevel: "",
+    influencerStyle: "",
+    influencerPersonality: "",
+    influencerNotes: "",
   });
   const u = (k, v) => setF(p => ({ ...p, [k]: v }));
   const toggle = t => u("personality", f.personality.includes(t) ? f.personality.filter(x => x !== t) : [...f.personality, t]);
@@ -620,7 +613,7 @@ function Section({ sectionKey, data, status, onApprove, onRequestChanges, onSubm
 
 // ─── Main ───
 export default function AlchemyOS() {
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState("client");
   const [screen, setScreen] = useState("intake");
   const [formData, setFormData] = useState(null);
   const [guidelines, setGuidelines] = useState({});
@@ -633,6 +626,15 @@ export default function AlchemyOS() {
   const [selectedClient, setSelectedClient] = useState(null);
   const [currentClientId, setCurrentClientId] = useState(null);
   const [dbReady, setDbReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check for admin access via ?admin in URL
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('admin')) {
+      setIsAdmin(true);
+      setView("dashboard");
+    }
+  }, []);
 
   // Load clients from Supabase on mount
   useEffect(() => {
@@ -644,9 +646,6 @@ export default function AlchemyOS() {
           progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           color: c.color || '#FFD60A',
         })));
-      } else {
-        // Show demo data if no DB or empty
-        setClients(DEMO_CLIENTS);
       }
       setDbReady(true);
     }
@@ -756,12 +755,12 @@ Return ONLY valid JSON: { "brandSummary": "2-3 paragraphs", "toneOfVoice": { "de
       `}</style>
 
       <div style={{ borderBottom: "1px solid #1A1A1A", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={goHome}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: isAdmin ? "pointer" : "default" }} onClick={isAdmin ? goHome : undefined}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: Y, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={18} style={{ color: "#0A0A0A" }} /></div>
           <span style={{ ...h, fontSize: 18 }}>Alchemy <span style={{ color: Y }}>OS</span></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {(view === "client" || view === "detail") && <button onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif" }}><Home size={14} /> Dashboard</button>}
+          {isAdmin && (view === "client" || view === "detail") && <button onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif" }}><Home size={14} /> Dashboard</button>}
           {view === "client" && screen === "review" && <span style={{ fontSize: 13, color: "#888" }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
         </div>
       </div>
@@ -838,7 +837,7 @@ Return ONLY valid JSON: { "brandSummary": "2-3 paragraphs", "toneOfVoice": { "de
               </p>
             </div>
 
-            <Btn onClick={goHome} icon={<Home size={16} />}>Back to Dashboard</Btn>
+            {isAdmin && <Btn onClick={goHome} icon={<Home size={16} />}>Back to Dashboard</Btn>}
           </div>}
         </>}
       </div>
