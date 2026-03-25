@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Check, Sparkles, ArrowRight, RefreshCw, Lock, X, Loader2, ChevronRight, MessageSquare, Plus, Home, Copy, ChevronLeft, Edit3, Send } from "lucide-react";
-import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, uploadProductImage } from "../lib/supabase";
+import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, uploadProductImage, getBrandIntake, getBrandHub } from "../lib/supabase";
 
 const Y = "#FFD60A";
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');`;
@@ -111,12 +111,13 @@ function ClientDetail({ client, onBack, onUpdate }) {
   const [stageOpen, setStageOpen] = useState(false);
   const sc = { onboarding: "#F97316", reviewing: Y, production: "#4ECDC4", delivered: "#22c55e" };
 
-  const addNote = () => {
+  const handleAddNote = async () => {
     if (!note.trim()) return;
-    const newNotes = [{ text: note, date: new Date().toLocaleString(), id: Date.now() }, ...notes];
-    setNotes(newNotes);
-    onUpdate({ ...client, notes: newNotes });
+    const newNote = { text: note, date: new Date().toLocaleString(), id: Date.now() };
+    setNotes(prev => [newNote, ...prev]);
     setNote("");
+    // Save to Supabase
+    await addNote(client.id, note);
   };
 
   const changeStage = (stage) => {
@@ -220,10 +221,10 @@ function ClientDetail({ client, onBack, onUpdate }) {
         <h3 style={{ ...h, fontSize: 16, marginBottom: 16 }}>Internal Notes</h3>
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add an internal note about this client..."
-            onKeyDown={e => { if (e.key === "Enter") addNote(); }}
+            onKeyDown={e => { if (e.key === "Enter") handleAddNote(); }}
             style={{ flex: 1, background: "#0A0A0A", border: "1px solid #2A2A2A", borderRadius: 8, padding: "10px 14px", color: "#fff", fontSize: 13, fontFamily: "'Plus Jakarta Sans', sans-serif", outline: "none" }}
             onFocus={e => e.target.style.borderColor = Y} onBlur={e => e.target.style.borderColor = "#2A2A2A"} />
-          <Btn small primary onClick={addNote} disabled={!note.trim()} icon={<Send size={12} />}>Add</Btn>
+          <Btn small primary onClick={handleAddNote} disabled={!note.trim()} icon={<Send size={12} />}>Add</Btn>
         </div>
         {notes.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -731,11 +732,21 @@ Return ONLY valid JSON: { "brandSummary": "2-3 paragraphs", "toneOfVoice": { "de
     await updateClient_db(updated.id, { status: updated.status, stage: updated.stage, progress: updated.progress });
   };
 
-  const selectClient = (c) => {
+  const selectClient = async (c) => {
     if (c.id.startsWith && c.id.startsWith("d")) {
       newClient();
     } else {
-      setSelectedClient(c);
+      // Load full client data from Supabase
+      const intake = await getBrandIntake(c.id);
+      const hub = await getBrandHub(c.id);
+      const clientNotes = await getNotes(c.id);
+      const fullClient = { 
+        ...c, 
+        formData: intake || null,
+        guidelines: hub?.guidelines || null,
+        notes: (clientNotes || []).map(n => ({ id: n.id, text: n.note_text, date: new Date(n.created_at).toLocaleString() })),
+      };
+      setSelectedClient(fullClient);
       setView("detail");
     }
   };
