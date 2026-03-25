@@ -185,36 +185,142 @@ function ClientDetail({ client, onBack, onUpdate }) {
       </div>
 
       {/* Info cards */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-        <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
-          <h4 style={{ fontSize: 12, color: "#666", textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>Client Info</h4>
-          {client.formData ? (
-            <div style={{ fontSize: 13, lineHeight: 2 }}>
-              <p><span style={{ color: "#666" }}>Brand:</span> <span style={{ color: "#fff" }}>{client.formData.brandName}</span></p>
-              {client.formData.tagline && <p><span style={{ color: "#666" }}>Tagline:</span> <span style={{ color: "#ccc" }}>{client.formData.tagline}</span></p>}
-              {client.formData.website && <p><span style={{ color: "#666" }}>Website:</span> <span style={{ color: "#ccc" }}>{client.formData.website}</span></p>}
-              <p><span style={{ color: "#666" }}>Objective:</span> <span style={{ color: "#ccc" }}>{client.formData.objective}</span></p>
-              <p><span style={{ color: "#666" }}>Target:</span> <span style={{ color: "#ccc" }}>{client.formData.ageRange}</span></p>
-              {client.formData.personality?.length > 0 && <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>{client.formData.personality.map((t, i) => <span key={i} style={{ padding: "3px 10px", borderRadius: 12, background: Y + "15", color: Y, fontSize: 11 }}>{t}</span>)}</div>}
+      {client.formData ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
+
+          {/* Row 1: Brand Identity + Assets */}
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+              <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>Brand Identity</h4>
+              <div style={{ fontSize: 13, lineHeight: 2 }}>
+                <p><span style={{ color: "#666" }}>Brand:</span> <span style={{ color: "#fff", fontWeight: 600 }}>{client.formData.brandName}</span></p>
+                {client.formData.tagline && <p><span style={{ color: "#666" }}>Tagline:</span> <span style={{ color: "#ccc" }}>{client.formData.tagline}</span></p>}
+                {client.formData.website && <p><span style={{ color: "#666" }}>Website:</span> <span style={{ color: "#ccc" }}>{client.formData.website}</span></p>}
+                <p><span style={{ color: "#666" }}>Objective:</span> <span style={{ color: "#ccc" }}>{client.formData.objective}</span></p>
+                <p><span style={{ color: "#666" }}>Target:</span> <span style={{ color: "#ccc" }}>{client.formData.ageRange}</span></p>
+                {client.formData.keyMessage && <p><span style={{ color: "#666" }}>Key Message:</span> <span style={{ color: "#ccc" }}>{client.formData.keyMessage}</span></p>}
+                {client.formData.competitors && <p><span style={{ color: "#666" }}>Competitors:</span> <span style={{ color: "#ccc" }}>{client.formData.competitors}</span></p>}
+                {client.formData.personality?.length > 0 && <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>{client.formData.personality.map((t, i) => <span key={i} style={{ padding: "3px 10px", borderRadius: 12, background: Y + "15", color: Y, fontSize: 11 }}>{t}</span>)}</div>}
+              </div>
             </div>
-          ) : (
-            <p style={{ color: "#555", fontSize: 13 }}>No intake data yet</p>
+            <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+              <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>Assets & Colors</h4>
+              {client.formData.productImages?.length > 0 ? (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  {client.formData.productImages.map((img, i) => <div key={i} style={{ width: 60, height: 60, borderRadius: 8, overflow: "hidden", border: "1px solid #2A2A2A" }}><img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>)}
+                </div>
+              ) : <p style={{ color: "#555", fontSize: 13, marginBottom: 12 }}>No product images uploaded</p>}
+              {client.formData.colors && (
+                <div>
+                  <p style={{ color: "#666", fontSize: 12, marginBottom: 6 }}>Brand Colors</p>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {parseColors(client.formData.colors).map((c, i) => <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}><div style={{ width: 32, height: 32, borderRadius: 6, background: c, border: "1px solid rgba(255,255,255,0.1)" }} /><span style={{ fontSize: 9, color: "#666", fontFamily: "monospace" }}>{c}</span></div>)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Brand Story */}
+          {client.formData.story && (
+            <div style={{ background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+              <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Brand Story</h4>
+              <p style={{ color: "#ccc", fontSize: 13, lineHeight: 1.7 }}>{client.formData.story}</p>
+            </div>
+          )}
+
+          {/* Row 2: Audience + Fears & Desires */}
+          <div style={{ display: "flex", gap: 16 }}>
+            {(client.formData.audience || client.formData.deepestFears || client.formData.deepestDesires) && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Target Audience</h4>
+                {client.formData.audience && <p style={{ color: "#ccc", fontSize: 13, lineHeight: 1.7, marginBottom: 14 }}>{client.formData.audience}</p>}
+                {client.formData.deepestFears && <div style={{ marginBottom: 12 }}><h5 style={{ color: "#ff6b6b", fontSize: 11, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Deepest Fears</h5><p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.6 }}>{client.formData.deepestFears}</p></div>}
+                {client.formData.deepestDesires && <div><h5 style={{ color: Y, fontSize: 11, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Deepest Desires</h5><p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.6 }}>{client.formData.deepestDesires}</p></div>}
+              </div>
+            )}
+            {(client.formData.influencerAge || client.formData.influencerGender) && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>AI Influencer</h4>
+                <div style={{ fontSize: 13, lineHeight: 2 }}>
+                  {client.formData.influencerAge && <p><span style={{ color: "#666" }}>Age:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerAge}</span></p>}
+                  {client.formData.influencerGender && <p><span style={{ color: "#666" }}>Gender:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerGender}</span></p>}
+                  {client.formData.influencerEthnicity && <p><span style={{ color: "#666" }}>Ethnicity:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerEthnicity}</span></p>}
+                  {client.formData.influencerBodyType && <p><span style={{ color: "#666" }}>Body Type:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerBodyType}</span></p>}
+                  {client.formData.influencerHairColor && <p><span style={{ color: "#666" }}>Hair:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerHairColor}{client.formData.influencerHairStyle ? `, ${client.formData.influencerHairStyle}` : ""}</span></p>}
+                  {client.formData.influencerBeautyLevel && <p><span style={{ color: "#666" }}>Beauty:</span> <span style={{ color: "#ccc" }}>{client.formData.influencerBeautyLevel}</span></p>}
+                </div>
+                {client.formData.influencerStyle && <p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>{client.formData.influencerStyle}</p>}
+                {client.formData.influencerPersonality && <p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.5, marginTop: 6 }}>{client.formData.influencerPersonality}</p>}
+                {client.formData.influencerNotes && <p style={{ color: "#666", fontSize: 11, lineHeight: 1.5, marginTop: 6, fontStyle: "italic" }}>{client.formData.influencerNotes}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Row 3: Features + Testimonials */}
+          <div style={{ display: "flex", gap: 16 }}>
+            {client.formData.uniqueFeatures?.filter(Boolean).length > 0 && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Unique Features</h4>
+                {client.formData.uniqueFeatures.filter(Boolean).map((f, i) => <p key={i} style={{ color: "#ccc", fontSize: 13, marginBottom: 6, lineHeight: 1.5 }}>• {f}</p>)}
+              </div>
+            )}
+            {client.formData.testimonials?.filter(Boolean).length > 0 && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: "#A78BFA", textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Testimonials</h4>
+                {client.formData.testimonials.filter(Boolean).map((t, i) => <p key={i} style={{ color: "#ccc", fontSize: 12, marginBottom: 10, lineHeight: 1.6, fontStyle: "italic", borderLeft: "2px solid #A78BFA30", paddingLeft: 12 }}>"{t}"</p>)}
+              </div>
+            )}
+          </div>
+
+          {/* Row 4: Audio & Voice + Video */}
+          <div style={{ display: "flex", gap: 16 }}>
+            {(client.formData.voiceStyle?.length > 0 || client.formData.musicMood?.length > 0) && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Audio & Voice</h4>
+                {client.formData.voiceStyle?.length > 0 && <div style={{ marginBottom: 10 }}><p style={{ color: "#666", fontSize: 11, marginBottom: 4 }}>Voice Style</p><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{client.formData.voiceStyle.map((v, i) => <span key={i} style={{ padding: "3px 10px", borderRadius: 12, background: Y + "15", color: Y, fontSize: 11 }}>{v}</span>)}</div></div>}
+                {client.formData.voiceGender && <p style={{ fontSize: 12, color: "#aaa", lineHeight: 2 }}><span style={{ color: "#666" }}>Voice:</span> {client.formData.voiceGender}, {client.formData.voiceAge}</p>}
+                {client.formData.voiceNotes && <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginBottom: 10 }}>{client.formData.voiceNotes}</p>}
+                {client.formData.musicMood?.length > 0 && <div style={{ marginBottom: 8 }}><p style={{ color: "#666", fontSize: 11, marginBottom: 4 }}>Music Mood</p><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{client.formData.musicMood.map((m, i) => <span key={i} style={{ padding: "3px 10px", borderRadius: 12, background: "#A78BFA18", color: "#A78BFA", fontSize: 11 }}>{m}</span>)}</div></div>}
+                {client.formData.musicGenres?.length > 0 && <div style={{ marginBottom: 8 }}><p style={{ color: "#666", fontSize: 11, marginBottom: 4 }}>Genres</p><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{client.formData.musicGenres.map((g, i) => <span key={i} style={{ padding: "3px 10px", borderRadius: 12, background: "#4ECDC418", color: "#4ECDC4", fontSize: 11 }}>{g}</span>)}</div></div>}
+                {client.formData.musicNotes && <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5 }}>{client.formData.musicNotes}</p>}
+              </div>
+            )}
+            {(client.formData.videoPace !== undefined || client.formData.videoNotes) && (
+              <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
+                <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Video Direction</h4>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666", marginBottom: 4 }}><span>Slow</span><span>Fast</span></div>
+                  <div style={{ height: 4, borderRadius: 2, background: "#1A1A1A" }}><div style={{ height: "100%", borderRadius: 2, background: "#FF6B6B", width: `${client.formData.videoPace || 50}%` }} /></div>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666", marginBottom: 4 }}><span>Calm</span><span>High Energy</span></div>
+                  <div style={{ height: 4, borderRadius: 2, background: "#1A1A1A" }}><div style={{ height: "100%", borderRadius: 2, background: "#FF6B6B", width: `${client.formData.videoEnergy || 50}%` }} /></div>
+                </div>
+                <p style={{ fontSize: 12, color: "#aaa", lineHeight: 2 }}><span style={{ color: "#666" }}>Transitions:</span> {client.formData.videoTransitions || "Smooth"}</p>
+                <p style={{ fontSize: 12, color: "#aaa", lineHeight: 2 }}><span style={{ color: "#666" }}>Cuts:</span> {client.formData.videoCuts || "Medium"}</p>
+                {client.formData.videoNotes && <p style={{ fontSize: 12, color: "#888", lineHeight: 1.5, marginTop: 6 }}>{client.formData.videoNotes}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Generated Guidelines */}
+          {client.guidelines && (
+            <div style={{ background: "#131313", border: `1px solid ${Y}30`, borderRadius: 12, padding: 20 }}>
+              <h4 style={{ fontSize: 12, color: Y, textTransform: "uppercase", fontWeight: 600, marginBottom: 14 }}>Generated Brand Guidelines</h4>
+              {client.guidelines.brandSummary && <div style={{ marginBottom: 16 }}><h5 style={{ color: "#fff", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Brand Summary</h5><p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.7 }}>{client.guidelines.brandSummary}</p></div>}
+              {client.guidelines.toneOfVoice && <div style={{ marginBottom: 16 }}><h5 style={{ color: "#fff", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Tone of Voice</h5><p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.7 }}>{client.guidelines.toneOfVoice.description}</p></div>}
+              {client.guidelines.audiencePersona && <div style={{ marginBottom: 16 }}><h5 style={{ color: "#fff", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Audience Persona: {client.guidelines.audiencePersona.name}</h5><p style={{ color: "#aaa", fontSize: 12, lineHeight: 1.7 }}>{client.guidelines.audiencePersona.description}</p></div>}
+              {client.guidelines.copyDirection?.taglineOptions && <div style={{ marginBottom: 16 }}><h5 style={{ color: "#fff", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Tagline Options</h5>{client.guidelines.copyDirection.taglineOptions.map((t, i) => <p key={i} style={{ color: Y, fontSize: 13, fontWeight: 600, fontFamily: "'Syne', sans-serif", marginBottom: 4 }}>"{t}"</p>)}</div>}
+              {client.guidelines.copyDirection?.headlines && <div><h5 style={{ color: "#fff", fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Headlines</h5>{client.guidelines.copyDirection.headlines.map((hl, i) => <p key={i} style={{ color: "#ccc", fontSize: 12, marginBottom: 4 }}>• {hl}</p>)}</div>}
+            </div>
           )}
         </div>
-        <div style={{ flex: 1, background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 20 }}>
-          <h4 style={{ fontSize: 12, color: "#666", textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>Assets</h4>
-          {client.formData?.productImages?.length > 0 ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {client.formData.productImages.map((img, i) => <div key={i} style={{ width: 60, height: 60, borderRadius: 8, overflow: "hidden", border: "1px solid #2A2A2A" }}><img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>)}
-            </div>
-          ) : <p style={{ color: "#555", fontSize: 13 }}>No assets uploaded</p>}
-          {client.formData?.colors && (
-            <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-              {parseColors(client.formData.colors).map((c, i) => <div key={i} style={{ width: 28, height: 28, borderRadius: 6, background: c, border: "1px solid rgba(255,255,255,0.1)" }} />)}
-            </div>
-          )}
+      ) : (
+        <div style={{ background: "#131313", border: "1px solid #2A2A2A", borderRadius: 12, padding: 40, textAlign: "center", marginBottom: 20 }}>
+          <p style={{ color: "#555", fontSize: 14 }}>No intake data yet — client hasn't submitted the form.</p>
         </div>
-      </div>
+      )}
 
       {/* Internal Notes */}
       <div style={{ background: "#131313", border: "1px solid #2A2A2A", borderRadius: 14, padding: 24 }}>
