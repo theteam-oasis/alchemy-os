@@ -1,40 +1,48 @@
-import { GoogleGenAI } from '@google/genai'
-
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
-
 export async function POST(request) {
   try {
-    const { prompt } = await request.json()
+    const body = await request.json()
+    const { prompt } = body
 
-    if (!prompt) {
-      return Response.json({ success: false, error: 'No prompt provided' }, { status: 400 })
+    console.log('Image generation called with prompt:', prompt ? prompt.slice(0, 100) : 'MISSING')
+
+    if (!prompt || prompt.trim() === '') {
+      return Response.json({ success: false, error: `No prompt provided. Body received: ${JSON.stringify(body)}` }, { status: 400 })
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image-preview',
-      contents: prompt,
-      config: {
-        responseModalities: ['Text', 'Image'],
-      },
-    })
+    const apiKey = process.env.GOOGLE_API_KEY
+    if (!apiKey) {
+      return Response.json({ success: false, error: 'GOOGLE_API_KEY not set' }, { status: 500 })
+    }
 
-    let imageBase64 = null
-    let mimeType = 'image/png'
-
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        imageBase64 = part.inlineData.data
-        mimeType = part.inlineData.mimeType || 'image/png'
-        break
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        }),
       }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('Google API error:', errText)
+      return Response.json({ success: false, error: `Google API error: ${response.status} — ${errText}` }, { status: 500 })
     }
 
-    if (!imageBase64) {
-      throw new Error('No image returned from Nano Banana 2')
+    const data = await response.json()
+    const parts = data?.candidates?.[0]?.content?.parts || []
+    const imagePart = parts.find(p => p.inlineData)
+
+    if (!imagePart) {
+      console.error('No image in response:', JSON.stringify(data))
+      return Response.json({ success: false, error: 'No image returned from Nano Banana 2' }, { status: 500 })
     }
 
-    // Return as data URL so frontend can display without saving to disk
-    const dataUrl = `data:${mimeType};base64,${imageBase64}`
+    const { data: imageBase64, mimeType } = imagePart.inlineData
+    const dataUrl = `data:${mimeType || 'image/png'};base64,${imageBase64}`
 
     return Response.json({ success: true, imageUrl: dataUrl })
   } catch (error) {
