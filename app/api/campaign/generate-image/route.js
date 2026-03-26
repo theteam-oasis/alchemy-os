@@ -3,16 +3,16 @@ export async function POST(request) {
     const body = await request.json()
     const { prompt } = body
 
-    console.log('Image generation called with prompt:', prompt ? prompt.slice(0, 100) : 'MISSING')
-
     if (!prompt || prompt.trim() === '') {
-      return Response.json({ success: false, error: `No prompt provided. Body received: ${JSON.stringify(body)}` }, { status: 400 })
+      return Response.json({ success: false, error: 'No prompt provided' }, { status: 400 })
     }
 
     const apiKey = process.env.GOOGLE_API_KEY
     if (!apiKey) {
       return Response.json({ success: false, error: 'GOOGLE_API_KEY not set' }, { status: 500 })
     }
+
+    console.log('Calling Nano Banana 2 with prompt:', prompt.slice(0, 80))
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
@@ -26,19 +26,20 @@ export async function POST(request) {
       }
     )
 
+    const responseText = await response.text()
+    console.log('Google API status:', response.status)
+    console.log('Google API response (first 300 chars):', responseText.slice(0, 300))
+
     if (!response.ok) {
-      const errText = await response.text()
-      console.error('Google API error:', errText)
-      return Response.json({ success: false, error: `Google API error: ${response.status} — ${errText}` }, { status: 500 })
+      return Response.json({ success: false, error: `Google API ${response.status}: ${responseText.slice(0, 200)}` }, { status: 500 })
     }
 
-    const data = await response.json()
+    const data = JSON.parse(responseText)
     const parts = data?.candidates?.[0]?.content?.parts || []
     const imagePart = parts.find(p => p.inlineData)
 
     if (!imagePart) {
-      console.error('No image in response:', JSON.stringify(data))
-      return Response.json({ success: false, error: 'No image returned from Nano Banana 2' }, { status: 500 })
+      return Response.json({ success: false, error: `No image in response. Parts: ${JSON.stringify(parts.map(p => Object.keys(p)))}` }, { status: 500 })
     }
 
     const { data: imageBase64, mimeType } = imagePart.inlineData
@@ -46,7 +47,7 @@ export async function POST(request) {
 
     return Response.json({ success: true, imageUrl: dataUrl })
   } catch (error) {
-    console.error('Image generation error:', error)
+    console.error('Image generation exception:', error.message, error.stack)
     return Response.json({ success: false, error: error.message }, { status: 500 })
   }
 }
