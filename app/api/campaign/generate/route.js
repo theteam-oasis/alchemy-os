@@ -2,7 +2,24 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// ─── Scripts ───
+// ─── Helper: extract text from Claude response safely ───
+function extractText(message) {
+  if (!message || !message.content || !message.content.length) {
+    throw new Error('Empty response from Claude')
+  }
+  const block = message.content.find(b => b.type === 'text')
+  if (!block || !block.text) {
+    throw new Error('No text block in Claude response')
+  }
+  return block.text.trim()
+}
+
+// ─── Helper: parse JSON from Claude response, stripping markdown fences ───
+function parseJSON(text) {
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(clean)
+}
+
 export async function POST(request) {
   const url = new URL(request.url)
   const type = url.searchParams.get('type')
@@ -70,7 +87,8 @@ Respond ONLY with valid JSON array of 4 objects, no markdown:
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const scripts = JSON.parse(message.content[0].text.trim())
+    const text = extractText(message)
+    const scripts = parseJSON(text)
     return Response.json({ success: true, scripts })
   } catch (error) {
     return Response.json({ success: false, error: error.message }, { status: 500 })
@@ -118,7 +136,8 @@ Respond ONLY with valid JSON array of 4 objects, no markdown:
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const directions = JSON.parse(message.content[0].text.trim())
+    const text = extractText(message)
+    const directions = parseJSON(text)
     return Response.json({ success: true, directions })
   } catch (error) {
     return Response.json({ success: false, error: error.message }, { status: 500 })
@@ -154,7 +173,8 @@ Respond ONLY with valid JSON array of 4 objects, no markdown:
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const avatarPrompts = JSON.parse(message.content[0].text.trim())
+    const text = extractText(message)
+    const avatarPrompts = parseJSON(text)
     return Response.json({ success: true, avatarPrompts })
   } catch (error) {
     return Response.json({ success: false, error: error.message }, { status: 500 })
@@ -195,7 +215,8 @@ Each prompt must include:
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const scenePrompts = JSON.parse(message.content[0].text.trim())
+    const text = extractText(message)
+    const scenePrompts = parseJSON(text)
     return Response.json({ success: true, scenePrompts })
   } catch (error) {
     return Response.json({ success: false, error: error.message }, { status: 500 })
