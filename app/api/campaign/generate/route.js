@@ -31,26 +31,21 @@ async function generateScripts(request) {
     const { concept, analysis, duration = 30, previousScripts = [] } = await request.json()
 
     const avoidBlock = previousScripts.length > 0
-      ? `AVOID these hooks from previous generation: ${previousScripts.map(s => s.hook).join(' | ')}`
+      ? `AVOID these hooks: ${previousScripts.map(s => s.hook).join(' | ')}`
       : ''
 
-    const prompt = `You are an ad copywriter. Write 4 short, production-ready ad scripts.
+    const prompt = `Write 4 short ad scripts.
 
 CONCEPT: ${concept.title} — ${concept.theme}
-VISUAL UNIVERSE: ${concept.visualUniverse}
 PRODUCT: ${analysis.heroProduct}
 TRANSFORMATION: ${analysis.desiredTransformation}
-BRAND TONE: ${analysis.websiteTone}
-DURATION: ${duration} seconds (~${Math.round(duration * 2.3)} spoken words max)
+TONE: ${analysis.websiteTone}
+DURATION: ${duration}s (~${Math.round(duration * 2.3)} spoken words max)
 ${avoidBlock}
 
-Rules:
-- Real spoken lines only, not descriptions
-- Each script has a different structure and opening
-- Keep fullScript under 80 words
-- Return EXACTLY 4 scripts
+Rules: Real spoken lines only. Different structure per script. fullScript max 60 words.
 
-Respond with a JSON array only, no markdown:
+Return JSON array only, no markdown:
 [{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":"","approach":""}]`
 
     const message = await client.messages.create({
@@ -71,15 +66,14 @@ async function generateDirections(request) {
   try {
     const { concept, analysis } = await request.json()
 
-    const prompt = `You are a visual director. Generate 4 distinct visual directions for this campaign.
+    const prompt = `Generate 4 distinct visual directions for this ad campaign.
 
 CONCEPT: ${concept.title} — ${concept.visualUniverse}
-BRAND TONE: ${analysis.websiteTone}
-VISUAL CUES: ${analysis.visualCues}
+TONE: ${analysis.websiteTone}
 
-Each direction must feel like a completely different film. Keep each field concise — 1 sentence max.
+Each direction = different film. All fields max 10 words each.
 
-Respond with a JSON array only, no markdown:
+Return JSON array only, no markdown:
 [{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","texture":"","editingFeel":"","designLanguage":"","cinematicReference":"","summary":""}]`
 
     const message = await client.messages.create({
@@ -100,21 +94,20 @@ async function generateAvatarPrompts(request) {
   try {
     const { concept, direction, analysis } = await request.json()
 
-    const prompt = `You are a casting director. Generate 4 avatar character image prompts for this campaign.
+    const prompt = `Generate 4 avatar character image prompts for an ad campaign.
 
 CAMPAIGN: ${concept.title}
-VISUAL DIRECTION: ${direction.title} — ${direction.colorWorld}, ${direction.lighting}
-BRAND TONE: ${analysis.websiteTone}
-TARGET CUSTOMER: ${analysis.targetCustomer}
+VISUAL DIRECTION: ${direction.colorWorld}, ${direction.lighting}
+TARGET: ${analysis.targetCustomer}
 
-Generate 4 distinct characters. Vary age, look, energy. Each imagePrompt must be a complete, detailed image generation prompt ready to send to an AI image model. Keep each imagePrompt under 120 words.
+4 distinct characters, different age/look/energy. Each imagePrompt max 60 words, ready for image AI.
 
-Respond with a JSON array only, no markdown:
+Return JSON array only, no markdown:
 [{"label":"","imagePrompt":""}]`
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     })
 
@@ -134,16 +127,15 @@ async function generateScenePrompts(request) {
     const chunkSize = Math.floor(words.length / totalScenes)
     const sceneWords = words.slice(sceneIndex * chunkSize, (sceneIndex + 1) * chunkSize).join(' ')
 
-    const prompt = `Generate 4 image prompts for scene ${sceneIndex + 1} of ${totalScenes} in an ad.
+    const prompt = `Generate 4 image prompts for scene ${sceneIndex + 1} of ${totalScenes}.
 
-CAMPAIGN: ${concept.title}
-DIRECTION: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}
-AVATAR: ${avatarLabel} (must appear in all 4, consistent)
-SCENE MOMENT: "${sceneWords}"
+DIRECTION: ${direction.colorWorld}, ${direction.lighting}
+AVATAR: ${avatarLabel} — must appear in all 4, consistent
+SCENE: "${sceneWords}"
 
-Vary camera angle/framing across the 4 options. Each prompt under 100 words. No text or watermarks in images.
+Vary camera angle across 4. Each prompt max 60 words. No text or watermarks.
 
-Respond with a JSON array of 4 strings only, no markdown:
+Return JSON array of 4 strings only, no markdown:
 ["prompt1","prompt2","prompt3","prompt4"]`
 
     const message = await client.messages.create({
