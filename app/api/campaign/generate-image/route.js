@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { prompt, referenceImageBase64, referenceMimeType } = body
+    const { prompt, referenceImageBase64, referenceMimeType, productImageBase64, productMimeType, aspectRatio, imageSize } = body
 
     if (!prompt || prompt.trim() === '') {
       return Response.json({ success: false, error: 'No prompt provided' }, { status: 400 })
@@ -14,15 +14,27 @@ export async function POST(request) {
       return Response.json({ success: false, error: 'GOOGLE_API_KEY not set' }, { status: 500 })
     }
 
-    console.log('Generating image, has reference:', !!referenceImageBase64)
+    console.log('Generating image | size:', imageSize || '2K', '| aspect:', aspectRatio || '16:9', '| avatar ref:', !!referenceImageBase64, '| product ref:', !!productImageBase64)
 
-    // Build parts — text first, then reference image if provided
+    // Build parts array — text prompt first, then reference images
     const parts = [{ text: prompt }]
+
+    // Avatar reference image for character consistency
     if (referenceImageBase64) {
       parts.push({
         inlineData: {
           mimeType: referenceMimeType || 'image/png',
           data: referenceImageBase64,
+        }
+      })
+    }
+
+    // Product reference image
+    if (productImageBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: productMimeType || 'image/jpeg',
+          data: productImageBase64,
         }
       })
     }
@@ -34,7 +46,13 @@ export async function POST(request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig: {
+            imageSize: imageSize || '2K',
+            aspectRatio: aspectRatio || '16:9',
+          }
+        },
       }),
     })
 
@@ -46,11 +64,11 @@ export async function POST(request) {
     }
 
     const data = JSON.parse(responseText)
-    const parts2 = data?.candidates?.[0]?.content?.parts || []
-    const imagePart = parts2.find(p => p.inlineData)
+    const resParts = data?.candidates?.[0]?.content?.parts || []
+    const imagePart = resParts.find(p => p.inlineData)
 
     if (!imagePart) {
-      return Response.json({ success: false, error: `No image returned. Parts: ${JSON.stringify(parts2.map(p => Object.keys(p)))}` }, { status: 500 })
+      return Response.json({ success: false, error: `No image returned. Parts: ${JSON.stringify(resParts.map(p => Object.keys(p)))}` }, { status: 500 })
     }
 
     const dataUrl = `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`
