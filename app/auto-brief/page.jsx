@@ -35,6 +35,8 @@ export default function AutoBriefPage() {
   const [creativeKeywords, setCreativeKeywords] = useState('')
   const [aspectRatio, setAspectRatio] = useState('16:9')
   const [productImageDataUrl, setProductImageDataUrl] = useState(null)
+  const [clientProductImages, setClientProductImages] = useState([])
+  const [selectedProductUrls, setSelectedProductUrls] = useState([])
   const [progress, setProgress] = useState([])
   const [conceptProgress, setConceptProgress] = useState([null, null, null, null])
   const [currentStage, setCurrentStage] = useState('')
@@ -49,11 +51,13 @@ export default function AutoBriefPage() {
 
   useEffect(() => {
     if (!selectedClientId) return
-    supabase.from('brand_intake').select('website, brand_name').eq('client_id', selectedClientId).maybeSingle()
+    supabase.from('brand_intake').select('website, brand_name, product_image_urls').eq('client_id', selectedClientId).maybeSingle()
       .then(({ data }) => {
         if (data) {
           if (data.website) setWebsiteUrl(data.website)
           if (data.brand_name) setProductName(data.brand_name)
+          if (data.product_image_urls?.length) setClientProductImages(data.product_image_urls)
+          else setClientProductImages([])
         }
       })
   }, [selectedClientId])
@@ -63,6 +67,16 @@ export default function AutoBriefPage() {
     if (!file) return
     const dataUrl = await fileToDataUrl(file)
     setProductImageDataUrl(dataUrl)
+    setSelectedProductUrls([])
+  }
+
+  function toggleClientProductUrl(url) {
+    setSelectedProductUrls(prev => {
+      if (prev.includes(url)) return prev.filter(u => u !== url)
+      if (prev.length >= 4) return prev
+      return [...prev, url]
+    })
+    setProductImageDataUrl(null)
   }
 
   async function handleGenerate() {
@@ -227,6 +241,21 @@ export default function AutoBriefPage() {
         .product-title { font-size: 13px; color: #888; font-weight: 500; }
         .product-sub { font-size: 11px; color: #444; margin-top: 2px; }
         .product-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .product-picker { background: #0e0e0e; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; }
+        .product-picker-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 12px; font-weight: 600; display: flex; justify-content: space-between; }
+        .product-picker-count { color: #FFD60A; }
+        .product-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 12px; }
+        .product-picker-item { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #1e1e1e; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; }
+        .product-picker-item:hover { border-color: #444; }
+        .product-picker-item.selected { border-color: #FFD60A; }
+        .product-picker-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .product-picker-check { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #0a0a0a; }
+        .product-picker-divider { height: 1px; background: #1e1e1e; margin: 12px 0; }
+        .product-own { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .product-own-preview { width: 44px; height: 44px; border-radius: 8px; object-fit: contain; background: #1a1a1a; border: 1px solid #222; }
+        .product-own-placeholder { width: 44px; height: 44px; border-radius: 8px; background: #1a1a1a; border: 1px dashed #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .product-own-text { flex: 1; font-size: 12px; color: #666; }
+        .product-own-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
 
         /* Generate button */
         .generate-btn { width: 100%; padding: 18px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: all 0.15s; font-family: inherit; letter-spacing: 0.02em; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
@@ -341,19 +370,37 @@ export default function AutoBriefPage() {
             </div>
 
             <div className="form-section">
-              <label className="form-label">Product Image <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
-              <div className={`product-upload ${productImageDataUrl ? 'has-img' : ''}`} onClick={() => productInputRef.current?.click()}>
-                {productImageDataUrl
-                  ? <img src={productImageDataUrl} alt="Product" className="product-preview" />
-                  : <div className="product-placeholder">📦</div>
-                }
-                <div className="product-text">
-                  <p className="product-title">{productImageDataUrl ? 'Product image ready' : 'Upload product photo'}</p>
-                  <p className="product-sub">Used as visual reference across all storyboard scenes</p>
+              <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional — up to 4)</span></label>
+              <div className="product-picker">
+                {clientProductImages.length > 0 && (
+                  <>
+                    <div className="product-picker-label">
+                      <span>From Client Onboarding</span>
+                      <span className="product-picker-count">{selectedProductUrls.length}/4 selected</span>
+                    </div>
+                    <div className="product-picker-grid">
+                      {clientProductImages.map((url, i) => (
+                        <div key={i} className={`product-picker-item ${selectedProductUrls.includes(url) ? 'selected' : ''}`} onClick={() => toggleClientProductUrl(url)}>
+                          <img src={url} alt={`Product ${i+1}`} />
+                          {selectedProductUrls.includes(url) && <div className="product-picker-check">{selectedProductUrls.indexOf(url)+1}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="product-picker-divider" />
+                  </>
+                )}
+                <div className="product-own" onClick={() => productInputRef.current?.click()}>
+                  {productImageDataUrl
+                    ? <img src={productImageDataUrl} alt="Uploaded" className="product-own-preview" />
+                    : <div className="product-own-placeholder">📦</div>
+                  }
+                  <span className="product-own-text">
+                    {productImageDataUrl ? 'Custom image uploaded' : clientProductImages.length > 0 ? 'Or upload your own' : 'Upload a product photo'}
+                  </span>
+                  <button className="product-own-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
+                    {productImageDataUrl ? 'Change' : 'Upload'}
+                  </button>
                 </div>
-                <button className="product-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
-                  {productImageDataUrl ? 'Change' : 'Upload'}
-                </button>
               </div>
               <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductUpload} />
             </div>
