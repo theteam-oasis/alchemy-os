@@ -2,11 +2,15 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+function parseJSON(text) {
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(clean)
+}
+
 export async function POST(request) {
   try {
     const { websiteUrl, productName, offerNotes } = await request.json()
 
-    // Attempt to fetch website content
     let websiteContent = ''
     try {
       const res = await fetch(websiteUrl, {
@@ -14,7 +18,6 @@ export async function POST(request) {
         signal: AbortSignal.timeout(8000),
       })
       const html = await res.text()
-      // Strip HTML tags, get readable text
       websiteContent = html
         .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -36,17 +39,17 @@ ADDITIONAL NOTES: ${offerNotes || 'None'}
 
 Extract the following brand intelligence. Be specific and grounded in the actual website text — do not invent generic marketing language.
 
-Respond ONLY with a valid JSON object, no markdown, no preamble:
+Respond ONLY with a valid JSON object, no markdown fences, no preamble:
 {
   "coreOffer": "The single clearest thing this brand sells or does",
   "heroProduct": "The flagship product or service mentioned most",
   "targetCustomer": "Who this is clearly for based on site language",
   "corePainPoint": "The problem the customer has that this solves",
-  "desiredTransformation": "What the customer's life looks like after using this",
-  "differentiators": ["what makes this brand distinct from competitors", "..."],
-  "proofPoints": ["claims, stats, testimonials, awards found on site", "..."],
+  "desiredTransformation": "What the customer life looks like after using this",
+  "differentiators": ["what makes this brand distinct from competitors"],
+  "proofPoints": ["claims, stats, testimonials, awards found on site"],
   "websiteTone": "How the brand sounds: e.g. clinical, warm, rebellious, luxurious, playful",
-  "keyPhrasing": ["memorable phrases or claims pulled directly from site", "..."],
+  "keyPhrasing": ["memorable phrases or claims pulled directly from site"],
   "visualCues": "What visual or aesthetic themes appear on the site",
   "productCategory": "What market/category this fits into"
 }`
@@ -57,9 +60,10 @@ Respond ONLY with a valid JSON object, no markdown, no preamble:
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const text = message.content[0].text.trim()
-    const analysis = JSON.parse(text)
+    const block = message.content.find(b => b.type === 'text')
+    if (!block || !block.text) throw new Error('No text response from Claude')
 
+    const analysis = parseJSON(block.text)
     return Response.json({ success: true, analysis })
   } catch (error) {
     console.error('Analyze error:', error)
