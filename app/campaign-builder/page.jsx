@@ -47,16 +47,10 @@ function fileToDataUrl(file) {
 }
 
 async function generateImage(prompt, options = {}) {
-  const { avatarDataUrl, productDataUrl, aspectRatio = '16:9', imageSize = '2K' } = options
+  const { avatarImageUrl, productImageUrl, aspectRatio = '16:9', imageSize = '2K' } = options
   const body = { prompt, aspectRatio, imageSize }
-  if (avatarDataUrl) {
-    body.referenceImageBase64 = dataUrlToBase64(avatarDataUrl)
-    body.referenceMimeType = getMimeType(avatarDataUrl)
-  }
-  if (productDataUrl) {
-    body.productImageBase64 = dataUrlToBase64(productDataUrl)
-    body.productMimeType = getMimeType(productDataUrl)
-  }
+  if (avatarImageUrl) body.avatarImageUrl = avatarImageUrl
+  if (productImageUrl) body.productImageUrl = productImageUrl
   const res = await fetch('/api/campaign/generate-image', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -185,6 +179,7 @@ export default function CampaignBuilder() {
   const [avatarImages, setAvatarImages] = useState([null,null,null,null])
   const [avatarLabels, setAvatarLabels] = useState([])
   const [chosenAvatarIdx, setChosenAvatarIdx] = useState(null)
+  const [lockedAvatarUrl, setLockedAvatarUrl] = useState(null) // Supabase URL after upload
   const [avatarsLoading, setAvatarsLoading] = useState(false)
   const [aspectRatio, setAspectRatio] = useState('16:9')
   const [shotList, setShotList] = useState([])
@@ -350,6 +345,23 @@ export default function CampaignBuilder() {
     finally { setAvatarsLoading(false) }
   }
 
+  // Upload chosen avatar to Supabase storage and get a URL
+  // This avoids 413 errors from sending large base64 in every scene request
+  async function uploadAvatarToStorage(dataUrl) {
+    try {
+      const base64 = dataUrlToBase64(dataUrl)
+      const mimeType = getMimeType(dataUrl)
+      const res = await fetch('/api/campaign/upload-avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType, campaignId }),
+      })
+      const json = await res.json()
+      if (json.success) return json.url
+      return null
+    } catch { return null }
+  }
+
   async function handleGenerateScenes() {
     if (chosenAvatarIdx === null) return
     setScenesLoading(true); setScenesGenerated(0); setCurrentScene(0)
@@ -358,8 +370,17 @@ export default function CampaignBuilder() {
     const avatarDataUrl = avatarImages[chosenAvatarIdx]
     save({ chosen_avatar: avatarDataUrl, avatars: avatarImages, aspect_ratio: aspectRatio })
 
-    // Resolve product reference image
+    // Upload avatar to Supabase storage to get a URL (avoids 413 on scene requests)
+    let avatarUrl = lockedAvatarUrl
+    if (!avatarUrl && avatarDataUrl) {
+      avatarUrl = await uploadAvatarToStorage(avatarDataUrl)
+      if (avatarUrl) setLockedAvatarUrl(avatarUrl)
+    }
+
+    // Resolve product URL
     const resolvedProductDataUrl = await getProductDataUrl()
+    // Use first selected client product URL directly if available (already a URL)
+    const productUrl = selectedProductUrls[0] || null
 
     try {
       // Step 1: Generate full shot list
@@ -391,13 +412,19 @@ ${shot.isProductShot && productImageDataUrl ? 'Feature the product prominently i
 Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.lighting}. No text, no watermarks.`
 
           const imgOptions = {
-            avatarDataUrl,
+            avatarImageUrl: avatarUrl || undefined,
             aspectRatio,
             imageSize: '2K',
           }
-          // Add product reference for product shots
-          if (shot.isProductShot && resolvedProductDataUrl) {
-            imgOptions.productDataUrl = resolvedProductDataUrl
+          // Add product URL for product shots
+          if (shot.isProductShot && (productUrl || resolvedProductDataUrl)) {
+            // Prefer direct URL, fall back to uploaded data URL
+            if (productUrl) {
+              imgOptions.productImageUrl = productUrl
+            } else if (resolvedProductDataUrl) {
+              // Upload it too to get a URL
+              imgOptions.productImageUrl = productUrl
+            }
           }
 
           return generateImage(fullPrompt, imgOptions).then(imageUrl => {
@@ -435,7 +462,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
   function handleReset() {
     setStep(STEPS.INPUT); setCampaignId(null); setConcepts([]); setChosenConcept(null);
     setScripts([]); setChosenScript(null); setDirections([]); setChosenDirection(null);
-    setAvatarImages([null,null,null,null]); setChosenAvatarIdx(null);
+    setAvatarImages([null,null,null,null]); setChosenAvatarIdx(null); setLockedAvatarUrl(null);
     setShotList([]); setScenes([]); setAnalysis(null);
     setUseOwnScript(false); setOwnScriptText(''); setProductImageDataUrl(null);
     setSelectedProductUrls([]); setClientProductImages([]);
