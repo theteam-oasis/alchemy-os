@@ -2,6 +2,11 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+function parseJSON(text) {
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(clean)
+}
+
 export async function POST(request) {
   try {
     const { analysis, creativeKeywords, count = 4, previousConcepts = [] } = await request.json()
@@ -43,25 +48,14 @@ ${keywordsBlock}
 ${avoidBlock}
 
 CRITICAL RULES:
-1. Each concept must come from a COMPLETELY DIFFERENT creative territory — different emotional frame, different visual universe, different metaphor family. They must be mutually exclusive worlds.
+1. Each concept must come from a COMPLETELY DIFFERENT creative territory.
 2. Ground every concept in the actual brand data above — not generic ad ideas.
 3. DO NOT use F1/racing/speed metaphors unless the brand is clearly automotive or performance-tech.
-4. DO NOT use vague concepts like "premium quality" or "fast and better" — every concept needs a specific visual world and metaphor bridge.
-5. Be SPECIFIC and CINEMATIC. Each concept should feel like a different film genre.
-6. Return EXACTLY ${count} concepts — not fewer, not more.
+4. Be SPECIFIC and CINEMATIC. Each concept should feel like a different film genre.
+5. Return EXACTLY ${count} concepts — not fewer, not more.
 
-Respond ONLY with a valid JSON array of exactly ${count} objects, no markdown, no preamble:
-[
-  {
-    "title": "Short evocative campaign title",
-    "theme": "One sentence describing the strategic angle",
-    "visualUniverse": "What this campaign looks like visually — lighting, environment, texture, color world",
-    "metaphorBridge": "How the product/service maps to the visual metaphor being used",
-    "emotionalFrame": "What emotion this campaign triggers in the viewer",
-    "whyItFits": "Why this specific direction suits THIS brand based on the site analysis",
-    "siteAnchors": ["specific phrases or facts from the brand analysis that inspired this concept"]
-  }
-]`
+Respond ONLY with a valid JSON array. No markdown, no backticks, no preamble, no explanation — raw JSON only:
+[{"title":"","theme":"","visualUniverse":"","metaphorBridge":"","emotionalFrame":"","whyItFits":"","siteAnchors":[]}]`
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -70,7 +64,7 @@ Respond ONLY with a valid JSON array of exactly ${count} objects, no markdown, n
     })
 
     const text = message.content[0].text.trim()
-    const concepts = JSON.parse(text)
+    const concepts = parseJSON(text)
 
     if (!Array.isArray(concepts) || concepts.length !== count) {
       throw new Error(`Expected ${count} concepts, got ${concepts?.length}`)
