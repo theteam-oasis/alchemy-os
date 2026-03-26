@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { prompt, referenceImageBase64, referenceMimeType, productImageBase64, productMimeType, aspectRatio, imageSize } = body
+    const { prompt, avatarImageUrl, productImageUrl, aspectRatio, imageSize } = body
 
     if (!prompt || prompt.trim() === '') {
       return Response.json({ success: false, error: 'No prompt provided' }, { status: 400 })
@@ -14,29 +14,35 @@ export async function POST(request) {
       return Response.json({ success: false, error: 'GOOGLE_API_KEY not set' }, { status: 500 })
     }
 
-    console.log('Generating image | size:', imageSize || '2K', '| aspect:', aspectRatio || '16:9', '| avatar ref:', !!referenceImageBase64, '| product ref:', !!productImageBase64)
+    console.log('Generating | size:', imageSize || '2K', '| aspect:', aspectRatio || '16:9', '| avatar url:', !!avatarImageUrl, '| product url:', !!productImageUrl)
 
-    // Build parts array — text prompt first, then reference images
+    // Build parts — text first, then fetch reference images by URL server-side
     const parts = [{ text: prompt }]
 
-    // Avatar reference image for character consistency
-    if (referenceImageBase64) {
-      parts.push({
-        inlineData: {
-          mimeType: referenceMimeType || 'image/png',
-          data: referenceImageBase64,
-        }
-      })
+    // Fetch avatar reference image from URL (avoids huge base64 in request body)
+    if (avatarImageUrl) {
+      try {
+        const imgRes = await fetch(avatarImageUrl)
+        const imgBuffer = await imgRes.arrayBuffer()
+        const imgBase64 = Buffer.from(imgBuffer).toString('base64')
+        const mimeType = imgRes.headers.get('content-type') || 'image/png'
+        parts.push({ inlineData: { mimeType, data: imgBase64 } })
+      } catch (e) {
+        console.error('Failed to fetch avatar image:', e.message)
+      }
     }
 
-    // Product reference image
-    if (productImageBase64) {
-      parts.push({
-        inlineData: {
-          mimeType: productMimeType || 'image/jpeg',
-          data: productImageBase64,
-        }
-      })
+    // Fetch product reference image from URL
+    if (productImageUrl) {
+      try {
+        const imgRes = await fetch(productImageUrl)
+        const imgBuffer = await imgRes.arrayBuffer()
+        const imgBase64 = Buffer.from(imgBuffer).toString('base64')
+        const mimeType = imgRes.headers.get('content-type') || 'image/jpeg'
+        parts.push({ inlineData: { mimeType, data: imgBase64 } })
+      } catch (e) {
+        console.error('Failed to fetch product image:', e.message)
+      }
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`
