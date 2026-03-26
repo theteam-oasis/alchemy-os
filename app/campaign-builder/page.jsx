@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -25,7 +25,6 @@ async function autosave(campaignId, clientId, patch, onSave) {
   } catch (e) { console.error('Autosave failed', e) }
 }
 
-// Extract base64 data from a data URL
 function dataUrlToBase64(dataUrl) {
   if (!dataUrl) return null
   const parts = dataUrl.split(',')
@@ -38,12 +37,25 @@ function getMimeType(dataUrl) {
   return match ? match[1] : 'image/png'
 }
 
-// Generate image — optionally with a reference image for character consistency
-async function generateImage(prompt, referenceDataUrl = null) {
-  const body = { prompt }
-  if (referenceDataUrl) {
-    body.referenceImageBase64 = dataUrlToBase64(referenceDataUrl)
-    body.referenceMimeType = getMimeType(referenceDataUrl)
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function generateImage(prompt, options = {}) {
+  const { avatarDataUrl, productDataUrl, aspectRatio = '16:9', imageSize = '2K' } = options
+  const body = { prompt, aspectRatio, imageSize }
+  if (avatarDataUrl) {
+    body.referenceImageBase64 = dataUrlToBase64(avatarDataUrl)
+    body.referenceMimeType = getMimeType(avatarDataUrl)
+  }
+  if (productDataUrl) {
+    body.productImageBase64 = dataUrlToBase64(productDataUrl)
+    body.productMimeType = getMimeType(productDataUrl)
   }
   const res = await fetch('/api/campaign/generate-image', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -52,6 +64,24 @@ async function generateImage(prompt, referenceDataUrl = null) {
   const json = await res.json()
   if (!json.success) throw new Error(json.error)
   return json.imageUrl
+}
+
+// Run promises in batches of N in parallel
+async function batchGenerate(items, batchSize, fn) {
+  const results = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const batchResults = await Promise.allSettled(batch.map(fn))
+    results.push(...batchResults)
+  }
+  return results
+}
+
+function downloadImage(dataUrl, filename) {
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = filename || 'scene.png'
+  a.click()
 }
 
 function StepDots({ current }) {
@@ -66,11 +96,12 @@ function StepDots({ current }) {
   )
 }
 
-function LoadingPulse({ message }) {
+function LoadingPulse({ message, sub }) {
   return (
     <div className="loading-state">
       <div className="pulse-ring" />
       <p className="loading-msg">{message}</p>
+      {sub && <p className="loading-sub">{sub}</p>}
     </div>
   )
 }
@@ -135,6 +166,7 @@ export default function CampaignBuilder() {
   const [offerNotes, setOfferNotes] = useState('')
   const [creativeKeywords, setCreativeKeywords] = useState('')
   const [conceptCount, setConceptCount] = useState(4)
+  const [productImageDataUrl, setProductImageDataUrl] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [concepts, setConcepts] = useState([])
   const [chosenConcept, setChosenConcept] = useState(null)
@@ -143,6 +175,8 @@ export default function CampaignBuilder() {
   const [chosenScript, setChosenScript] = useState(null)
   const [scriptDuration, setScriptDuration] = useState(30)
   const [scriptsLoading, setScriptsLoading] = useState(false)
+  const [useOwnScript, setUseOwnScript] = useState(false)
+  const [ownScriptText, setOwnScriptText] = useState('')
   const [directions, setDirections] = useState([])
   const [chosenDirection, setChosenDirection] = useState(null)
   const [directionsLoading, setDirectionsLoading] = useState(false)
@@ -150,14 +184,16 @@ export default function CampaignBuilder() {
   const [avatarLabels, setAvatarLabels] = useState([])
   const [chosenAvatarIdx, setChosenAvatarIdx] = useState(null)
   const [avatarsLoading, setAvatarsLoading] = useState(false)
+  const [aspectRatio, setAspectRatio] = useState('16:9')
   const [shotList, setShotList] = useState([])
   const [scenes, setScenes] = useState([])
   const [currentScene, setCurrentScene] = useState(0)
   const [scenesLoading, setScenesLoading] = useState(false)
   const [scenesGenerated, setScenesGenerated] = useState(0)
-  const [useOwnScript, setUseOwnScript] = useState(false)
-  const [ownScriptText, setOwnScriptText] = useState('')
   const [error, setError] = useState(null)
+  const productInputRef = useRef(null)
+
+  const BATCH_SIZE = 4 // Max parallel image generations
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -186,6 +222,20 @@ export default function CampaignBuilder() {
   }, [campaignId, selectedClientId])
 
   const lockedAvatarDataUrl = chosenAvatarIdx !== null ? avatarImages[chosenAvatarIdx] : null
+
+  // Auto-regenerate scripts when duration changes (if scripts already exist)
+  useEffect(() => {
+    if (step === STEPS.SCRIPTS && scripts.length > 0 && !scriptsLoading && !useOwnScript) {
+      handleGenerateScripts()
+    }
+  }, [scriptDuration])
+
+  async function handleProductImageUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const dataUrl = await fileToDataUrl(file)
+    setProductImageDataUrl(dataUrl)
+  }
 
   async function handleAnalyze() {
     if (!websiteUrl && !productName) { setError('Enter a website URL or product name.'); return }
@@ -226,7 +276,7 @@ export default function CampaignBuilder() {
     try {
       const res = await fetch('/api/campaign/generate?type=scripts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concept: chosenConcept, analysis, duration: scriptDuration, previousScripts: scripts }),
+        body: JSON.stringify({ concept: chosenConcept, analysis, duration: scriptDuration, previousScripts: [] }),
       })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
@@ -265,8 +315,11 @@ export default function CampaignBuilder() {
       if (!json.success) throw new Error(json.error)
       const prompts = json.avatarPrompts
       setAvatarLabels(prompts.map(p => p.label))
-      // Generate all 4 avatars in parallel — NO reference image, these are portraits
-      const results = await Promise.allSettled(prompts.map(p => generateImage(p.imagePrompt)))
+
+      // Generate all 4 avatars in parallel — portrait format, no product reference
+      const results = await Promise.allSettled(
+        prompts.map(p => generateImage(p.imagePrompt, { aspectRatio: '3:4', imageSize: '2K' }))
+      )
       setAvatarImages(results.map(r => r.status === 'fulfilled' ? r.value : null))
       save({ chosen_direction: chosenDirection })
     } catch (e) { setError(e.message) }
@@ -279,15 +332,16 @@ export default function CampaignBuilder() {
     setStep(STEPS.SCENES)
     const avatarLabel = avatarLabels[chosenAvatarIdx] || 'Avatar'
     const avatarDataUrl = avatarImages[chosenAvatarIdx]
-    save({ chosen_avatar: avatarDataUrl, avatars: avatarImages })
+    save({ chosen_avatar: avatarDataUrl, avatars: avatarImages, aspect_ratio: aspectRatio })
 
     try {
-      // Step 1: Generate full shot list from script
+      // Step 1: Generate full shot list
       const shotRes = await fetch('/api/campaign/generate?type=shot-list', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           script: chosenScript, duration: scriptDuration,
-          concept: chosenConcept, direction: chosenDirection, avatarLabel,
+          concept: chosenConcept, direction: chosenDirection,
+          avatarLabel, hasProduct: !!productImageDataUrl, aspectRatio,
         }),
       })
       const shotJson = await shotRes.json()
@@ -295,36 +349,49 @@ export default function CampaignBuilder() {
 
       const shots = shotJson.shotList
       setShotList(shots)
-      setScenes(shots.map(() => ({ imageUrl: null, loading: true, shot: null })))
+      setScenes(shots.map(shot => ({ imageUrl: null, loading: true, shot })))
 
-      // Step 2: Generate each scene image using avatar as reference
-      for (let i = 0; i < shots.length; i++) {
-        const shot = shots[i]
-        // Build cinematic prompt with shot type and avatar reference instruction
-        const fullPrompt = `${shot.imagePrompt}
+      // Step 2: Generate images in batches of BATCH_SIZE
+      for (let i = 0; i < shots.length; i += BATCH_SIZE) {
+        const batch = shots.slice(i, i + BATCH_SIZE)
+        const batchPromises = batch.map((shot, batchIdx) => {
+          const globalIdx = i + batchIdx
+          const fullPrompt = `${shot.imagePrompt}
 
-Shot type: ${shot.shotType}. Camera: ${shot.cameraMove}. 
-The character in this scene is the SAME person as the reference portrait image provided.
-Maintain exact facial features, hair, skin tone, and outfit from the reference.
-Scene: ${shot.environment}. Action: ${shot.action}.
+Character: ${avatarLabel} — maintain exact facial features, hair, skin tone, and outfit from the reference portrait.
+Shot type: ${shot.shotType}. Camera movement: ${shot.cameraMove}.
+${shot.isProductShot && productImageDataUrl ? 'Feature the product prominently in this shot — maintain exact product appearance from reference.' : ''}
 Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.lighting}. No text, no watermarks.`
 
-        try {
-          // Pass avatar portrait as reference image for character consistency
-          const imageUrl = await generateImage(fullPrompt, avatarDataUrl)
-          setScenes(prev => {
-            const updated = [...prev]
-            updated[i] = { imageUrl, loading: false, shot }
-            return updated
+          const imgOptions = {
+            avatarDataUrl,
+            aspectRatio,
+            imageSize: '2K',
+          }
+          // Add product reference for product shots
+          if (shot.isProductShot && productImageDataUrl) {
+            imgOptions.productDataUrl = productImageDataUrl
+          }
+
+          return generateImage(fullPrompt, imgOptions).then(imageUrl => {
+            setScenes(prev => {
+              const updated = [...prev]
+              updated[globalIdx] = { ...updated[globalIdx], imageUrl, loading: false }
+              return updated
+            })
+            setScenesGenerated(prev => prev + 1)
+          }).catch(err => {
+            setScenes(prev => {
+              const updated = [...prev]
+              updated[globalIdx] = { ...updated[globalIdx], imageUrl: null, loading: false, error: err.message }
+              return updated
+            })
+            setScenesGenerated(prev => prev + 1)
           })
-        } catch (e) {
-          setScenes(prev => {
-            const updated = [...prev]
-            updated[i] = { imageUrl: null, loading: false, shot, error: e.message }
-            return updated
-          })
-        }
-        setScenesGenerated(i + 1)
+        })
+
+        // Wait for this batch to finish before starting the next
+        await Promise.allSettled(batchPromises)
       }
 
       setScenesLoading(false)
@@ -336,6 +403,14 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
   function handleFinishStoryboard() {
     save({ scenes, storyboard_complete: true })
     setStep(STEPS.STORYBOARD)
+  }
+
+  function handleReset() {
+    setStep(STEPS.INPUT); setCampaignId(null); setConcepts([]); setChosenConcept(null);
+    setScripts([]); setChosenScript(null); setDirections([]); setChosenDirection(null);
+    setAvatarImages([null,null,null,null]); setChosenAvatarIdx(null);
+    setShotList([]); setScenes([]); setAnalysis(null);
+    setUseOwnScript(false); setOwnScriptText(''); setProductImageDataUrl(null);
   }
 
   return (
@@ -392,12 +467,14 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
         .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .btn-secondary { background: transparent; color: #888; border: 1px solid #2a2a2a; border-radius: 8px; padding: 14px 24px; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
         .btn-secondary:hover { border-color: #444; color: #aaa; }
+        .btn-ghost { background: transparent; color: #555; border: none; padding: 8px 12px; font-size: 12px; cursor: pointer; font-family: inherit; transition: color 0.15s; border-radius: 6px; }
+        .btn-ghost:hover { color: #aaa; background: #1a1a1a; }
         .action-row { display: flex; align-items: center; gap: 12px; margin-top: 32px; }
         .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 24px; }
         .pulse-ring { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #FFD60A22; border-top-color: #FFD60A; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-msg { font-size: 14px; color: #555; letter-spacing: 0.05em; }
-        .loading-sub { font-size: 12px; color: #333; margin-top: 8px; }
+        .loading-sub { font-size: 12px; color: #333; }
         .analysis-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 24px; margin-bottom: 32px; }
         .analysis-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #FFD60A; margin-bottom: 16px; font-weight: 600; }
         .analysis-row { display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1a1a1a; }
@@ -438,7 +515,25 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
         .direction-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #444; font-weight: 600; }
         .direction-value { font-size: 12px; color: #777; line-height: 1.4; }
         .selected-check { position: absolute; top: 14px; right: 14px; width: 24px; height: 24px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #0a0a0a; }
-        /* Avatar grid — 4 portrait cards */
+        /* Product upload */
+        .product-upload-box { border: 1px dashed #2a2a2a; border-radius: 10px; padding: 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: border-color 0.15s; background: #0e0e0e; }
+        .product-upload-box:hover { border-color: #444; }
+        .product-upload-box.has-image { border-color: #FFD60A44; }
+        .product-preview { width: 60px; height: 60px; border-radius: 8px; object-fit: contain; background: #1a1a1a; }
+        .product-upload-text { flex: 1; }
+        .product-upload-title { font-size: 13px; color: #888; font-weight: 500; }
+        .product-upload-sub { font-size: 11px; color: #444; margin-top: 3px; }
+        .product-upload-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 6px 12px; background: transparent; cursor: pointer; font-family: inherit; }
+        /* Aspect ratio selector */
+        .aspect-selector { display: flex; gap: 12px; margin-bottom: 32px; }
+        .aspect-btn { flex: 1; padding: 16px; border-radius: 10px; border: 1px solid #2a2a2a; background: #111; color: #555; font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .aspect-btn:hover { border-color: #444; }
+        .aspect-btn.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A08; }
+        .aspect-icon { font-size: 24px; }
+        .aspect-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+        .aspect-desc { font-size: 10px; color: #444; }
+        .aspect-btn.active .aspect-desc { color: #FFD60A88; }
+        /* Avatar grid */
         .avatar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
         .avatar-card { cursor: pointer; border-radius: 12px; overflow: hidden; border: 2px solid #1e1e1e; transition: all 0.2s; position: relative; background: #111; }
         .avatar-card:hover { border-color: #333; }
@@ -451,42 +546,53 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
         .avatar-check { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #0a0a0a; }
         .avatar-failed { width: 100%; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; color: #333; font-size: 12px; }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        /* Locked avatar strip */
+        /* Locked strip */
         .locked-strip { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #111; border: 1px solid #1e1e1e; border-radius: 10px; margin-bottom: 24px; }
         .locked-portrait { width: 56px; height: 72px; border-radius: 8px; object-fit: cover; border: 2px solid #FFD60A; }
         .locked-info { flex: 1; }
         .locked-name { font-size: 13px; font-weight: 600; color: #e0e0e0; }
         .locked-sub { font-size: 11px; color: #555; margin-top: 2px; }
         .lock-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #FFD60A; border: 1px solid #FFD60A44; padding: 4px 10px; border-radius: 100px; }
-        /* Scene storyboard grid */
-        .storyboard-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 32px; }
+        /* Storyboard strip */
+        .storyboard-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-bottom: 24px; }
         .scene-tile { border-radius: 8px; overflow: hidden; border: 1px solid #1e1e1e; cursor: pointer; transition: all 0.2s; background: #111; }
         .scene-tile:hover { border-color: #333; }
         .scene-tile.active-tile { border-color: #FFD60A; }
         .scene-tile-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+        .scene-tile-img.vertical { aspect-ratio: 9/16; }
         .scene-tile-shimmer { width: 100%; aspect-ratio: 16/9; background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
-        .scene-tile-label { padding: 6px 8px; font-size: 9px; color: #444; text-transform: uppercase; letter-spacing: 0.06em; display: flex; justify-content: space-between; }
-        .scene-tile-shot { color: #FFD60A; }
-        /* Scene detail view */
-        .scene-detail { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+        .scene-tile-shimmer.vertical { aspect-ratio: 9/16; }
+        .scene-tile-label { padding: 5px 7px; font-size: 9px; color: #444; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; }
+        .scene-tile-shot { color: #FFD60A88; }
+        /* Scene detail */
+        .scene-detail { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; overflow: hidden; margin-bottom: 24px; position: relative; }
         .scene-detail-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+        .scene-detail-img.vertical { aspect-ratio: 9/16; max-height: 600px; width: auto; margin: 0 auto; display: block; }
         .scene-detail-shimmer { width: 100%; aspect-ratio: 16/9; background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+        .scene-detail-shimmer.vertical { aspect-ratio: 9/16; }
+        .scene-download-btn { position: absolute; top: 12px; right: 12px; background: #0a0a0aaa; border: 1px solid #333; color: #aaa; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: inherit; backdrop-filter: blur(4px); transition: all 0.15s; }
+        .scene-download-btn:hover { background: #FFD60A; color: #0a0a0a; border-color: #FFD60A; }
         .scene-detail-body { padding: 20px 24px; }
         .scene-detail-row { display: grid; grid-template-columns: 100px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a1a; }
         .scene-detail-row:last-child { border-bottom: none; }
-        .scene-detail-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #444; font-weight: 600; padding-top: 1px; }
+        .scene-detail-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #444; font-weight: 600; }
         .scene-detail-value { font-size: 12px; color: #888; line-height: 1.5; }
-        /* Progress bar */
-        .progress-bar-wrap { background: #1a1a1a; border-radius: 100px; height: 4px; margin: 16px 0; overflow: hidden; }
+        /* Progress */
+        .progress-bar-wrap { background: #1a1a1a; border-radius: 100px; height: 4px; margin: 12px 0 20px; overflow: hidden; }
         .progress-bar-fill { height: 100%; background: #FFD60A; border-radius: 100px; transition: width 0.3s; }
+        .progress-text { font-size: 11px; color: #444; margin-bottom: 4px; }
         .error-bar { background: #2a1010; border: 1px solid #5a1a1a; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #ff6b6b; margin-bottom: 20px; }
         .summary-strip { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }
         .summary-chip { padding: 8px 16px; background: #111; border: 1px solid #1e1e1e; border-radius: 100px; font-size: 12px; color: #666; }
         .summary-chip strong { color: #aaa; }
-        .storyboard-final { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 40px; }
-        .storyboard-final-tile { border-radius: 8px; overflow: hidden; border: 1px solid #1e1e1e; }
+        /* Final storyboard */
+        .storyboard-final { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 40px; }
+        .storyboard-final-tile { border-radius: 8px; overflow: hidden; border: 1px solid #1e1e1e; position: relative; }
         .storyboard-final-tile img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
-        .storyboard-final-label { padding: 8px 10px; font-size: 10px; color: #555; text-transform: uppercase; background: #111; }
+        .storyboard-final-tile img.vertical { aspect-ratio: 9/16; }
+        .storyboard-final-label { padding: 8px 10px; font-size: 10px; color: #555; text-transform: uppercase; background: #111; display: flex; justify-content: space-between; align-items: center; }
+        .tile-dl-btn { font-size: 10px; color: #555; cursor: pointer; padding: 2px 6px; border-radius: 4px; border: 1px solid #222; background: transparent; font-family: inherit; transition: all 0.15s; }
+        .tile-dl-btn:hover { color: #FFD60A; border-color: #FFD60A44; }
       `}</style>
 
       <div className="cb-shell">
@@ -513,6 +619,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 <h1 className="step-title">Brand Input</h1>
                 <p className="step-sub">Connect a client or enter brand details manually.</p>
               </div>
+
               {clients.length > 0 && (
                 <div className="client-selector">
                   <p className="client-selector-label">Select Client</p>
@@ -524,6 +631,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                   </div>
                 </div>
               )}
+
               <div className="form-grid">
                 <div className="form-group">
                   <label className="form-label">Website URL</label>
@@ -542,6 +650,26 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                   <input className="form-input" placeholder="ritual, cinematic, rebellion, luxury..." value={creativeKeywords} onChange={e => setCreativeKeywords(e.target.value)} />
                   <p className="keywords-hint">Comma-separated words to steer creative direction</p>
                 </div>
+
+                {/* Product image upload */}
+                <div className="form-group full">
+                  <label className="form-label">Product Image <span style={{color:'#333',fontWeight:400}}>(optional — will appear in scenes)</span></label>
+                  <div className={`product-upload-box ${productImageDataUrl ? 'has-image' : ''}`} onClick={() => productInputRef.current?.click()}>
+                    {productImageDataUrl
+                      ? <img src={productImageDataUrl} alt="Product" className="product-preview" />
+                      : <div style={{width:60,height:60,background:'#1a1a1a',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:'#333',fontSize:20}}>📦</div>
+                    }
+                    <div className="product-upload-text">
+                      <p className="product-upload-title">{productImageDataUrl ? 'Product image uploaded' : 'Upload a product photo'}</p>
+                      <p className="product-upload-sub">The product will be integrated into relevant scenes using AI reference</p>
+                    </div>
+                    <button className="product-upload-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
+                      {productImageDataUrl ? 'Change' : 'Upload'}
+                    </button>
+                  </div>
+                  <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductImageUpload} />
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Number of Concepts</label>
                   <div className="count-toggle">
@@ -549,6 +677,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                   </div>
                 </div>
               </div>
+
               <div className="action-row">
                 <button className="btn-primary" onClick={handleAnalyze}>Analyze & Build →</button>
               </div>
@@ -599,7 +728,6 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
 
               {!scriptsLoading && (
                 <>
-                  {/* Mode toggle */}
                   <div className="form-group" style={{marginBottom:24}}>
                     <label className="form-label">Script Mode</label>
                     <div className="count-toggle">
@@ -608,15 +736,18 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                     </div>
                   </div>
 
+                  <div className="form-group" style={{marginBottom:24}}>
+                    <label className="form-label">Ad Duration</label>
+                    <div className="duration-options">
+                      {[15,30,45,60].map(d => (
+                        <button key={d} className={`duration-btn ${scriptDuration === d ? 'active' : ''}`} onClick={() => setScriptDuration(d)}>{d}s</button>
+                      ))}
+                    </div>
+                    <p className="keywords-hint">Scripts are word-count calibrated to match this duration exactly</p>
+                  </div>
+
                   {useOwnScript ? (
-                    /* Own script mode */
                     <div>
-                      <div className="form-group" style={{marginBottom:16}}>
-                        <label className="form-label">Ad Duration</label>
-                        <div className="duration-options">
-                          {[15,30,45,60].map(d => <button key={d} className={`duration-btn ${scriptDuration === d ? 'active' : ''}`} onClick={() => setScriptDuration(d)}>{d}s</button>)}
-                        </div>
-                      </div>
                       <div className="form-group" style={{marginBottom:24}}>
                         <label className="form-label">Your Script</label>
                         <textarea
@@ -629,49 +760,46 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                         <p className="keywords-hint">This script will be used for the shot list and scene generation.</p>
                       </div>
                       <div className="action-row">
-                        <button
-                          className="btn-primary"
-                          disabled={!ownScriptText.trim()}
-                          onClick={() => {
-                            const customScript = {
-                              title: 'Custom Script',
-                              hook: ownScriptText.split('.')[0] || ownScriptText.slice(0, 60),
-                              body: ownScriptText,
-                              cta: '',
-                              fullScript: ownScriptText,
-                              mood: 'Custom',
-                              approach: 'User provided',
-                            }
-                            setChosenScript(customScript)
-                            save({ chosen_script: customScript })
-                            handleGenerateDirections()
-                          }}
-                        >
+                        <button className="btn-primary" disabled={!ownScriptText.trim()} onClick={() => {
+                          const customScript = {
+                            title: 'Custom Script',
+                            hook: ownScriptText.split('.')[0] || ownScriptText.slice(0,60),
+                            body: ownScriptText,
+                            cta: '',
+                            fullScript: ownScriptText,
+                            mood: 'Custom',
+                            approach: 'User provided',
+                            estimatedDuration: `${scriptDuration}s`,
+                          }
+                          setChosenScript(customScript)
+                          save({ chosen_script: customScript })
+                          handleGenerateDirections()
+                        }}>
                           Use This Script →
                         </button>
                       </div>
                     </div>
                   ) : (
-                    /* AI generate mode */
                     <div>
-                      <div className="form-group" style={{marginBottom:24}}>
-                        <label className="form-label">Ad Duration</label>
-                        <div className="duration-options">
-                          {[15,30,45,60].map(d => <button key={d} className={`duration-btn ${scriptDuration === d ? 'active' : ''}`} onClick={() => setScriptDuration(d)}>{d}s</button>)}
-                        </div>
-                      </div>
                       <div className="cards-grid">
                         {scripts.map((s,i) => <ScriptCard key={i} script={s} selected={chosenScript?.title === s.title} onClick={() => setChosenScript(s)} />)}
                       </div>
-                      <div className="action-row">
-                        <button className="btn-primary" disabled={!chosenScript} onClick={handleGenerateDirections}>Choose Visual Direction →</button>
-                        <button className="btn-secondary" onClick={handleGenerateScripts}>Regenerate Scripts</button>
-                      </div>
+                      {scripts.length === 0 && !scriptsLoading && (
+                        <div style={{textAlign:'center',padding:'40px 0'}}>
+                          <button className="btn-primary" onClick={handleGenerateScripts}>Generate Scripts →</button>
+                        </div>
+                      )}
+                      {scripts.length > 0 && (
+                        <div className="action-row">
+                          <button className="btn-primary" disabled={!chosenScript} onClick={handleGenerateDirections}>Choose Visual Direction →</button>
+                          <button className="btn-secondary" onClick={handleGenerateScripts}>Regenerate Scripts</button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
               )}
-              {scriptsLoading && <LoadingPulse message="Writing scripts..." />}
+              {scriptsLoading && <LoadingPulse message={`Writing ${scriptDuration}s scripts...`} sub={`~${Math.round(scriptDuration * 2.3)} spoken words each`} />}
             </div>
           )}
 
@@ -704,9 +832,28 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
               <div className="step-heading">
                 <p className="step-eyebrow">Step 5</p>
                 <h1 className="step-title">Choose Your Character</h1>
-                <p className="step-sub">{avatarsLoading ? 'Generating character portraits...' : 'Pick one. This character will appear in every scene of your campaign.'}</p>
+                <p className="step-sub">{avatarsLoading ? 'Generating character portraits...' : 'Pick one. This character appears in every scene.'}</p>
               </div>
               {chosenConcept && <div className="summary-strip"><div className="summary-chip"><strong>Concept:</strong> {chosenConcept.title}</div><div className="summary-chip"><strong>Direction:</strong> {chosenDirection?.title}</div></div>}
+
+              {/* Aspect ratio selector — set here before scene generation */}
+              {!avatarsLoading && (
+                <div className="form-group" style={{marginBottom:28}}>
+                  <label className="form-label">Video Format</label>
+                  <div className="aspect-selector">
+                    <button className={`aspect-btn ${aspectRatio === '16:9' ? 'active' : ''}`} onClick={() => setAspectRatio('16:9')}>
+                      <span className="aspect-icon">🖥</span>
+                      <span className="aspect-label">16:9</span>
+                      <span className="aspect-desc">Landscape · YouTube · TV</span>
+                    </button>
+                    <button className={`aspect-btn ${aspectRatio === '9:16' ? 'active' : ''}`} onClick={() => setAspectRatio('9:16')}>
+                      <span className="aspect-icon">📱</span>
+                      <span className="aspect-label">9:16</span>
+                      <span className="aspect-desc">Vertical · Reels · TikTok</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="avatar-grid">
                 {avatarImages.map((img, i) => (
@@ -727,7 +874,9 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
 
               {!avatarsLoading && (
                 <div className="action-row">
-                  <button className="btn-primary" disabled={chosenAvatarIdx === null} onClick={handleGenerateScenes}>Lock Character & Build Storyboard →</button>
+                  <button className="btn-primary" disabled={chosenAvatarIdx === null} onClick={handleGenerateScenes}>
+                    Lock Character & Build Storyboard ({aspectRatio}) →
+                  </button>
                   <button className="btn-secondary" onClick={handleGenerateAvatars}>Regenerate Characters</button>
                 </div>
               )}
@@ -742,43 +891,43 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 <h1 className="step-title">Scene Builder</h1>
                 <p className="step-sub">
                   {scenesLoading
-                    ? `Generating storyboard... ${scenesGenerated} of ${shotList.length} scenes`
-                    : `${scenes.length} scenes generated. Review your storyboard.`}
+                    ? `Building storyboard in ${aspectRatio} — ${scenesGenerated} of ${shotList.length} scenes complete`
+                    : `${scenes.length} scenes · ${aspectRatio} format · 2K resolution`}
                 </p>
               </div>
 
-              {/* Locked character strip */}
               {lockedAvatarDataUrl && (
                 <div className="locked-strip">
                   <img src={lockedAvatarDataUrl} alt="Locked character" className="locked-portrait" />
                   <div className="locked-info">
                     <p className="locked-name">{avatarLabels[chosenAvatarIdx] || 'Character'}</p>
-                    <p className="locked-sub">Locked — appears in every scene</p>
+                    <p className="locked-sub">Locked — reference image used in every scene</p>
                   </div>
-                  <span className="lock-badge">🔒 Locked</span>
+                  <span className="lock-badge">🔒 {aspectRatio}</span>
                 </div>
               )}
 
-              {/* Progress bar while generating */}
               {scenesLoading && shotList.length > 0 && (
-                <div className="progress-bar-wrap">
-                  <div className="progress-bar-fill" style={{ width: `${(scenesGenerated / shotList.length) * 100}%` }} />
-                </div>
+                <>
+                  <p className="progress-text">{scenesGenerated} / {shotList.length} scenes · generating {BATCH_SIZE} at a time</p>
+                  <div className="progress-bar-wrap">
+                    <div className="progress-bar-fill" style={{ width: `${(scenesGenerated / shotList.length) * 100}%` }} />
+                  </div>
+                </>
               )}
 
-              {/* Storyboard strip — all scenes */}
               {scenes.length > 0 && (
                 <div className="storyboard-strip">
                   {scenes.map((scene, i) => (
                     <div key={i} className={`scene-tile ${currentScene === i ? 'active-tile' : ''}`} onClick={() => setCurrentScene(i)}>
                       {scene.loading
-                        ? <div className="scene-tile-shimmer" />
+                        ? <div className={`scene-tile-shimmer ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
                         : scene.imageUrl
-                          ? <img src={scene.imageUrl} alt={`Scene ${i+1}`} className="scene-tile-img" />
-                          : <div className="scene-tile-shimmer" />
+                          ? <img src={scene.imageUrl} alt={`Scene ${i+1}`} className={`scene-tile-img ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
+                          : <div className={`scene-tile-shimmer ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
                       }
                       <div className="scene-tile-label">
-                        <span>Scene {i+1}</span>
+                        <span>{i+1}</span>
                         {scene.shot && <span className="scene-tile-shot">{scene.shot.shotType}</span>}
                       </div>
                     </div>
@@ -786,15 +935,19 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 </div>
               )}
 
-              {/* Current scene detail */}
               {scenes[currentScene] && (
                 <div className="scene-detail">
                   {scenes[currentScene].loading
-                    ? <div className="scene-detail-shimmer" />
+                    ? <div className={`scene-detail-shimmer ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
                     : scenes[currentScene].imageUrl
-                      ? <img src={scenes[currentScene].imageUrl} alt={`Scene ${currentScene+1}`} className="scene-detail-img" />
-                      : <div className="scene-detail-shimmer" />
+                      ? <img src={scenes[currentScene].imageUrl} alt={`Scene ${currentScene+1}`} className={`scene-detail-img ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
+                      : <div className={`scene-detail-shimmer ${aspectRatio === '9:16' ? 'vertical' : ''}`} />
                   }
+                  {!scenes[currentScene].loading && scenes[currentScene].imageUrl && (
+                    <button className="scene-download-btn" onClick={() => downloadImage(scenes[currentScene].imageUrl, `scene-${currentScene+1}-${aspectRatio.replace(':','x')}.png`)}>
+                      ↓ Download
+                    </button>
+                  )}
                   {scenes[currentScene].shot && (
                     <div className="scene-detail-body">
                       {[
@@ -804,7 +957,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                         ['Environment', scenes[currentScene].shot.environment],
                         ['Camera', scenes[currentScene].shot.cameraMove],
                         ['Mood', scenes[currentScene].shot.mood],
-                      ].map(([l,v]) => (
+                      ].map(([l,v]) => v && (
                         <div key={l} className="scene-detail-row">
                           <span className="scene-detail-label">{l}</span>
                           <span className="scene-detail-value">{v}</span>
@@ -815,7 +968,6 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 </div>
               )}
 
-              {/* Navigation */}
               {!scenesLoading && scenes.length > 0 && (
                 <div className="action-row">
                   <button className="btn-primary" disabled={scenes.some(s => s.loading)} onClick={handleFinishStoryboard}>View Full Storyboard →</button>
@@ -832,24 +984,28 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
               <div className="step-heading">
                 <p className="step-eyebrow">Complete</p>
                 <h1 className="step-title">Full Storyboard</h1>
-                <p className="step-sub">{scenes.length} scenes. Your campaign is ready.</p>
+                <p className="step-sub">{scenes.length} scenes · {aspectRatio} · 2K</p>
               </div>
               <div className="summary-strip">
                 <div className="summary-chip"><strong>Concept:</strong> {chosenConcept?.title}</div>
                 <div className="summary-chip"><strong>Script:</strong> {chosenScript?.title}</div>
                 <div className="summary-chip"><strong>Direction:</strong> {chosenDirection?.title}</div>
                 <div className="summary-chip"><strong>Character:</strong> {avatarLabels[chosenAvatarIdx]}</div>
+                <div className="summary-chip"><strong>Format:</strong> {aspectRatio}</div>
                 <div className="summary-chip"><strong>Scenes:</strong> {scenes.length}</div>
               </div>
               <div className="storyboard-final">
                 {scenes.map((scene, i) => (
                   <div key={i} className="storyboard-final-tile">
                     {scene.imageUrl
-                      ? <img src={scene.imageUrl} alt={`Scene ${i+1}`} />
-                      : <div style={{ aspectRatio:'16/9', background:'#111', display:'flex', alignItems:'center', justifyContent:'center', color:'#333', fontSize:12 }}>No image</div>
+                      ? <img src={scene.imageUrl} alt={`Scene ${i+1}`} className={aspectRatio === '9:16' ? 'vertical' : ''} />
+                      : <div style={{ aspectRatio: aspectRatio === '9:16' ? '9/16' : '16/9', background:'#111', display:'flex', alignItems:'center', justifyContent:'center', color:'#333', fontSize:12 }}>No image</div>
                     }
                     <div className="storyboard-final-label">
-                      Scene {i+1} {scene.shot && `· ${scene.shot.shotType}`}
+                      <span>Scene {i+1} {scene.shot && `· ${scene.shot.shotType}`}</span>
+                      {scene.imageUrl && (
+                        <button className="tile-dl-btn" onClick={() => downloadImage(scene.imageUrl, `scene-${i+1}.png`)}>↓</button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -861,13 +1017,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 </div>
               )}
               <div className="action-row">
-                <button className="btn-primary" onClick={() => {
-                  setStep(STEPS.INPUT); setCampaignId(null); setConcepts([]); setChosenConcept(null);
-                  setScripts([]); setChosenScript(null); setDirections([]); setChosenDirection(null);
-                  setAvatarImages([null,null,null,null]); setChosenAvatarIdx(null);
-                  setShotList([]); setScenes([]); setAnalysis(null);
-                  setUseOwnScript(false); setOwnScriptText('');
-                }}>New Campaign</button>
+                <button className="btn-primary" onClick={handleReset}>New Campaign</button>
                 <button className="btn-secondary" onClick={() => setStep(STEPS.SCENES)}>← Back to Scenes</button>
               </div>
             </div>
