@@ -167,6 +167,8 @@ export default function CampaignBuilder() {
   const [creativeKeywords, setCreativeKeywords] = useState('')
   const [conceptCount, setConceptCount] = useState(4)
   const [productImageDataUrl, setProductImageDataUrl] = useState(null)
+  const [clientProductImages, setClientProductImages] = useState([]) // URLs from brand_intake
+  const [selectedProductUrls, setSelectedProductUrls] = useState([]) // up to 4 selected
   const [analysis, setAnalysis] = useState(null)
   const [concepts, setConcepts] = useState([])
   const [chosenConcept, setChosenConcept] = useState(null)
@@ -207,12 +209,13 @@ export default function CampaignBuilder() {
   }, [])
 
   useEffect(() => {
-    if (!selectedClientId) return
+    if (!selectedClientId) { setClientProductImages([]); return }
     supabase.from('brand_intake').select('*').eq('client_id', selectedClientId).maybeSingle()
       .then(({ data }) => {
         if (data) {
           if (data.website) setWebsiteUrl(data.website)
           if (data.brand_name) setProductName(data.brand_name)
+          if (data.product_image_urls?.length) setClientProductImages(data.product_image_urls)
         }
       })
   }, [selectedClientId])
@@ -235,6 +238,27 @@ export default function CampaignBuilder() {
     if (!file) return
     const dataUrl = await fileToDataUrl(file)
     setProductImageDataUrl(dataUrl)
+    setSelectedProductUrls([]) // clear client selections when uploading own
+  }
+
+  function toggleClientProductUrl(url) {
+    setSelectedProductUrls(prev => {
+      if (prev.includes(url)) return prev.filter(u => u !== url)
+      if (prev.length >= 4) return prev // max 4
+      return [...prev, url]
+    })
+    setProductImageDataUrl(null) // clear manual upload when selecting client images
+  }
+
+  // Convert first selected product URL to base64 for use as reference
+  async function getProductDataUrl() {
+    if (productImageDataUrl) return productImageDataUrl
+    if (selectedProductUrls.length === 0) return null
+    try {
+      const res = await fetch(selectedProductUrls[0])
+      const blob = await res.blob()
+      return await fileToDataUrl(blob)
+    } catch { return null }
   }
 
   async function handleAnalyze() {
@@ -334,6 +358,9 @@ export default function CampaignBuilder() {
     const avatarDataUrl = avatarImages[chosenAvatarIdx]
     save({ chosen_avatar: avatarDataUrl, avatars: avatarImages, aspect_ratio: aspectRatio })
 
+    // Resolve product reference image
+    const resolvedProductDataUrl = await getProductDataUrl()
+
     try {
       // Step 1: Generate full shot list
       const shotRes = await fetch('/api/campaign/generate?type=shot-list', {
@@ -341,7 +368,7 @@ export default function CampaignBuilder() {
         body: JSON.stringify({
           script: chosenScript, duration: scriptDuration,
           concept: chosenConcept, direction: chosenDirection,
-          avatarLabel, hasProduct: !!productImageDataUrl, aspectRatio,
+          avatarLabel, hasProduct: !!resolvedProductDataUrl, aspectRatio,
         }),
       })
       const shotJson = await shotRes.json()
@@ -369,8 +396,8 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
             imageSize: '2K',
           }
           // Add product reference for product shots
-          if (shot.isProductShot && productImageDataUrl) {
-            imgOptions.productDataUrl = productImageDataUrl
+          if (shot.isProductShot && resolvedProductDataUrl) {
+            imgOptions.productDataUrl = resolvedProductDataUrl
           }
 
           return generateImage(fullPrompt, imgOptions).then(imageUrl => {
@@ -411,6 +438,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
     setAvatarImages([null,null,null,null]); setChosenAvatarIdx(null);
     setShotList([]); setScenes([]); setAnalysis(null);
     setUseOwnScript(false); setOwnScriptText(''); setProductImageDataUrl(null);
+    setSelectedProductUrls([]); setClientProductImages([]);
   }
 
   return (
@@ -524,6 +552,22 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
         .product-upload-title { font-size: 13px; color: #888; font-weight: 500; }
         .product-upload-sub { font-size: 11px; color: #444; margin-top: 3px; }
         .product-upload-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 6px 12px; background: transparent; cursor: pointer; font-family: inherit; }
+        /* Product image picker */
+        .product-picker { background: #0e0e0e; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; }
+        .product-picker-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .product-picker-count { color: #FFD60A; font-size: 11px; }
+        .product-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .product-picker-item { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #1e1e1e; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; }
+        .product-picker-item:hover { border-color: #444; }
+        .product-picker-item.selected { border-color: #FFD60A; }
+        .product-picker-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .product-picker-check { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #0a0a0a; }
+        .product-picker-divider { height: 1px; background: #1e1e1e; margin: 14px 0; }
+        .product-own-upload { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .product-own-preview { width: 48px; height: 48px; border-radius: 8px; object-fit: contain; background: #1a1a1a; border: 1px solid #222; }
+        .product-own-placeholder { width: 48px; height: 48px; border-radius: 8px; background: #1a1a1a; border: 1px dashed #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .product-own-text { flex: 1; font-size: 12px; color: #666; }
+        .product-own-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
         /* Aspect ratio selector */
         .aspect-selector { display: flex; gap: 12px; margin-bottom: 32px; }
         .aspect-btn { flex: 1; padding: 16px; border-radius: 10px; border: 1px solid #2a2a2a; background: #111; color: #555; font-size: 13px; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -651,22 +695,51 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                   <p className="keywords-hint">Comma-separated words to steer creative direction</p>
                 </div>
 
-                {/* Product image upload */}
+                {/* Product image picker */}
                 <div className="form-group full">
-                  <label className="form-label">Product Image <span style={{color:'#333',fontWeight:400}}>(optional — will appear in scenes)</span></label>
-                  <div className={`product-upload-box ${productImageDataUrl ? 'has-image' : ''}`} onClick={() => productInputRef.current?.click()}>
-                    {productImageDataUrl
-                      ? <img src={productImageDataUrl} alt="Product" className="product-preview" />
-                      : <div style={{width:60,height:60,background:'#1a1a1a',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:'#333',fontSize:20}}>📦</div>
-                    }
-                    <div className="product-upload-text">
-                      <p className="product-upload-title">{productImageDataUrl ? 'Product image uploaded' : 'Upload a product photo'}</p>
-                      <p className="product-upload-sub">The product will be integrated into relevant scenes using AI reference</p>
+                  <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional — up to 4, will appear in scenes)</span></label>
+
+                  <div className="product-picker">
+                    {/* Client images from onboarding */}
+                    {clientProductImages.length > 0 && (
+                      <>
+                        <div className="product-picker-label">
+                          <span>From Client Onboarding</span>
+                          <span className="product-picker-count">{selectedProductUrls.length}/4 selected</span>
+                        </div>
+                        <div className="product-picker-grid">
+                          {clientProductImages.map((url, i) => (
+                            <div
+                              key={i}
+                              className={`product-picker-item ${selectedProductUrls.includes(url) ? 'selected' : ''}`}
+                              onClick={() => toggleClientProductUrl(url)}
+                            >
+                              <img src={url} alt={`Product ${i+1}`} />
+                              {selectedProductUrls.includes(url) && (
+                                <div className="product-picker-check">{selectedProductUrls.indexOf(url) + 1}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="product-picker-divider" />
+                      </>
+                    )}
+
+                    {/* Upload own image */}
+                    <div className="product-own-upload" onClick={() => productInputRef.current?.click()}>
+                      {productImageDataUrl
+                        ? <img src={productImageDataUrl} alt="Uploaded" className="product-own-preview" />
+                        : <div className="product-own-placeholder">📦</div>
+                      }
+                      <span className="product-own-text">
+                        {productImageDataUrl ? 'Custom image uploaded' : clientProductImages.length > 0 ? 'Or upload your own image' : 'Upload a product photo'}
+                      </span>
+                      <button className="product-own-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
+                        {productImageDataUrl ? 'Change' : 'Upload'}
+                      </button>
                     </div>
-                    <button className="product-upload-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
-                      {productImageDataUrl ? 'Change' : 'Upload'}
-                    </button>
                   </div>
+
                   <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductImageUpload} />
                 </div>
 
