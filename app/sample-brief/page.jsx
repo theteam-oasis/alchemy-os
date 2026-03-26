@@ -17,16 +17,12 @@ function fileToDataUrl(file) {
   })
 }
 
-const STAGES = [
-  { key: 'analyzing', label: 'Analyzing brand', icon: '🔍' },
-  { key: 'concepts', label: 'Building 4 campaign concepts', icon: '💡' },
-  { key: 'images', label: 'Generating avatars', icon: '👤' },
-  { key: 'scenes', label: 'Building storyboards', icon: '🎬' },
-  { key: 'saving', label: 'Saving to database', icon: '💾' },
-]
+function parseJSON(text) {
+  return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
+}
 
-export default function AutoBriefPage() {
-  const [phase, setPhase] = useState('input') // input | generating | done | error
+export default function SampleBriefPage() {
+  const [phase, setPhase] = useState('input')
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
   const [websiteUrl, setWebsiteUrl] = useState('')
@@ -37,9 +33,13 @@ export default function AutoBriefPage() {
   const [productImageDataUrl, setProductImageDataUrl] = useState(null)
   const [clientProductImages, setClientProductImages] = useState([])
   const [selectedProductUrls, setSelectedProductUrls] = useState([])
-  const [progress, setProgress] = useState([])
-  const [conceptProgress, setConceptProgress] = useState([null, null, null, null])
-  const [currentStage, setCurrentStage] = useState('')
+  const [conceptProgress, setConceptProgress] = useState([
+    { status: 'waiting', title: '', message: '' },
+    { status: 'waiting', title: '', message: '' },
+    { status: 'waiting', title: '', message: '' },
+    { status: 'waiting', title: '', message: '' },
+  ])
+  const [overallMessage, setOverallMessage] = useState('')
   const [error, setError] = useState(null)
   const [doneClientId, setDoneClientId] = useState(null)
   const productInputRef = useRef(null)
@@ -50,7 +50,7 @@ export default function AutoBriefPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedClientId) return
+    if (!selectedClientId) { setClientProductImages([]); return }
     supabase.from('brand_intake').select('website, brand_name, product_image_urls').eq('client_id', selectedClientId).maybeSingle()
       .then(({ data }) => {
         if (data) {
@@ -80,107 +80,112 @@ export default function AutoBriefPage() {
   }
 
   async function handleGenerate() {
-    if (!selectedClientId && !productName) {
-      setError('Select a client or enter a product name.')
-      return
-    }
-
-    // If no client selected, we need one — create a temp approach
-    const clientId = selectedClientId
-    if (!clientId) {
-      setError('Please select a client to link the briefs to.')
-      return
-    }
+    if (!selectedClientId) { setError('Please select a client.'); return }
+    if (!websiteUrl && !productName) { setError('Enter a website URL or product name.'); return }
 
     setPhase('generating')
-    setProgress([])
-    setConceptProgress([null, null, null, null])
     setError(null)
+    setConceptProgress([
+      { status: 'waiting', title: '', message: 'Waiting...' },
+      { status: 'waiting', title: '', message: 'Waiting...' },
+      { status: 'waiting', title: '', message: 'Waiting...' },
+      { status: 'waiting', title: '', message: 'Waiting...' },
+    ])
 
     try {
-      const res = await fetch('/api/campaign/sample-generate', {
+      // Step 1: Analyze website + generate 4 concepts via Claude directly
+      setOverallMessage('Analyzing brand and generating 4 campaign concepts...')
+
+      const analyzeRes = await fetch('/api/campaign/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteUrl, productName, offerNotes }),
+      })
+      const analyzeJson = await analyzeRes.json()
+      if (!analyzeJson.success) throw new Error(analyzeJson.error)
+      const analysis = analyzeJson.analysis
+
+      const conceptsRes = await fetch('/api/campaign/concepts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clientId,
-          websiteUrl,
-          productName,
-          offerNotes,
-          creativeKeywords,
-          aspectRatio,
-          imageSize: "1K",
+          analysis,
+          creativeKeywords: creativeKeywords.split(',').map(k => k.trim()).filter(Boolean),
+          count: 4,
+          previousConcepts: [],
         }),
       })
+      const conceptsJson = await conceptsRes.json()
+      if (!conceptsJson.success) throw new Error(conceptsJson.error)
+      const concepts = conceptsJson.concepts
 
-      if (!res.ok) throw new Error('Generation failed to start')
-      if (!res.body) throw new Error('No response stream')
+      // Show concept titles
+      setConceptProgress(concepts.map((c, i) => ({
+        status: 'building',
+        title: c.title,
+        message: 'Building...'
+      })))
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+      setOverallMessage('Building all 4 campaigns in parallel...')
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      // Step 2: Build all 4 concepts in parallel — one API call per concept
+      const buildPromises = concepts.map(async (concept, conceptIdx) => {
+        try {
+          setConceptProgress(prev => {
+            const updated = [...prev]
+            updated[conceptIdx] = { ...updated[conceptIdx], status: 'building', message: 'Generating script, avatar & scenes...' }
+            return updated
+          })
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+          const res = await fetch('/api/campaign/sample-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientId: selectedClientId,
+              analysis,
+              concept,
+              conceptIdx,
+              websiteUrl,
+              productName,
+              offerNotes,
+              creativeKeywords,
+              aspectRatio,
+              imageSize: '1K',
+            }),
+          })
 
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.slice(7).trim()
-            continue
-          }
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
+          const json = await res.json()
+          if (!json.success) throw new Error(json.error)
 
-              if (data.step) {
-                setCurrentStage(data.step)
-                setProgress(prev => [...prev, { 
-                  time: new Date().toLocaleTimeString(), 
-                  message: data.message,
-                  conceptIdx: data.conceptIdx
-                }])
-              }
+          setConceptProgress(prev => {
+            const updated = [...prev]
+            updated[conceptIdx] = { status: 'done', title: concept.title, message: 'Complete ✓' }
+            return updated
+          })
 
-              if (data.conceptTitle !== undefined) {
-                // concept_complete event
-                setConceptProgress(prev => {
-                  const updated = [...prev]
-                  updated[data.conceptIdx] = { title: data.conceptTitle, status: 'done' }
-                  return updated
-                })
-              }
-
-              if (data.error && data.conceptIdx !== undefined) {
-                setConceptProgress(prev => {
-                  const updated = [...prev]
-                  updated[data.conceptIdx] = { title: `Concept ${data.conceptIdx + 1}`, status: 'error' }
-                  return updated
-                })
-              }
-
-              if (data.clientId && data.successCount !== undefined) {
-                // complete event
-                setDoneClientId(data.clientId)
-                setPhase('done')
-              }
-
-              if (data.message && !data.step && !data.clientId) {
-                setError(data.message)
-                setPhase('error')
-              }
-            } catch {}
-          }
+          return json.campaignId
+        } catch (e) {
+          console.error(`Concept ${conceptIdx} failed:`, e.message)
+          setConceptProgress(prev => {
+            const updated = [...prev]
+            updated[conceptIdx] = { status: 'error', title: concept.title, message: e.message }
+            return updated
+          })
+          return null
         }
-      }
+      })
+
+      await Promise.allSettled(buildPromises)
+      setDoneClientId(selectedClientId)
+      setPhase('done')
+
     } catch (e) {
       setError(e.message)
       setPhase('error')
     }
   }
+
+  const completedCount = conceptProgress.filter(c => c.status === 'done').length
 
   return (
     <>
@@ -191,188 +196,159 @@ export default function AutoBriefPage() {
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-
-        .shell { min-height: 100vh; display: flex; flex-direction: column; }
-
-        /* Header */
+        .shell { min-height: 100vh; }
         .header { display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; border-bottom: 1px solid #1a1a1a; }
         .logo { display: flex; align-items: center; gap: 10px; }
         .logo-mark { width: 28px; height: 28px; background: #FFD60A; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #0a0a0a; }
         .logo-text { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #888; }
         .logo-text span { color: #FFD60A; }
-        .header-nav { display: flex; gap: 16px; }
+        .nav { display: flex; gap: 12px; }
         .nav-link { font-size: 12px; color: #555; text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid #222; transition: all 0.15s; }
         .nav-link:hover { color: #aaa; border-color: #333; }
-
-        /* Input phase */
-        .input-container { max-width: 680px; margin: 60px auto; padding: 0 40px; width: 100%; animation: fadeIn 0.3s ease; }
-        .page-eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #FFD60A; font-weight: 600; margin-bottom: 10px; }
-        .page-title { font-size: 36px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; line-height: 1.2; }
-        .page-sub { font-size: 14px; color: #555; margin-bottom: 40px; line-height: 1.6; }
-
-        .form-section { margin-bottom: 28px; }
-        .form-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 8px; display: block; }
-        .form-input, .form-textarea { background: #111; border: 1px solid #222; border-radius: 8px; color: #e8e8e8; font-size: 14px; padding: 12px 16px; outline: none; transition: border-color 0.15s; font-family: inherit; width: 100%; }
-        .form-input:focus, .form-textarea:focus { border-color: #FFD60A44; }
-        .form-textarea { resize: vertical; min-height: 80px; }
-        .form-hint { font-size: 11px; color: #444; margin-top: 6px; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-        /* Client pills */
-        .client-box { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; margin-bottom: 28px; }
-        .client-box-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 12px; }
-        .client-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-        .client-pill { padding: 7px 14px; border-radius: 100px; border: 1px solid #2a2a2a; background: transparent; color: #666; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
-        .client-pill:hover { border-color: #444; color: #aaa; }
-        .client-pill.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A11; }
-
-        /* Aspect toggle */
+        .container { max-width: 680px; margin: 60px auto; padding: 0 40px; width: 100%; animation: fadeIn 0.3s ease; }
+        .eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #FFD60A; font-weight: 600; margin-bottom: 10px; }
+        .title { font-size: 36px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; line-height: 1.2; }
+        .subtitle { font-size: 14px; color: #555; margin-bottom: 40px; line-height: 1.6; }
+        .cost-badge { display: inline-flex; align-items: center; gap: 6px; background: #111; border: 1px solid #1e1e1e; border-radius: 100px; padding: 5px 12px; font-size: 11px; color: #555; margin-bottom: 32px; }
+        .cost-badge span { color: #FFD60A; font-weight: 600; }
+        .section { margin-bottom: 24px; }
+        .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 8px; display: block; }
+        .input, .textarea { background: #111; border: 1px solid #222; border-radius: 8px; color: #e8e8e8; font-size: 14px; padding: 12px 16px; outline: none; transition: border-color 0.15s; font-family: inherit; width: 100%; }
+        .input:focus, .textarea:focus { border-color: #FFD60A44; }
+        .textarea { resize: vertical; min-height: 72px; }
+        .hint { font-size: 11px; color: #444; margin-top: 6px; }
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .client-box { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; margin-bottom: 24px; }
+        .client-box-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 10px; }
+        .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pill { padding: 7px 14px; border-radius: 100px; border: 1px solid #2a2a2a; background: transparent; color: #666; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+        .pill:hover { border-color: #444; color: #aaa; }
+        .pill.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A11; }
         .aspect-row { display: flex; gap: 10px; }
         .aspect-btn { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #2a2a2a; background: transparent; color: #555; font-size: 12px; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .aspect-btn:hover { border-color: #444; }
         .aspect-btn.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A08; }
-
-        /* Product upload */
-        .product-upload { border: 1px dashed #2a2a2a; border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.15s; background: #0e0e0e; }
-        .product-upload:hover { border-color: #444; }
-        .product-upload.has-img { border-color: #FFD60A44; }
-        .product-preview { width: 52px; height: 52px; border-radius: 8px; object-fit: contain; background: #1a1a1a; }
-        .product-placeholder { width: 52px; height: 52px; border-radius: 8px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .product-text { flex: 1; }
-        .product-title { font-size: 13px; color: #888; font-weight: 500; }
-        .product-sub { font-size: 11px; color: #444; margin-top: 2px; }
-        .product-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
         .product-picker { background: #0e0e0e; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; }
         .product-picker-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 12px; font-weight: 600; display: flex; justify-content: space-between; }
         .product-picker-count { color: #FFD60A; }
-        .product-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 12px; }
-        .product-picker-item { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #1e1e1e; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; }
-        .product-picker-item:hover { border-color: #444; }
-        .product-picker-item.selected { border-color: #FFD60A; }
-        .product-picker-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .product-picker-check { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #0a0a0a; }
-        .product-picker-divider { height: 1px; background: #1e1e1e; margin: 12px 0; }
+        .product-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin-bottom: 12px; }
+        .product-item { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #1e1e1e; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; }
+        .product-item:hover { border-color: #444; }
+        .product-item.selected { border-color: #FFD60A; }
+        .product-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .product-item-check { position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #0a0a0a; }
+        .divider { height: 1px; background: #1e1e1e; margin: 12px 0; }
         .product-own { display: flex; align-items: center; gap: 12px; cursor: pointer; }
         .product-own-preview { width: 44px; height: 44px; border-radius: 8px; object-fit: contain; background: #1a1a1a; border: 1px solid #222; }
         .product-own-placeholder { width: 44px; height: 44px; border-radius: 8px; background: #1a1a1a; border: 1px dashed #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
         .product-own-text { flex: 1; font-size: 12px; color: #666; }
-        .product-own-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
-
-        /* Generate button */
-        .generate-btn { width: 100%; padding: 18px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: all 0.15s; font-family: inherit; letter-spacing: 0.02em; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
-        .generate-btn:hover { background: #ffe033; transform: translateY(-1px); }
-        .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-        .generate-btn-cost { font-size: 11px; opacity: 0.6; font-weight: 400; }
-
-        /* Error */
+        .product-own-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; }
         .error-bar { background: #2a1010; border: 1px solid #5a1a1a; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #ff6b6b; margin-bottom: 20px; }
-
-        /* Generating phase */
-        .generating-container { max-width: 680px; margin: 60px auto; padding: 0 40px; width: 100%; animation: fadeIn 0.3s ease; }
-        .generating-header { text-align: center; margin-bottom: 48px; }
-        .generating-spinner { width: 56px; height: 56px; border: 2px solid #FFD60A22; border-top-color: #FFD60A; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        .generating-title { font-size: 22px; font-weight: 700; color: #f0f0f0; margin-bottom: 6px; }
-        .generating-sub { font-size: 13px; color: #555; }
-
-        /* Concept progress cards */
-        .concept-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 32px; }
-        .concept-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
-        .concept-card.done { border-color: #FFD60A44; }
-        .concept-card.error { border-color: #5a1a1a; }
-        .concept-card-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, #FFD60A08 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 2s infinite; }
-        .concept-card-num { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 8px; }
-        .concept-card-title { font-size: 14px; font-weight: 600; color: #f0f0f0; margin-bottom: 4px; min-height: 20px; }
-        .concept-card-status { font-size: 11px; }
-        .status-building { color: #FFD60A; animation: pulse 1.5s infinite; }
-        .status-done { color: #4ade80; }
-        .status-error { color: #f87171; }
-        .status-waiting { color: #444; }
-        .concept-card-check { position: absolute; top: 16px; right: 16px; width: 24px; height: 24px; background: #4ade8022; border: 1px solid #4ade8066; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #4ade80; }
-
-        /* Live log */
-        .live-log { background: #0e0e0e; border: 1px solid #1a1a1a; border-radius: 10px; padding: 16px; max-height: 200px; overflow-y: auto; }
-        .live-log-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 12px; }
-        .log-item { display: flex; gap: 10px; margin-bottom: 8px; animation: fadeIn 0.2s ease; }
-        .log-time { font-size: 10px; color: #333; white-space: nowrap; padding-top: 1px; }
-        .log-msg { font-size: 12px; color: #666; line-height: 1.4; }
-        .log-dot { width: 6px; height: 6px; border-radius: 50%; background: #FFD60A; margin-top: 5px; flex-shrink: 0; }
-
-        /* Done phase */
-        .done-container { max-width: 560px; margin: 80px auto; padding: 0 40px; text-align: center; animation: fadeIn 0.4s ease; }
-        .done-icon { font-size: 56px; margin-bottom: 24px; }
+        .gen-btn { width: 100%; padding: 18px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: all 0.15s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 28px; }
+        .gen-btn:hover { background: #ffe033; transform: translateY(-1px); }
+        .gen-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .gen-btn-sub { font-size: 11px; opacity: 0.6; font-weight: 400; }
+        /* Generating */
+        .gen-container { max-width: 680px; margin: 60px auto; padding: 0 40px; animation: fadeIn 0.3s ease; }
+        .gen-header { text-align: center; margin-bottom: 40px; }
+        .spinner { width: 52px; height: 52px; border: 2px solid #FFD60A22; border-top-color: #FFD60A; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 18px; }
+        .gen-title { font-size: 22px; font-weight: 700; color: #f0f0f0; margin-bottom: 6px; }
+        .gen-sub { font-size: 13px; color: #555; }
+        .progress-bar-wrap { background: #1a1a1a; border-radius: 100px; height: 3px; margin: 20px 0; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: #FFD60A; border-radius: 100px; transition: width 0.5s; }
+        .concept-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .concept-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 18px; position: relative; overflow: hidden; transition: border-color 0.3s; }
+        .concept-card.building { border-color: #FFD60A44; }
+        .concept-card.done { border-color: #4ade8044; }
+        .concept-card.error { border-color: #ef444444; }
+        .concept-card-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #FFD60A06, transparent); background-size: 200% 100%; animation: shimmer 2s infinite; pointer-events: none; }
+        .concept-num { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 6px; }
+        .concept-title { font-size: 13px; font-weight: 600; color: #f0f0f0; margin-bottom: 6px; min-height: 18px; }
+        .concept-status { font-size: 11px; }
+        .s-waiting { color: #333; }
+        .s-building { color: #FFD60A; animation: pulse 1.5s infinite; }
+        .s-done { color: #4ade80; }
+        .s-error { color: #f87171; }
+        .concept-check { position: absolute; top: 14px; right: 14px; width: 22px; height: 22px; background: #4ade8022; border: 1px solid #4ade8066; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #4ade80; }
+        /* Done */
+        .done-container { max-width: 520px; margin: 80px auto; padding: 0 40px; text-align: center; animation: fadeIn 0.4s ease; }
+        .done-icon { font-size: 52px; margin-bottom: 20px; }
         .done-title { font-size: 28px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; }
-        .done-sub { font-size: 14px; color: #555; margin-bottom: 32px; line-height: 1.6; }
-        .done-btn { display: inline-block; padding: 16px 40px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; text-decoration: none; transition: all 0.15s; }
-        .done-btn:hover { background: #ffe033; transform: translateY(-1px); }
-        .done-secondary { display: inline-block; margin-top: 16px; font-size: 13px; color: #555; cursor: pointer; text-decoration: none; }
-        .done-secondary:hover { color: #888; }
+        .done-sub { font-size: 14px; color: #555; margin-bottom: 28px; line-height: 1.6; }
+        .done-btn { display: inline-block; padding: 15px 36px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; text-decoration: none; transition: all 0.15s; }
+        .done-btn:hover { background: #ffe033; }
+        .done-link { display: block; margin-top: 14px; font-size: 12px; color: #444; text-decoration: none; cursor: pointer; }
+        .done-link:hover { color: #666; }
       `}</style>
 
       <div className="shell">
         <header className="header">
           <div className="logo">
             <div className="logo-mark">A</div>
-            <span className="logo-text">Alchemy <span>Sample Brief Builder</span></span>
+            <span className="logo-text">Alchemy <span>Sample Builder</span></span>
           </div>
-          <div className="header-nav">
+          <div className="nav">
             <a href="/campaign-builder" className="nav-link">Manual Builder</a>
-            <a href="/auto-brief" className="nav-link">Full Brief Builder</a>
+            <a href="/auto-brief" className="nav-link">Full Brief (2K)</a>
           </div>
         </header>
 
-        {/* INPUT PHASE */}
+        {/* INPUT */}
         {phase === 'input' && (
-          <div className="input-container">
-            <p className="page-eyebrow">Sample Brief Machine</p>
-            <h1 className="page-title">Auto-Generate 4 Concepts</h1>
-            <p className="page-sub">Enter brand details and we'll automatically build 4 complete campaign briefs — concepts, scripts, avatars, and full storyboards — ready for client review.</p>
+          <div className="container">
+            <p className="eyebrow">Sample Brief Machine</p>
+            <h1 className="title">Auto-Generate 4 Sample Briefs</h1>
+            <p className="subtitle">One click. Four complete campaign concepts with scripts, avatars and storyboards — built for prospecting at scale.</p>
+
+            <div className="cost-badge">
+              1K resolution · <span>~$2.20 per run</span> · ~3 min
+            </div>
 
             {error && <div className="error-bar">⚠ {error}</div>}
 
-            {/* Client selector */}
             {clients.length > 0 && (
               <div className="client-box">
-                <p className="client-box-label">Select Client</p>
-                <div className="client-pills">
+                <p className="client-box-label">Client</p>
+                <div className="pills">
                   {clients.map(c => (
-                    <button key={c.id} className={`client-pill ${selectedClientId === c.id ? 'active' : ''}`} onClick={() => setSelectedClientId(c.id)}>{c.name}</button>
+                    <button key={c.id} className={`pill ${selectedClientId === c.id ? 'active' : ''}`} onClick={() => setSelectedClientId(c.id)}>{c.name}</button>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="form-grid" style={{marginBottom:20}}>
-              <div className="form-section" style={{marginBottom:0}}>
-                <label className="form-label">Website URL</label>
-                <input className="form-input" type="url" placeholder="https://yourbrand.com" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} />
+            <div className="grid2" style={{marginBottom:20}}>
+              <div className="section" style={{marginBottom:0}}>
+                <label className="label">Website URL</label>
+                <input className="input" type="url" placeholder="https://yourbrand.com" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} />
               </div>
-              <div className="form-section" style={{marginBottom:0}}>
-                <label className="form-label">Product / Service</label>
-                <input className="form-input" placeholder="What are we advertising?" value={productName} onChange={e => setProductName(e.target.value)} />
+              <div className="section" style={{marginBottom:0}}>
+                <label className="label">Product / Service</label>
+                <input className="input" placeholder="What are we advertising?" value={productName} onChange={e => setProductName(e.target.value)} />
               </div>
             </div>
 
-            <div className="form-section">
-              <label className="form-label">Offer or Context <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
-              <textarea className="form-textarea" placeholder="Any specific offer, launch details, or campaign context..." value={offerNotes} onChange={e => setOfferNotes(e.target.value)} />
+            <div className="section">
+              <label className="label">Offer or Context <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
+              <textarea className="textarea" placeholder="Specific offer, launch, or campaign context..." value={offerNotes} onChange={e => setOfferNotes(e.target.value)} />
             </div>
 
-            <div className="form-section">
-              <label className="form-label">Creative Keywords <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
-              <input className="form-input" placeholder="ritual, cinematic, rebellion, luxury, transformation..." value={creativeKeywords} onChange={e => setCreativeKeywords(e.target.value)} />
-              <p className="form-hint">Comma-separated — steers creative direction across all 4 concepts</p>
+            <div className="section">
+              <label className="label">Creative Keywords <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
+              <input className="input" placeholder="cinematic, premium, transformation..." value={creativeKeywords} onChange={e => setCreativeKeywords(e.target.value)} />
+              <p className="hint">Steers creative direction across all 4 concepts</p>
             </div>
 
-            <div className="form-section">
-              <label className="form-label">Video Format</label>
+            <div className="section">
+              <label className="label">Format</label>
               <div className="aspect-row">
-                <button className={`aspect-btn ${aspectRatio === '16:9' ? 'active' : ''}`} onClick={() => setAspectRatio('16:9')}>🖥 16:9 — Landscape</button>
-                <button className={`aspect-btn ${aspectRatio === '9:16' ? 'active' : ''}`} onClick={() => setAspectRatio('9:16')}>📱 9:16 — Vertical</button>
+                <button className={`aspect-btn ${aspectRatio === '16:9' ? 'active' : ''}`} onClick={() => setAspectRatio('16:9')}>🖥 16:9 Landscape</button>
+                <button className={`aspect-btn ${aspectRatio === '9:16' ? 'active' : ''}`} onClick={() => setAspectRatio('9:16')}>📱 9:16 Vertical</button>
               </div>
             </div>
 
-            <div className="form-section">
-              <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional — up to 4)</span></label>
+            <div className="section">
+              <label className="label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
               <div className="product-picker">
                 {clientProductImages.length > 0 && (
                   <>
@@ -382,13 +358,13 @@ export default function AutoBriefPage() {
                     </div>
                     <div className="product-picker-grid">
                       {clientProductImages.map((url, i) => (
-                        <div key={i} className={`product-picker-item ${selectedProductUrls.includes(url) ? 'selected' : ''}`} onClick={() => toggleClientProductUrl(url)}>
+                        <div key={i} className={`product-item ${selectedProductUrls.includes(url) ? 'selected' : ''}`} onClick={() => toggleClientProductUrl(url)}>
                           <img src={url} alt={`Product ${i+1}`} />
-                          {selectedProductUrls.includes(url) && <div className="product-picker-check">{selectedProductUrls.indexOf(url)+1}</div>}
+                          {selectedProductUrls.includes(url) && <div className="product-item-check">{selectedProductUrls.indexOf(url)+1}</div>}
                         </div>
                       ))}
                     </div>
-                    <div className="product-picker-divider" />
+                    <div className="divider" />
                   </>
                 )}
                 <div className="product-own" onClick={() => productInputRef.current?.click()}>
@@ -407,89 +383,57 @@ export default function AutoBriefPage() {
               <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductUpload} />
             </div>
 
-            <button className="generate-btn" disabled={!selectedClientId || (!websiteUrl && !productName)} onClick={handleGenerate}>
-              ⚡ Auto-Generate 4 Sample Briefs
-              <span className="generate-btn-cost">~$2.20 · 1K quality · ~3-5 min</span>
+            <button className="gen-btn" disabled={!selectedClientId || (!websiteUrl && !productName)} onClick={handleGenerate}>
+              ⚡ Generate 4 Sample Briefs
+              <span className="gen-btn-sub">~$2.20 · 1K · ~3 min</span>
             </button>
           </div>
         )}
 
-        {/* GENERATING PHASE */}
+        {/* GENERATING */}
         {phase === 'generating' && (
-          <div className="generating-container">
-            <div className="generating-header">
-              <div className="generating-spinner" />
-              <h2 className="generating-title">Building your briefs...</h2>
-              <p className="generating-sub">All 4 concepts are generating in parallel. This takes 3-5 minutes.</p>
+          <div className="gen-container">
+            <div className="gen-header">
+              <div className="spinner" />
+              <h2 className="gen-title">Building 4 sample briefs...</h2>
+              <p className="gen-sub">{overallMessage || 'All 4 concepts generating in parallel'}</p>
             </div>
 
-            {/* 4 concept cards */}
-            <div className="concept-cards">
-              {[0,1,2,3].map(i => {
-                const cp = conceptProgress[i]
-                return (
-                  <div key={i} className={`concept-card ${cp?.status === 'done' ? 'done' : cp?.status === 'error' ? 'error' : ''}`}>
-                    {!cp && <div className="concept-card-shimmer" />}
-                    <p className="concept-card-num">Concept {i+1}</p>
-                    <p className="concept-card-title">{cp?.title || '—'}</p>
-                    <p className={`concept-card-status ${
-                      !cp ? 'status-waiting' :
-                      cp.status === 'done' ? 'status-done' :
-                      cp.status === 'error' ? 'status-error' : 'status-building'
-                    }`}>
-                      {!cp ? 'Waiting...' :
-                       cp.status === 'done' ? '✓ Complete' :
-                       cp.status === 'error' ? '✕ Failed' : '● Building...'}
-                    </p>
-                    {cp?.status === 'done' && <div className="concept-card-check">✓</div>}
-                  </div>
-                )
-              })}
+            <div className="progress-bar-wrap">
+              <div className="progress-bar-fill" style={{ width: `${(completedCount / 4) * 100}%` }} />
             </div>
+            <p style={{fontSize:11,color:'#444',marginBottom:20,textAlign:'center'}}>{completedCount} of 4 complete</p>
 
-            {/* Live log */}
-            <div className="live-log">
-              <p className="live-log-title">Live Progress</p>
-              {progress.slice(-8).map((p, i) => (
-                <div key={i} className="log-item">
-                  <div className="log-dot" />
-                  <span className="log-time">{p.time}</span>
-                  <span className="log-msg">{p.message}</span>
+            <div className="concept-grid">
+              {conceptProgress.map((cp, i) => (
+                <div key={i} className={`concept-card ${cp.status}`}>
+                  {cp.status === 'building' && <div className="concept-card-shimmer" />}
+                  <p className="concept-num">Concept {i+1}</p>
+                  <p className="concept-title">{cp.title || '—'}</p>
+                  <p className={`concept-status s-${cp.status}`}>
+                    {cp.status === 'waiting' ? 'Waiting...' :
+                     cp.status === 'building' ? '● Generating...' :
+                     cp.status === 'done' ? '✓ Complete' : `✕ ${cp.message}`}
+                  </p>
+                  {cp.status === 'done' && <div className="concept-check">✓</div>}
                 </div>
               ))}
-              {progress.length === 0 && <p className="log-msg" style={{color:'#333'}}>Starting...</p>}
             </div>
           </div>
         )}
 
-        {/* DONE PHASE */}
+        {/* DONE */}
         {phase === 'done' && (
           <div className="done-container">
             <div className="done-icon">🎬</div>
-            <h2 className="done-title">Briefs ready.</h2>
-            <p className="done-sub">
-              4 complete campaign concepts have been built and saved. Your client brief is ready to share.
-            </p>
-            <a href={`/brief/${doneClientId}`} className="done-btn">
-              Open Client Brief ↗
-            </a>
-            <br />
-            <a href={`/brief/${doneClientId}`} target="_blank" rel="noopener noreferrer" className="done-secondary">
-              Copy shareable link →
-            </a>
-            <br />
-            <button className="done-secondary" style={{background:'none',border:'none',cursor:'pointer',marginTop:8}} onClick={() => {
-              setPhase('input')
-              setProgress([])
-              setConceptProgress([null,null,null,null])
-              setDoneClientId(null)
-            }}>
-              Generate new briefs
-            </button>
+            <h2 className="done-title">{completedCount} briefs ready.</h2>
+            <p className="done-sub">Sample campaigns built and saved. Open the brief to preview and share with prospects.</p>
+            <a href={`/brief/${doneClientId}`} className="done-btn">Open Sample Brief ↗</a>
+            <button className="done-link" onClick={() => { setPhase('input'); setDoneClientId(null) }}>Generate another</button>
           </div>
         )}
 
-        {/* ERROR PHASE */}
+        {/* ERROR */}
         {phase === 'error' && (
           <div className="done-container">
             <div className="done-icon">⚠️</div>
