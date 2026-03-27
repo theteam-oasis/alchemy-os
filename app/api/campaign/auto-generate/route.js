@@ -15,6 +15,21 @@ function parseJSON(text) {
   return JSON.parse(clean)
 }
 
+function safeParseJSON(text, fallback = null) {
+  try {
+    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    // Try to fix truncated JSON by finding last complete object
+    return JSON.parse(clean)
+  } catch {
+    // Try to extract partial array
+    try {
+      const match = text.match(/(\[.*\])/s)
+      if (match) return JSON.parse(match[1])
+    } catch {}
+    return fallback
+  }
+}
+
 async function claude(prompt, maxTokens = 2000) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -136,7 +151,7 @@ Content: ${pageContent.slice(0,4000)}
 ONLY JSON:
 {"brandName":"","coreOffer":"","heroProduct":"","targetCustomer":"","corePainPoint":"","desiredTransformation":"","differentiators":[],"proofPoints":[],"websiteTone":"","keyPhrasing":[],"visualCues":"","productCategory":"","productDetails":"","brandPersonality":""}`, 1500)
 
-        const analysis = parseJSON(analysisText)
+        const analysis = safeParseJSON(analysisText, {brandName:'Brand',coreOffer:'',heroProduct:'',targetCustomer:'',corePainPoint:'',desiredTransformation:'',differentiators:[],websiteTone:'',keyPhrasing:[],visualCues:'',productCategory:'',productDetails:'',brandPersonality:''})
         sendEvent(controller, 'analysis_complete', { analysis })
 
         // Step 2: Generate 4 deeply specific concepts
@@ -153,7 +168,9 @@ Rules: completely different territories, brand-specific, reference real director
 ONLY JSON array of 4 (no markdown):
 [{"title":"","bigIdea":"","theme":"","visualUniverse":"","emotionalFrame":"","whyItFits":"","tone":""}]`, 6000)
 
-        const concepts = parseJSON(conceptsText)
+        const rawConcepts = safeParseJSON(conceptsText, [])
+        if (!rawConcepts?.length) throw new Error('Failed to parse concepts')
+        const concepts = rawConcepts.slice(0, 4)
         sendEvent(controller, 'concepts_complete', { concepts })
         sendEvent(controller, 'progress', { step: 'building', message: 'Building 4 full campaigns...' })
 
@@ -240,14 +257,16 @@ Respond ONLY with JSON:
 
             // Shot list — 8 scenes, brand-specific world
             // Split into 2 calls of 4 shots each to avoid truncation
-const shotBase = `Shots for 30s ad. Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}. Format: ${aspectRatio}. imagePrompt max 8 words. action max 3 words. ONLY JSON array no markdown:`
-const schema = `[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`
-const [shots1, shots2, shots3] = await Promise.all([
-  claude(shotBase + `\nExactly 2 shots, sceneIndex 0 and 1. Shot types: EWS, WS.\n` + schema, 1500).then(parseJSON).catch(()=>[]),
-  claude(shotBase + `\nExactly 2 shots, sceneIndex 2 and 3. Shot types: MS, CU.\n` + schema, 1500).then(parseJSON).catch(()=>[]),
-  claude(shotBase + `\nExactly 2 shots, sceneIndex 4 and 5. Shot types: ECU, INSERT.${productImageUrl?' One isProductShot:true.':''}\n` + schema, 1500).then(parseJSON).catch(()=>[]),
-])
-const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)?shots2:[]),...(Array.isArray(shots3)?shots3:[])]
+// Generate 6 individual shots - one per Claude call to avoid truncation
+const shotCtx = `Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}. Format: ${aspectRatio}.`
+const SHOT_TYPES = ['EWS','WS','MS','CU','ECU','INSERT']
+const shotList = (await Promise.all(
+  SHOT_TYPES.map((shotType, idx) =>
+    claude(`${shotCtx} Generate 1 cinematic shot. Shot type: ${shotType}. Index: ${idx}.${idx===4&&productImageUrl?' isProductShot: true.':''} imagePrompt 6 words max. ONLY JSON object: {"sceneIndex":${idx},"shotType":"${shotType}","action":"3 words","imagePrompt":"6 word scene description","isProductShot":${idx===4&&productImageUrl?'true':'false'}}`, 400)
+    .then(t => { try { return parseJSON(t) } catch { return {sceneIndex:idx,shotType,action:'scene',imagePrompt:`${direction.colorWorld} ${shotType} shot`,isProductShot:false} } })
+    .catch(() => ({sceneIndex:idx,shotType,action:'scene',imagePrompt:`${direction.colorWorld} ${shotType} shot`,isProductShot:false}))
+  )
+)).filter(Boolean)
 
             const shotList = parseJSON(shotListText)
 
