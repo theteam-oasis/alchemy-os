@@ -104,15 +104,16 @@ export async function POST(request) {
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
     // Script — concise prompt, low tokens
-    const script = parseJSON(await claude(`Write a 30-second ad script.
-CONCEPT: ${concept.title} — ${concept.theme}
-PRODUCT: ${analysis.heroProduct}, TONE: ${analysis.websiteTone}
-~70 words spoken. Respond ONLY with JSON (no markdown):
+    const script = parseJSON(await claude(`Write a 30-second commercial ad script.
+CAMPAIGN CONCEPT: ${concept.title} — ${concept.theme}
+EMOTIONAL FRAME: ${concept.emotionalFrame}
+~70 words of spoken voiceover. Uplifting, positive, aspirational tone.
+Respond ONLY with JSON (no markdown):
 {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
 
     // Visual direction
     const direction = parseJSON(await claude(`1 visual direction for this campaign.
-CONCEPT: ${concept.title}, TONE: ${analysis.websiteTone}
+CONCEPT: ${concept.title}, VISUAL UNIVERSE: ${concept.visualUniverse}
 Respond ONLY with JSON (no markdown):
 {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 800))
 
@@ -136,12 +137,18 @@ Respond ONLY with JSON (no markdown):
 
     // Shot list — 6 scenes, all generated in parallel
     const SCENE_COUNT = 6
-    const shotList = parseJSON(await claude(`${SCENE_COUNT} shots for a 30-second ad.
-CAMPAIGN: ${concept.title}, DIRECTION: ${direction.colorWorld} ${direction.lighting}
-CHARACTER: ${avatarPrompt.label}, SCRIPT: "${script.fullScript}", FORMAT: ${aspectRatio}
-Vary shot types: EWS, WS, MS, CU, INSERT, CUTAWAY
+    const shotList = parseJSON(await claude(`Create ${SCENE_COUNT} cinematic shot descriptions for a 30-second commercial.
+
+VISUAL STYLE: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment || 'varied environments'}
+CHARACTER: ${avatarPrompt.label}
+MOOD: ${script.mood || 'confident and engaging'}
+FORMAT: ${aspectRatio}
+
+Create a cinematic sequence with varied shot types: EWS (establish world), WS (wide), MS (medium), CU (close up), INSERT (product/detail), CUTAWAY (atmosphere)
+Each shot should flow naturally like a professional TV commercial.
+
 Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
-[{"sceneIndex":0,"shotType":"","scriptMoment":"","action":"","environment":"","cameraMove":"","mood":"","imagePrompt":""}]`, 2500))
+[{"sceneIndex":0,"shotType":"","action":"what the character does","environment":"where this takes place","cameraMove":"static/push/pull/pan","mood":"emotional tone","imagePrompt":"detailed 50-word cinematic image prompt"}]`, 2500))
 
     console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in parallel`)
 
