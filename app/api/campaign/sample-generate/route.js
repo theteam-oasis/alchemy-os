@@ -83,8 +83,8 @@ async function generateImage(prompt, options = {}) {
   )
     const text = await res.text()
     if (!res.ok) {
-      if (attempt < 2 && res.status === 500) {
-        console.log(`Google API 500, retrying in ${(attempt + 1) * 3}s...`)
+      if (attempt < 2 && (res.status === 500 || res.status === 503)) {
+        console.log(`Google API ${res.status}, retrying in ${(attempt + 1) * 3}s...`)
         await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
         continue
       }
@@ -237,23 +237,12 @@ Respond ONLY with JSON (no markdown):
 
     // Shot list — grounded in brand's world, character, and concept
     const SCENE_COUNT = 10
-    const shotList = parseJSON(await claude(`You are a cinematographer building a shot list for a 30-second commercial.
-
-BRAND: ${analysis.brandName}
-CHARACTER: ${avatarPrompt.label}
-VISUAL DIRECTION: ${direction.summary}
-COLOR WORLD: ${direction.colorWorld}
-LIGHTING: ${direction.lighting}
-ENVIRONMENT: ${direction.environment}
-CINEMATIC REFERENCE: ${direction.cinematicReference}
-CONCEPT: ${concept.theme}
-FORMAT: ${aspectRatio}
-${productImageUrl ? 'PRODUCT: Include 2-3 shots featuring the product naturally in the character\'s world.' : ''}
-
-Create ${SCENE_COUNT} shots that tell a coherent visual story. Each shot should feel like it belongs in this specific brand's world. Vary shot types: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV, MCU, DUTCH.
-
-Keep imagePrompt under 15 words. Keep action under 6 words.
-Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
+    const shotList = parseJSON(await claude(`Shot list. 30s commercial. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}.
+Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}.
+Ref: ${direction.cinematicReference}. Concept: ${concept.theme}. Format: ${aspectRatio}.
+${productImageUrl ? 'Include 2-3 product shots.' : ''}
+Vary: EWS/WS/MS/CU/ECU/INSERT/CUTAWAY/POV/MCU/DUTCH. imagePrompt max 12 words. action max 5 words.
+ONLY JSON array of exactly ${SCENE_COUNT} no markdown:
 [{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 5000))
 
     console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
