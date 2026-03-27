@@ -111,9 +111,38 @@ function slugify(name) {
 // Handles ONE concept per call — called 2x in parallel from frontend
 export async function POST(request) {
   try {
-    const { clientId, clientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl, productPageUrl } = await request.json()
+    const { clientId: incomingClientId, clientName: incomingClientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl, productPageUrl } = await request.json()
 
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
+
+    // Auto-create client if none provided — only concept 0 creates, concept 1 finds it
+    let clientId = incomingClientId
+    let clientName = incomingClientName || analysis.brandName || 'Brand'
+
+    if (!clientId) {
+      const sampleName = `SAMPLE - ${clientName}`
+      // Check if already exists (concept 1 may have already created it)
+      const { data: existing } = await supabase
+        .from('clients')
+        .select('id, name')
+        .ilike('name', sampleName)
+        .maybeSingle()
+
+      if (existing) {
+        clientId = existing.id
+        clientName = existing.name
+      } else {
+        const { data: created, error: createError } = await supabase
+          .from('clients')
+          .insert({ name: sampleName })
+          .select('id, name')
+          .single()
+        if (createError) throw createError
+        clientId = created.id
+        clientName = created.name
+        console.log(`Auto-created client: ${sampleName} (${clientId})`)
+      }
+    }
 
     // Script — use product details from analysis for accuracy
     const productContext = analysis.productDetails ? `PRODUCT DETAILS: ${analysis.productDetails}` : ''
@@ -217,7 +246,7 @@ ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No te
     if (error) throw error
 
     console.log(`Concept ${conceptIdx + 1} saved: ${saved.id}`)
-    return Response.json({ success: true, campaignId: saved.id, conceptTitle: concept.title, clientSlug })
+    return Response.json({ success: true, campaignId: saved.id, conceptTitle: concept.title, clientSlug, clientId })
 
   } catch (error) {
     console.error('Sample generate error:', error.message)
