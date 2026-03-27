@@ -9,7 +9,7 @@ function parseJSON(text) {
 
 export async function POST(request) {
   try {
-    const { analysis, creativeKeywords, count = 4, previousConcepts = [] } = await request.json()
+    const { analysis, creativeKeywords, count = 4, previousConcepts = [], brandIntake } = await request.json()
 
     const previousTitles = previousConcepts.map(c => c.title).join(', ')
     const previousThemes = previousConcepts.map(c => c.theme).join(', ')
@@ -17,18 +17,29 @@ export async function POST(request) {
     const previousVisuals = previousConcepts.map(c => c.visualUniverse).join(', ')
 
     const avoidBlock = previousConcepts.length > 0 ? `
-PREVIOUSLY GENERATED — DO NOT REPEAT OR CLOSELY RESEMBLE:
-- Titles used: ${previousTitles}
-- Themes used: ${previousThemes}
-- Metaphors used: ${previousMetaphors}
-- Visual universes used: ${previousVisuals}
-Generate entirely fresh directions from different creative territories.` : ''
+PREVIOUSLY GENERATED — DO NOT REPEAT:
+- Titles: ${previousTitles}
+- Themes: ${previousThemes}
+- Metaphors: ${previousMetaphors}
+- Visuals: ${previousVisuals}
+Generate entirely fresh directions.` : ''
 
     const keywordsBlock = creativeKeywords?.length > 0
-      ? `CREATIVE KEYWORDS TO INFLUENCE DIRECTION (do not ignore these): ${creativeKeywords.join(', ')}`
+      ? `CREATIVE KEYWORDS (use these to steer direction): ${creativeKeywords.join(', ')}`
       : ''
 
-    const prompt = `You are a world-class creative director at a premium ad agency. Your job is to generate ${count} campaign concepts for this brand.
+    // Extra context from onboarding form
+    const intakeBlock = brandIntake ? `
+ADDITIONAL CLIENT CONTEXT FROM ONBOARDING:
+- Brand Personality: ${brandIntake.personality_tags?.join(', ') || 'N/A'}
+- Brand Story: ${brandIntake.story || 'N/A'}
+- Campaign Goals: ${brandIntake.campaign_goals || 'N/A'}
+- Tone/Voice Preference: ${brandIntake.tone_voice || 'N/A'}
+- Target Audience Detail: ${brandIntake.target_audience || 'N/A'}
+- Competitors to differentiate from: ${brandIntake.competitors || 'N/A'}
+` : ''
+
+    const prompt = `You are a world-class creative director at a premium ad agency. Generate ${count} campaign concepts for this brand.
 
 BRAND ANALYSIS:
 - Core Offer: ${analysis.coreOffer}
@@ -37,24 +48,22 @@ BRAND ANALYSIS:
 - Pain Point: ${analysis.corePainPoint}
 - Transformation: ${analysis.desiredTransformation}
 - Differentiators: ${analysis.differentiators?.join(', ')}
-- Proof Points: ${analysis.proofPoints?.join(', ')}
 - Brand Tone: ${analysis.websiteTone}
-- Key Phrases from Site: ${analysis.keyPhrasing?.join(', ')}
+- Key Phrases: ${analysis.keyPhrasing?.join(', ')}
 - Visual Cues: ${analysis.visualCues}
-- Product Category: ${analysis.productCategory}
-
+- Category: ${analysis.productCategory}
+${intakeBlock}
 ${keywordsBlock}
-
 ${avoidBlock}
 
 CRITICAL RULES:
-1. Each concept must come from a COMPLETELY DIFFERENT creative territory.
-2. Ground every concept in the actual brand data above — not generic ad ideas.
-3. DO NOT use F1/racing/speed metaphors unless the brand is clearly automotive or performance-tech.
-4. Be SPECIFIC and CINEMATIC. Each concept should feel like a different film genre.
-5. Return EXACTLY ${count} concepts — not fewer, not more.
+1. Each concept from a COMPLETELY DIFFERENT creative territory — different emotional frame, visual universe, metaphor.
+2. Ground every concept in the actual brand data — no generic ad ideas.
+3. DO NOT use F1/racing/speed metaphors unless clearly automotive.
+4. Be SPECIFIC and CINEMATIC — each concept should feel like a different film genre.
+5. Return EXACTLY ${count} concepts.
 
-Respond ONLY with a valid JSON array. No markdown, no backticks, no preamble, no explanation — raw JSON only:
+Respond ONLY with a valid JSON array. No markdown, no backticks, no preamble:
 [{"title":"","theme":"","visualUniverse":"","metaphorBridge":"","emotionalFrame":"","whyItFits":"","siteAnchors":[]}]`
 
     const message = await client.messages.create({
