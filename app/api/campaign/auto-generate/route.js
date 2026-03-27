@@ -240,12 +240,14 @@ Respond ONLY with JSON:
 
             // Shot list — 8 scenes, brand-specific world
             // Split into 2 calls of 4 shots each to avoid truncation
-const shotBase = `Shot list. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}. Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}. Concept: ${concept.title}. Format: ${aspectRatio}.${productImageUrl?' Include 1 product shot.':''} imagePrompt max 10 words. action max 4 words. ONLY JSON array, no markdown:`
-const [shots1, shots2] = await Promise.all([
-  claude(shotBase + `\nShots 0-3 only (sceneIndex 0,1,2,3). Array of exactly 4:\n[{"sceneIndex":0,"shotType":"EWS","action":"","imagePrompt":"","isProductShot":false}]`, 3000).then(parseJSON),
-  claude(shotBase + `\nShots 4-7 only (sceneIndex 4,5,6,7). Array of exactly 4:\n[{"sceneIndex":4,"shotType":"MS","action":"","imagePrompt":"","isProductShot":false}]`, 3000).then(parseJSON),
+const shotBase = `Shots for 30s ad. Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}. Format: ${aspectRatio}. imagePrompt max 8 words. action max 3 words. ONLY JSON array no markdown:`
+const schema = `[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`
+const [shots1, shots2, shots3] = await Promise.all([
+  claude(shotBase + `\nExactly 2 shots, sceneIndex 0 and 1. Shot types: EWS, WS.\n` + schema, 1500).then(parseJSON).catch(()=>[]),
+  claude(shotBase + `\nExactly 2 shots, sceneIndex 2 and 3. Shot types: MS, CU.\n` + schema, 1500).then(parseJSON).catch(()=>[]),
+  claude(shotBase + `\nExactly 2 shots, sceneIndex 4 and 5. Shot types: ECU, INSERT.${productImageUrl?' One isProductShot:true.':''}\n` + schema, 1500).then(parseJSON).catch(()=>[]),
 ])
-const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)?shots2:[])]
+const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)?shots2:[]),...(Array.isArray(shots3)?shots3:[])]
 
             const shotList = parseJSON(shotListText)
 
@@ -257,7 +259,7 @@ const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)
 
             const buildScene = async (shot, i) => {
               const isProduct = shot.isProductShot && productImageUrl
-              const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ' — match reference portrait' : ''}. ${isProduct ? 'Feature product.' : ''} Shot: ${shot.shotType}. ${direction.colorWorld}. ${direction.lighting}. Cinematic photorealistic. No text.`
+              const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ', match portrait' : ''}. ${isProduct ? 'Feature product.' : ''} ${direction.colorWorld}. ${direction.lighting}. Cinematic photorealistic. No text.`
               const imageUrl = await generateImage(prompt, {
                 avatarUrl,
                 productUrl: isProduct ? productImageUrl : undefined,
@@ -267,14 +269,10 @@ const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)
               return { imageUrl, loading: false, shot }
             }
 
-            const batch1 = await Promise.allSettled(shotList.slice(0, 3).map((shot, i) => buildScene(shot, i)))
-            batch1.forEach((r, i) => {
+            // All scenes in parallel — 6 max at 1K is fast
+            const allResults = await Promise.allSettled(shotList.slice(0, SCENE_COUNT).map((shot, i) => buildScene(shot, i)))
+            allResults.forEach((r, i) => {
               sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
-            })
-
-            const batch2 = await Promise.allSettled(shotList.slice(3, 6).map((shot, i) => buildScene(shot, i + 3)))
-            batch2.forEach((r, i) => {
-              sceneResults[i + 3] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 3] }
             })
 
             sendEvent(controller, 'progress', { step: 'saving', message: `Concept ${conceptIdx + 1}: Saving...`, conceptIdx })
