@@ -9,7 +9,27 @@ function parseJSON(text) {
 
 export async function POST(request) {
   try {
-    const { websiteUrl, productName, offerNotes } = await request.json()
+    const { websiteUrl, productName, offerNotes, brandIntake } = await request.json()
+
+    // Build brand intake context from onboarding form
+    const intakeContext = brandIntake ? `
+CLIENT ONBOARDING DATA (filled in by the client — treat this as ground truth):
+- Brand Name: ${brandIntake.brand_name || 'N/A'}
+- Tagline: ${brandIntake.tagline || 'N/A'}
+- Brand Story: ${brandIntake.story || 'N/A'}
+- Personality Tags: ${brandIntake.personality_tags?.join(', ') || 'N/A'}
+- Target Audience: ${brandIntake.target_audience || 'N/A'}
+- Core Problem Solved: ${brandIntake.core_problem || 'N/A'}
+- Key Differentiators: ${brandIntake.differentiators || 'N/A'}
+- Tone/Voice: ${brandIntake.tone_voice || 'N/A'}
+- Campaign Goals: ${brandIntake.campaign_goals || 'N/A'}
+- Budget Range: ${brandIntake.budget || 'N/A'}
+- Previous Campaign Notes: ${brandIntake.previous_campaigns || 'N/A'}
+- Hero Product: ${brandIntake.hero_product || productName || 'N/A'}
+- Price Point: ${brandIntake.price_point || 'N/A'}
+- Competitors: ${brandIntake.competitors || 'N/A'}
+- Customer Transformation: ${brandIntake.transformation || 'N/A'}
+` : ''
 
     let websiteContent = ''
     try {
@@ -24,34 +44,34 @@ export async function POST(request) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-        .slice(0, 6000)
+        .slice(0, 4000)
     } catch {
       websiteContent = `Could not fetch website. Product: ${productName}. Notes: ${offerNotes}`
     }
 
     const prompt = `You are a senior brand strategist analyzing a brand for an ad campaign.
-
+${intakeContext}
 WEBSITE CONTENT:
 ${websiteContent}
 
 PRODUCT/SERVICE: ${productName}
 ADDITIONAL NOTES: ${offerNotes || 'None'}
 
-Extract the following brand intelligence. Be specific and grounded in the actual website text — do not invent generic marketing language.
+Extract brand intelligence. Prioritize the onboarding data above over the website scrape — the client knows their brand better than their website shows.
 
 Respond ONLY with a valid JSON object, no markdown fences, no preamble:
 {
   "coreOffer": "The single clearest thing this brand sells or does",
-  "heroProduct": "The flagship product or service mentioned most",
-  "targetCustomer": "Who this is clearly for based on site language",
-  "corePainPoint": "The problem the customer has that this solves",
-  "desiredTransformation": "What the customer life looks like after using this",
-  "differentiators": ["what makes this brand distinct from competitors"],
-  "proofPoints": ["claims, stats, testimonials, awards found on site"],
-  "websiteTone": "How the brand sounds: e.g. clinical, warm, rebellious, luxurious, playful",
-  "keyPhrasing": ["memorable phrases or claims pulled directly from site"],
-  "visualCues": "What visual or aesthetic themes appear on the site",
-  "productCategory": "What market/category this fits into"
+  "heroProduct": "The flagship product or service",
+  "targetCustomer": "Who this is for — be specific",
+  "corePainPoint": "The core problem this solves",
+  "desiredTransformation": "What changes in the customer's life after using this",
+  "differentiators": ["what makes this brand unique"],
+  "proofPoints": ["claims, stats, testimonials, awards"],
+  "websiteTone": "How the brand sounds",
+  "keyPhrasing": ["memorable phrases from the brand"],
+  "visualCues": "Visual and aesthetic themes",
+  "productCategory": "What market category this fits"
 }`
 
     const message = await client.messages.create({
