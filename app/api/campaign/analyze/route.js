@@ -106,11 +106,23 @@ Respond ONLY with valid JSON, no markdown:
   "productDetails": "Key product details, ingredients, features, specs"
 }`
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
-      messages: [{ role: 'user', content: prompt }],
-    })
+    // Retry up to 3 times on 529 overload
+    let message
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        message = await client.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1200,
+          messages: [{ role: 'user', content: prompt }],
+        })
+        break
+      } catch (e) {
+        if (attempt < 2 && e.message?.includes('529')) {
+          console.log(`Overloaded, retrying in ${(attempt + 1) * 3}s...`)
+          await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
+        } else throw e
+      }
+    }
 
     const block = message.content.find(b => b.type === 'text')
     if (!block?.text) throw new Error('No response from Claude')
