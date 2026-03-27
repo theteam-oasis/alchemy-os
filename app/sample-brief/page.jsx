@@ -24,6 +24,7 @@ export default function SampleBriefPage() {
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [productName, setProductName] = useState('')
   const [offerNotes, setOfferNotes] = useState('')
+  const [productPageUrl, setProductPageUrl] = useState('')
   const [creativeKeywords, setCreativeKeywords] = useState('')
   const [aspectRatio, setAspectRatio] = useState('16:9')
   const [productImageDataUrl, setProductImageDataUrl] = useState(null)
@@ -53,6 +54,7 @@ export default function SampleBriefPage() {
         if (data) {
           if (data.website) setWebsiteUrl(data.website)
           if (data.brand_name) setProductName(data.brand_name)
+          if (data.website) setProductPageUrl(data.website)
           setClientProductImages(data.product_image_urls?.length ? data.product_image_urls : [])
           setBrandIntake(data)
         }
@@ -89,7 +91,7 @@ export default function SampleBriefPage() {
       setOverallMessage('Analyzing brand...')
       const analyzeRes = await fetch('/api/campaign/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ websiteUrl, productName, offerNotes, brandIntake }),
+        body: JSON.stringify({ websiteUrl, productPageUrl, productName, offerNotes }),
       })
       const analyzeJson = await analyzeRes.json()
       if (!analyzeJson.success) throw new Error(analyzeJson.error)
@@ -134,6 +136,7 @@ export default function SampleBriefPage() {
               analysis, concept, conceptIdx: idx,
               websiteUrl, productName, offerNotes, aspectRatio,
               productImageUrl: selectedProductUrls[0] || null,
+              productPageUrl,
             }),
           })
           const json = await res.json()
@@ -290,13 +293,18 @@ export default function SampleBriefPage() {
 
             <div className="grid2" style={{marginBottom:16}}>
               <div>
-                <label className="label">Website URL</label>
+                <label className="label">Brand Website URL</label>
                 <input className="input" type="url" placeholder="https://yourbrand.com" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} />
               </div>
               <div>
                 <label className="label">Product / Service</label>
                 <input className="input" placeholder="What are we advertising?" value={productName} onChange={e => setProductName(e.target.value)} />
               </div>
+            </div>
+
+            <div className="section">
+              <label className="label">Product Page URL <span style={{color:'#555',fontWeight:400,textTransform:'none',letterSpacing:0}}>(paste the specific product page — this is what we analyze)</span></label>
+              <input className="input" type="url" placeholder="https://yourbrand.com/products/your-product" value={productPageUrl} onChange={e => setProductPageUrl(e.target.value)} />
             </div>
 
             <div className="section">
