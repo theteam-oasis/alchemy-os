@@ -66,26 +66,36 @@ async function generateImage(prompt, options = {}) {
     if (img) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
   }
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: {
-          responseModalities: ['TEXT', 'IMAGE'],
-          imageConfig: { imageSize: '1K', aspectRatio },
-        },
-      }),
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { imageSize: '1K', aspectRatio },
+          },
+        }),
     }
   )
-  const text = await res.text()
-  if (!res.ok) throw new Error(`Google API ${res.status}: ${text.slice(0, 200)}`)
-  const data = JSON.parse(text)
-  const imagePart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)
-  if (!imagePart) throw new Error('No image returned')
-  return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`
+    const text = await res.text()
+    if (!res.ok) {
+      if (attempt < 2 && res.status === 500) {
+        console.log(`Google API 500, retrying in ${(attempt + 1) * 3}s...`)
+        await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
+        continue
+      }
+      throw new Error(`Google API ${res.status}: ${text.slice(0, 200)}`)
+    }
+    const data = JSON.parse(text)
+    const imagePart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)
+    if (!imagePart) throw new Error('No image returned')
+    return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`
+  }
+  throw new Error('Google API failed after 3 attempts')
 }
 
 async function uploadToStorage(dataUrl, filename) {
