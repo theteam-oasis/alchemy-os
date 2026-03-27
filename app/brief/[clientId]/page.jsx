@@ -477,8 +477,8 @@ export default function BriefPage({ params }) {
             <p className="action-panel-title">Your Feedback</p>
             <p className="action-panel-sub">
               {campaigns.length > 1
-                ? `Review each concept using the tabs above and submit your feedback for Concept ${activeConcept + 1} below.`
-                : 'Let us know how you'd like to move forward with this concept.'}
+                ? `Review each concept using the tabs above and submit your feedback for Concept ${String(activeConcept + 1)} below.`
+                : 'Let us know how you would like to move forward with this concept.'}
             </p>
 
             {submitted[campaign.id] ? (
