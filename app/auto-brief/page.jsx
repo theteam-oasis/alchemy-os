@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
-const getSupabase = () => createClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
@@ -37,7 +37,7 @@ export default function AutoBriefPage() {
   const productInputRef = useRef(null)
 
   useEffect(()=>{
-    getSupabase().from('clients').select('id,name').order('name').then(({data})=>{
+    supabase.from('clients').select('id,name').order('name').then(({data})=>{
       if(!data)return
       // Deduplicate by name — keep first occurrence (alphabetically sorted)
       const seen=new Set()
@@ -57,7 +57,7 @@ export default function AutoBriefPage() {
     setExtractedImages([])
     setSelectedImageUrl(null)
     setUploadedImage(null)
-    getSupabase().from('brand_intake').select('website, product_image_urls').eq('client_id',selectedClientId).maybeSingle()
+    supabase.from('brand_intake').select('website, product_image_urls').eq('client_id',selectedClientId).maybeSingle()
       .then(({data})=>{
         if(!data)return
         // Priority 1: client uploaded images from brand_intake
