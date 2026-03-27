@@ -15,7 +15,7 @@ function parseJSON(text) {
   return JSON.parse(clean)
 }
 
-async function claude(prompt, maxTokens = 2048) {
+async function claude(prompt, maxTokens = 1500) {
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: maxTokens,
@@ -69,11 +69,10 @@ async function uploadToStorage(dataUrl, filename) {
     const base64 = dataUrl.split(',')[1]
     const mimeType = dataUrl.match(/data:([^;]+);/)?.[1] || 'image/png'
     const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
-    const path = `${filename}.${ext}`
     const buffer = Buffer.from(base64, 'base64')
-    const { error } = await supabase.storage.from('brand-assets').upload(path, buffer, { contentType: mimeType, upsert: true })
+    const { error } = await supabase.storage.from('brand-assets').upload(`${filename}.${ext}`, buffer, { contentType: mimeType, upsert: true })
     if (error) throw error
-    const { data: { publicUrl } } = supabase.storage.from('brand-assets').getPublicUrl(path)
+    const { data: { publicUrl } } = supabase.storage.from('brand-assets').getPublicUrl(`${filename}.${ext}`)
     return publicUrl
   } catch (e) {
     console.error('Upload failed:', e.message)
@@ -81,117 +80,102 @@ async function uploadToStorage(dataUrl, filename) {
   }
 }
 
-// This route handles ONE concept at a time
-// The frontend calls it 4 times in parallel
+// Handles ONE concept per call — called 2x in parallel from frontend
 export async function POST(request) {
   try {
-    const { 
-      clientId, analysis, concept, conceptIdx,
-      websiteUrl, productName, offerNotes,
-      creativeKeywords, aspectRatio = '16:9'
-    } = await request.json()
+    const { clientId, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9' } = await request.json()
 
-    console.log(`Building concept ${conceptIdx + 1}: ${concept.title}`)
+    console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
-    // Script
-    const scriptText = await claude(`Write 1 production-ready 30-second ad script.
+    // Script — concise prompt, low tokens
+    const script = parseJSON(await claude(`Write a 30-second ad script.
 CONCEPT: ${concept.title} — ${concept.theme}
-PRODUCT: ${analysis.heroProduct}
-TRANSFORMATION: ${analysis.desiredTransformation}
-TONE: ${analysis.websiteTone}
-~70 spoken words. Real voiceover lines only.
-Respond ONLY with JSON (single object):
-{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`)
-    const script = parseJSON(scriptText)
+PRODUCT: ${analysis.heroProduct}, TONE: ${analysis.websiteTone}
+~70 words spoken. Respond ONLY with JSON (no markdown):
+{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 800))
 
     // Visual direction
-    const directionText = await claude(`Generate 1 visual direction for this campaign.
-CONCEPT: ${concept.title} — ${concept.visualUniverse}
-TONE: ${analysis.websiteTone}
-Respond ONLY with JSON (single object):
-{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","texture":"","editingFeel":"","cinematicReference":"","summary":""}`)
-    const direction = parseJSON(directionText)
+    const direction = parseJSON(await claude(`1 visual direction for this campaign.
+CONCEPT: ${concept.title}, TONE: ${analysis.websiteTone}
+Respond ONLY with JSON (no markdown):
+{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 600))
 
     // Avatar prompt
-    const avatarPromptText = await claude(`Generate 1 avatar portrait prompt.
-CONCEPT: ${concept.title}
-STYLE: ${direction.colorWorld}, ${direction.lighting}
+    const avatarPrompt = parseJSON(await claude(`1 avatar portrait prompt.
+CONCEPT: ${concept.title}, STYLE: ${direction.colorWorld} ${direction.lighting}
 TARGET: ${analysis.targetCustomer}
-Chest-up portrait, clear face and outfit, neutral background, editorial photography.
-Respond ONLY with JSON (single object):
-{"label":"","imagePrompt":""}`)
-    const avatarPrompt = parseJSON(avatarPromptText)
+Chest-up portrait, clear face, neutral background.
+Respond ONLY with JSON (no markdown):
+{"label":"","imagePrompt":""}`, 400))
 
-    // Generate avatar image
+    console.log(`Concept ${conceptIdx + 1}: generating avatar`)
     const avatarDataUrl = await generateImage(
       avatarPrompt.imagePrompt + ' Chest-up portrait, editorial photography, neutral background. No text.',
       { aspectRatio: '3:4' }
     )
+    const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
 
-    // Upload avatar
-    const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/concept-${conceptIdx}-avatar`)
 
-    // Shot list — 6 scenes for samples (faster)
-    const sceneCount = 6
-    const shotListText = await claude(`Create ${sceneCount} shots for a 30-second commercial.
-CAMPAIGN: ${concept.title} — ${concept.theme}
-DIRECTION: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}
-CHARACTER: ${avatarPrompt.label}
-SCRIPT: "${script.fullScript}"
-FORMAT: ${aspectRatio}
-Vary shot types: ECU, CU, MCU, MS, WS, EWS, INSERT
-Respond ONLY with JSON array of exactly ${sceneCount}:
-[{"sceneIndex":0,"shotType":"","scriptMoment":"","action":"","environment":"","cameraMove":"","mood":"","isProductShot":false,"imagePrompt":""}]`, 4000)
-    const shotList = parseJSON(shotListText)
 
-    // Generate scene images in batches of 3
-    const sceneResults = new Array(shotList.length).fill(null)
-    for (let i = 0; i < shotList.length; i += 3) {
-      const batch = shotList.slice(i, i + 3)
-      const results = await Promise.allSettled(
+    // Shot list — 8 scenes
+    const SCENE_COUNT = 8
+    const shotList = parseJSON(await claude(`${SCENE_COUNT} shots for a 30-second ad.
+CAMPAIGN: ${concept.title}, DIRECTION: ${direction.colorWorld} ${direction.lighting}
+CHARACTER: ${avatarPrompt.label}, SCRIPT: "${script.fullScript}", FORMAT: ${aspectRatio}
+Vary shot types cinematically: EWS, WS, MS, MCU, CU, ECU, INSERT, CUTAWAY
+Open wide, build close, mix throughout.
+Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
+[{"sceneIndex":0,"shotType":"","scriptMoment":"","action":"","environment":"","cameraMove":"","mood":"","imagePrompt":""}]`, 3000))
+
+    console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
+
+    // Generate in 2 batches of 4 — parallel within each batch, sequential between batches
+    const sceneResultsFlat = new Array(SCENE_COUNT).fill(null)
+
+    for (let batchStart = 0; batchStart < SCENE_COUNT; batchStart += 4) {
+      const batch = shotList.slice(batchStart, batchStart + 4)
+      const batchResults = await Promise.allSettled(
         batch.map(async (shot, bi) => {
           const prompt = `${shot.imagePrompt}
-Character: ${avatarPrompt.label} — maintain exact appearance from reference.
+Character: ${avatarPrompt.label} — match reference portrait exactly.
 Shot: ${shot.shotType}. Camera: ${shot.cameraMove}.
-${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text, no watermarks.`
+${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
           const imageUrl = await generateImage(prompt, { avatarUrl, aspectRatio })
           return { imageUrl, loading: false, shot }
         })
       )
-      results.forEach((r, bi) => {
-        sceneResults[i + bi] = r.status === 'fulfilled'
+      batchResults.forEach((r, bi) => {
+        sceneResultsFlat[batchStart + bi] = r.status === 'fulfilled'
           ? r.value
-          : { imageUrl: null, loading: false, shot: shotList[i + bi] }
+          : { imageUrl: null, loading: false, shot: shotList[batchStart + bi] }
       })
+      console.log(`Concept ${conceptIdx + 1}: batch ${batchStart / 4 + 1} done`)
     }
 
+    const scenes = sceneResultsFlat
+
     // Save to Supabase
-    const { data: saved, error } = await supabase
-      .from('campaigns')
-      .insert({
-        client_id: clientId,
-        status: 'complete',
-        storyboard_complete: true,
-        website_url: websiteUrl,
-        product_name: productName,
-        offer_notes: offerNotes,
-        creative_keywords: creativeKeywords ? creativeKeywords.split(',').map(k => k.trim()) : [],
-        website_analysis: analysis,
-        chosen_concept: concept,
-        script_duration: 30,
-        chosen_script: script,
-        chosen_direction: direction,
-        chosen_avatar: avatarDataUrl,
-        scenes: sceneResults,
-        aspect_ratio: aspectRatio,
-        concept_title: concept.title,
-      })
-      .select('id')
-      .single()
+    const { data: saved, error } = await supabase.from('campaigns').insert({
+      client_id: clientId,
+      status: 'complete',
+      storyboard_complete: true,
+      website_url: websiteUrl,
+      product_name: productName,
+      offer_notes: offerNotes,
+      website_analysis: analysis,
+      chosen_concept: concept,
+      script_duration: 30,
+      chosen_script: script,
+      chosen_direction: direction,
+      chosen_avatar: avatarDataUrl,
+      scenes,
+      aspect_ratio: aspectRatio,
+      concept_title: concept.title,
+    }).select('id').single()
 
     if (error) throw error
 
-    console.log(`Concept ${conceptIdx + 1} complete: ${saved.id}`)
+    console.log(`Concept ${conceptIdx + 1} saved: ${saved.id}`)
     return Response.json({ success: true, campaignId: saved.id, conceptTitle: concept.title })
 
   } catch (error) {
