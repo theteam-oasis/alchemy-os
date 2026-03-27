@@ -21,7 +21,9 @@ async function claude(prompt, maxTokens = 1500) {
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
   })
-  return msg.content.find(b => b.type === 'text').text.trim()
+  const block = msg.content?.find(b => b.type === 'text')
+  if (!block?.text) throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
+  return block.text.trim()
 }
 
 async function generateImage(prompt, options = {}) {
@@ -92,13 +94,13 @@ export async function POST(request) {
 CONCEPT: ${concept.title} — ${concept.theme}
 PRODUCT: ${analysis.heroProduct}, TONE: ${analysis.websiteTone}
 ~70 words spoken. Respond ONLY with JSON (no markdown):
-{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 800))
+{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
 
     // Visual direction
     const direction = parseJSON(await claude(`1 visual direction for this campaign.
 CONCEPT: ${concept.title}, TONE: ${analysis.websiteTone}
 Respond ONLY with JSON (no markdown):
-{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 600))
+{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 800))
 
     // Avatar prompt
     const avatarPrompt = parseJSON(await claude(`1 avatar portrait prompt.
@@ -106,7 +108,7 @@ CONCEPT: ${concept.title}, STYLE: ${direction.colorWorld} ${direction.lighting}
 TARGET: ${analysis.targetCustomer}
 Chest-up portrait, clear face, neutral background.
 Respond ONLY with JSON (no markdown):
-{"label":"","imagePrompt":""}`, 400))
+{"label":"","imagePrompt":""}`, 600))
 
     console.log(`Concept ${conceptIdx + 1}: generating avatar`)
     const avatarDataUrl = await generateImage(
