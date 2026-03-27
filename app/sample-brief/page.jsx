@@ -36,6 +36,7 @@ export default function SampleBriefPage() {
   const [overallMessage, setOverallMessage] = useState('')
   const [error, setError] = useState(null)
   const [doneClientId, setDoneClientId] = useState(null)
+  const [doneSlug, setDoneSlug] = useState(null)
   const productInputRef = useRef(null)
 
   useEffect(() => {
@@ -124,12 +125,16 @@ export default function SampleBriefPage() {
           const res = await fetch('/api/campaign/sample-generate', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              clientId: selectedClientId, analysis, concept, conceptIdx: idx,
+              clientId: selectedClientId,
+              clientName: clients.find(c => c.id === selectedClientId)?.name,
+              analysis, concept, conceptIdx: idx,
               websiteUrl, productName, offerNotes, aspectRatio,
+              productImageUrl: selectedProductUrls[0] || null,
             }),
           })
           const json = await res.json()
           if (!json.success) throw new Error(json.error)
+          if (json.clientSlug && !doneSlug) setDoneSlug(json.clientSlug)
 
           setConceptProgress(prev => {
             const u = [...prev]
@@ -381,8 +386,8 @@ export default function SampleBriefPage() {
             <div className="done-icon">🎬</div>
             <h2 className="done-title">{completedCount} briefs ready.</h2>
             <p className="done-sub">Sample campaigns built and saved. Open the brief to preview and share.</p>
-            <a href={`/brief/${doneClientId}`} className="done-btn">Open Sample Brief ↗</a>
-            <button className="done-link" onClick={() => { setPhase('input'); setDoneClientId(null) }}>Generate another</button>
+            <a href={`/${doneSlug}/briefs`} className="done-btn">Open Sample Brief ↗</a>
+            <button className="done-link" onClick={() => { setPhase('input'); setDoneClientId(null); setDoneSlug(null) }}>Generate another</button>
           </div>
         )}
 
