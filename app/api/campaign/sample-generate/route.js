@@ -15,47 +15,46 @@ function parseJSON(text) {
   return JSON.parse(clean)
 }
 
-async function claude(prompt, maxTokens = 1500, retryOnRefusal = true) {
+async function claude(prompt, maxTokens = 1500) {
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
   })
   const block = msg.content?.find(b => b.type === 'text')
-  if (!block?.text) {
-    if (msg.stop_reason === 'end_turn' || !retryOnRefusal) {
-      throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
-    }
-    // Retry with simpler prompt on refusal
-    console.log('Claude refused, retrying with simplified prompt...')
-    const retryMsg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt + '\n\nKeep it simple and professional. Respond with valid JSON only.' }],
-    })
-    const retryBlock = retryMsg.content?.find(b => b.type === 'text')
-    if (!retryBlock?.text) throw new Error(`Claude refused after retry. Stop reason: ${retryMsg.stop_reason}`)
-    return retryBlock.text.trim()
-  }
+  if (!block?.text) throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
   return block.text.trim()
 }
 
+async function fetchImageAsBase64(url) {
+  try {
+    const res = await fetch(url)
+    const buf = await res.arrayBuffer()
+    return {
+      data: Buffer.from(buf).toString('base64'),
+      mimeType: res.headers.get('content-type') || 'image/jpeg',
+    }
+  } catch (e) {
+    console.error('Image fetch failed:', e.message)
+    return null
+  }
+}
+
 async function generateImage(prompt, options = {}) {
-  const { avatarUrl, aspectRatio = '16:9' } = options
+  const { avatarUrl, productUrl, aspectRatio = '16:9' } = options
   const apiKey = process.env.GOOGLE_API_KEY
   const parts = [{ text: prompt }]
 
+  // Avatar reference — character consistency
   if (avatarUrl) {
-    try {
-      const imgRes = await fetch(avatarUrl)
-      const buf = await imgRes.arrayBuffer()
-      parts.push({
-        inlineData: {
-          mimeType: imgRes.headers.get('content-type') || 'image/png',
-          data: Buffer.from(buf).toString('base64'),
-        }
-      })
-    } catch (e) { console.error('Avatar fetch failed:', e.message) }
+    const img = await fetchImageAsBase64(avatarUrl)
+    if (img) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
+  }
+
+  // Product reference — product consistency
+  if (productUrl) {
+    const img = await fetchImageAsBase64(productUrl)
+    if (img) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
   }
 
   const res = await fetch(
@@ -96,14 +95,18 @@ async function uploadToStorage(dataUrl, filename) {
   }
 }
 
+function slugify(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
 // Handles ONE concept per call — called 2x in parallel from frontend
 export async function POST(request) {
   try {
-    const { clientId, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9' } = await request.json()
+    const { clientId, clientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl } = await request.json()
 
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
-    // Script — concise prompt, low tokens
+    // Script
     const script = parseJSON(await claude(`Write a 30-second commercial ad script.
 CAMPAIGN CONCEPT: ${concept.title} — ${concept.theme}
 EMOTIONAL FRAME: ${concept.emotionalFrame}
@@ -117,12 +120,10 @@ CONCEPT: ${concept.title}, VISUAL UNIVERSE: ${concept.visualUniverse}
 Respond ONLY with JSON (no markdown):
 {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 800))
 
-    // Avatar prompt — kept generic to avoid content refusals
+    // Avatar — hardcoded safe portraits to avoid refusals
     const avatarStyles = [
       { label: 'Confident professional', imagePrompt: `Portrait photo of a confident smiling professional person, chest-up, looking at camera, clean neutral gray background, soft studio lighting, shallow depth of field, commercial photography style, ${direction.colorWorld} color grade` },
       { label: 'Friendly lifestyle', imagePrompt: `Portrait photo of a friendly approachable person, chest-up, warm smile, looking at camera, neutral white background, natural soft lighting, editorial photography, ${direction.colorWorld} color grade` },
-      { label: 'Modern creative', imagePrompt: `Portrait photo of a stylish modern person, chest-up, relaxed expression, looking at camera, clean background, cinematic ${direction.lighting} lighting, commercial photography, ${direction.colorWorld} tones` },
-      { label: 'Everyday hero', imagePrompt: `Portrait photo of a relatable everyday person, chest-up, genuine smile, looking at camera, simple background, bright natural lighting, lifestyle photography style, ${direction.colorWorld} color grade` },
     ]
     const avatarPrompt = avatarStyles[conceptIdx % avatarStyles.length]
 
@@ -133,42 +134,54 @@ Respond ONLY with JSON (no markdown):
     )
     const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
 
-
-
-    // Shot list — 6 scenes, all generated in parallel
-    const SCENE_COUNT = 6
-    const shotList = parseJSON(await claude(`Create ${SCENE_COUNT} cinematic shot descriptions for a 30-second commercial.
-
-VISUAL STYLE: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment || 'varied environments'}
+    // Shot list — 10 scenes in two batches
+    const SCENE_COUNT = 10
+    const shotList = parseJSON(await claude(`Create ${SCENE_COUNT} cinematic shots for a 30-second commercial.
+VISUAL STYLE: ${direction.colorWorld}, ${direction.lighting}
 CHARACTER: ${avatarPrompt.label}
-MOOD: ${script.mood || 'confident and engaging'}
 FORMAT: ${aspectRatio}
-
-Create a cinematic sequence with varied shot types: EWS (establish world), WS (wide), MS (medium), CU (close up), INSERT (product/detail), CUTAWAY (atmosphere)
-Each shot should flow naturally like a professional TV commercial.
-
+${productImageUrl ? 'PRODUCT: Feature the product naturally in 2-3 shots.' : ''}
+Vary shot types: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV, MCU, DUTCH
+Keep imagePrompt under 25 words each.
 Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
-[{"sceneIndex":0,"shotType":"","action":"what the character does","environment":"where this takes place","cameraMove":"static/push/pull/pan","mood":"emotional tone","imagePrompt":"detailed 50-word cinematic image prompt"}]`, 2500))
+[{"sceneIndex":0,"shotType":"","action":"","environment":"","cameraMove":"","mood":"","isProductShot":false,"imagePrompt":""}]`, 4000))
 
-    console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in parallel`)
+    console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
 
-    // All scenes in parallel — fastest approach
-    const sceneResultsRaw = await Promise.allSettled(
-      shotList.map(async (shot) => {
-        const prompt = `${shot.imagePrompt}
-Character: ${avatarPrompt.label} — match reference portrait exactly.
+    // Batch 1: scenes 0-4 in parallel
+    const sceneResults = new Array(SCENE_COUNT).fill(null)
+
+    const buildScene = async (shot, i) => {
+      const isProduct = shot.isProductShot && productImageUrl
+      const prompt = `${shot.imagePrompt}
+${avatarUrl ? `Character: ${avatarPrompt.label} — maintain exact appearance from reference portrait.` : ''}
+${isProduct ? 'Feature the product prominently — maintain exact product appearance from reference.' : ''}
 Shot: ${shot.shotType}. Camera: ${shot.cameraMove}.
 ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
-        const imageUrl = await generateImage(prompt, { avatarUrl, aspectRatio })
-        return { imageUrl, loading: false, shot }
+      const imageUrl = await generateImage(prompt, {
+        avatarUrl,
+        productUrl: isProduct ? productImageUrl : undefined,
+        aspectRatio,
       })
-    )
+      return { imageUrl, loading: false, shot }
+    }
 
-    const scenes = sceneResultsRaw.map((r, i) =>
-      r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
-    )
+    // Batch 1: first 5
+    const batch1 = await Promise.allSettled(shotList.slice(0, 5).map((shot, i) => buildScene(shot, i)))
+    batch1.forEach((r, i) => {
+      sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
+    })
+    console.log(`Concept ${conceptIdx + 1}: batch 1 done`)
+
+    // Batch 2: last 5
+    const batch2 = await Promise.allSettled(shotList.slice(5, 10).map((shot, i) => buildScene(shot, i + 5)))
+    batch2.forEach((r, i) => {
+      sceneResults[i + 5] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 5] }
+    })
+    console.log(`Concept ${conceptIdx + 1}: batch 2 done`)
 
     // Save to Supabase
+    const clientSlug = slugify(clientName || '')
     const { data: saved, error } = await supabase.from('campaigns').insert({
       client_id: clientId,
       status: 'complete',
@@ -182,14 +195,16 @@ ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No te
       chosen_script: script,
       chosen_direction: direction,
       chosen_avatar: avatarDataUrl,
-      scenes,
+      scenes: sceneResults,
+      aspect_ratio: aspectRatio,
       concept_title: concept.title,
+      client_status: 'pending',
     }).select('id').single()
 
     if (error) throw error
 
     console.log(`Concept ${conceptIdx + 1} saved: ${saved.id}`)
-    return Response.json({ success: true, campaignId: saved.id, conceptTitle: concept.title })
+    return Response.json({ success: true, campaignId: saved.id, conceptTitle: concept.title, clientSlug })
 
   } catch (error) {
     console.error('Sample generate error:', error.message)
