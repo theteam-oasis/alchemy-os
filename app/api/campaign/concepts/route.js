@@ -42,6 +42,7 @@ ADDITIONAL CLIENT CONTEXT FROM ONBOARDING:
     const prompt = `You are a world-class creative director at a premium ad agency. Generate ${count} campaign concepts for this brand.
 
 BRAND ANALYSIS:
+- Brand: ${analysis.brandName || 'Unknown'}
 - Core Offer: ${analysis.coreOffer}
 - Hero Product: ${analysis.heroProduct}
 - Target Customer: ${analysis.targetCustomer}
@@ -51,17 +52,19 @@ BRAND ANALYSIS:
 - Brand Tone: ${analysis.websiteTone}
 - Key Phrases: ${analysis.keyPhrasing?.join(', ')}
 - Visual Cues: ${analysis.visualCues}
+- Product Details: ${analysis.productDetails || 'N/A'}
 - Category: ${analysis.productCategory}
 ${intakeBlock}
 ${keywordsBlock}
 ${avoidBlock}
 
-CRITICAL RULES:
-1. Each concept from a COMPLETELY DIFFERENT creative territory — different emotional frame, visual universe, metaphor.
-2. Ground every concept in the actual brand data — no generic ad ideas.
-3. DO NOT use F1/racing/speed metaphors unless clearly automotive.
-4. Be SPECIFIC and CINEMATIC — each concept should feel like a different film genre.
-5. Return EXACTLY ${count} concepts.
+RULES:
+1. Each concept must come from a COMPLETELY DIFFERENT creative territory — different emotional frame, visual world, metaphor. No overlap.
+2. Every concept must be DEEPLY SPECIFIC to this brand. No generic ad ideas. If someone read the concept without the brand name, they should still be able to guess what category this is.
+3. The visualUniverse must describe a specific aesthetic world — reference real directors, photographers, or visual movements (e.g. "Nan Goldin documentary intimacy", "Wes Anderson symmetry", "90s health magazine editorial"). Be specific.
+4. The theme must articulate a tension, transformation, or insight that is TRUE for this brand's customer — not a tagline, a real human truth.
+5. The emotionalFrame must describe the specific feeling we want the viewer to have at the END of the video — not during it.
+6. Return EXACTLY ${count} concepts.
 
 Respond ONLY with a valid JSON array. No markdown, no backticks, no preamble:
 [{"title":"","theme":"","visualUniverse":"","metaphorBridge":"","emotionalFrame":"","whyItFits":"","siteAnchors":[]}]`
