@@ -161,30 +161,72 @@ export async function POST(request) {
       }
     }
 
-    // Script — use product details from analysis for accuracy
-    const productContext = analysis.productDetails ? `PRODUCT DETAILS: ${analysis.productDetails}` : ''
-    const script = parseJSON(await claude(`Write a 30-second commercial ad script for a lifestyle brand.
-CAMPAIGN THEME: ${concept.theme}
-EMOTIONAL FRAME: ${concept.emotionalFrame}
-VISUAL UNIVERSE: ${concept.visualUniverse}
-${productContext}
-~70 words of uplifting, positive spoken voiceover. No medical claims.
-Respond ONLY with JSON (no markdown):
-{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
+    // Script — fully grounded in brand analysis + concept
+    const script = parseJSON(await claude(`You are a world-class copywriter. Write a 30-second commercial script.
 
-    // Visual direction — no concept title to avoid filter triggers
-    const direction = parseJSON(await claude(`1 visual direction for a commercial ad campaign.
-VISUAL UNIVERSE: ${concept.visualUniverse}
-EMOTIONAL FRAME: ${concept.emotionalFrame}
-Respond ONLY with JSON (no markdown):
-{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 800))
+BRAND: ${analysis.brandName}
+PRODUCT: ${analysis.heroProduct}
+TARGET CUSTOMER: ${analysis.targetCustomer}
+CORE PAIN POINT: ${analysis.corePainPoint}
+TRANSFORMATION: ${analysis.desiredTransformation}
+KEY PHRASES FROM BRAND: ${analysis.keyPhrasing?.join(', ')}
+PRODUCT DETAILS: ${analysis.productDetails || 'N/A'}
+BRAND TONE: ${analysis.websiteTone}
 
-    // Avatar — hardcoded safe portraits to avoid refusals
-    const avatarStyles = [
-      { label: 'Confident professional', imagePrompt: `Portrait photo of a confident smiling professional person, chest-up, looking at camera, clean neutral gray background, soft studio lighting, shallow depth of field, commercial photography style, ${direction.colorWorld} color grade` },
-      { label: 'Friendly lifestyle', imagePrompt: `Portrait photo of a friendly approachable person, chest-up, warm smile, looking at camera, neutral white background, natural soft lighting, editorial photography, ${direction.colorWorld} color grade` },
-    ]
-    const avatarPrompt = avatarStyles[conceptIdx % avatarStyles.length]
+CAMPAIGN CONCEPT: ${concept.theme}
+EMOTIONAL FRAME: ${concept.emotionalFrame}
+
+Write ~70 words of voiceover. Use the brand's actual tone and language. Reference the real transformation the product delivers. Sound like this specific brand, not a generic ad.
+No medical claims. No superlatives like "revolutionary" or "amazing".
+Respond ONLY with JSON (no markdown):
+{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1200))
+
+    // Visual direction — grounded in brand's actual visual world
+    const direction = parseJSON(await claude(`You are a creative director. Define the visual direction for this campaign.
+
+BRAND: ${analysis.brandName}
+VISUAL CUES FROM BRAND: ${analysis.visualCues}
+BRAND TONE: ${analysis.websiteTone}
+TARGET CUSTOMER: ${analysis.targetCustomer}
+PRODUCT CATEGORY: ${analysis.productCategory}
+
+CONCEPT VISUAL UNIVERSE: ${concept.visualUniverse}
+EMOTIONAL FRAME: ${concept.emotionalFrame}
+
+Define a specific, cinematic visual direction that feels true to this brand and its customer's world. Think about where this customer actually lives, what their aesthetic is, what time of day, what textures and light feel right for them.
+Respond ONLY with JSON (no markdown):
+{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 1000))
+
+    // Avatar — built from the actual target customer description
+    const avatarClaudePrompt = await claude(`You are a casting director and photographer. Describe a portrait photo for a commercial campaign character.
+
+BRAND: ${analysis.brandName}
+TARGET CUSTOMER: ${analysis.targetCustomer}
+BRAND TONE: ${analysis.websiteTone}
+VISUAL DIRECTION: ${direction.colorWorld}, ${direction.lighting}
+CUSTOMER ARCHETYPE: ${direction.customerArchetype || analysis.targetCustomer}
+
+Describe a chest-up portrait of the ideal customer for this brand. Be specific about:
+- Age range, general appearance, energy/vibe
+- What they're wearing (simple, brand-appropriate)
+- Expression and body language
+- Background/setting (simple, on-brand)
+- Photography style and lighting
+
+Keep it safe, professional, and appropriate for mainstream advertising. No specific ethnicities, no medical conditions, no controversial elements.
+Respond ONLY with JSON (no markdown):
+{"label":"customer archetype in 4 words","imagePrompt":"detailed portrait photo prompt, 40-50 words"}`, 800)
+
+    let avatarPrompt
+    try {
+      avatarPrompt = parseJSON(avatarClaudePrompt)
+    } catch {
+      // Fallback if parsing fails
+      avatarPrompt = {
+        label: direction.customerArchetype || 'brand customer',
+        imagePrompt: `Portrait photo of a ${analysis.targetCustomer || 'professional person'}, chest-up, looking at camera, ${direction.colorWorld} color grade, ${direction.lighting}, editorial photography, neutral background`
+      }
+    }
 
     console.log(`Concept ${conceptIdx + 1}: generating avatar`)
     const avatarDataUrl = await generateImage(
@@ -193,14 +235,23 @@ Respond ONLY with JSON (no markdown):
     )
     const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
 
-    // Shot list — 10 scenes in two batches
+    // Shot list — grounded in brand's world, character, and concept
     const SCENE_COUNT = 10
-    const shotList = parseJSON(await claude(`Create ${SCENE_COUNT} cinematic shots for a 30-second commercial.
-VISUAL STYLE: ${direction.colorWorld}, ${direction.lighting}
+    const shotList = parseJSON(await claude(`You are a cinematographer building a shot list for a 30-second commercial.
+
+BRAND: ${analysis.brandName}
 CHARACTER: ${avatarPrompt.label}
+VISUAL DIRECTION: ${direction.summary}
+COLOR WORLD: ${direction.colorWorld}
+LIGHTING: ${direction.lighting}
+ENVIRONMENT: ${direction.environment}
+CINEMATIC REFERENCE: ${direction.cinematicReference}
+CONCEPT: ${concept.theme}
 FORMAT: ${aspectRatio}
-${productImageUrl ? 'PRODUCT: Feature the product naturally in 2-3 shots.' : ''}
-Vary shot types: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV, MCU, DUTCH
+${productImageUrl ? 'PRODUCT: Include 2-3 shots featuring the product naturally in the character\'s world.' : ''}
+
+Create ${SCENE_COUNT} shots that tell a coherent visual story. Each shot should feel like it belongs in this specific brand's world. Vary shot types: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV, MCU, DUTCH.
+
 Keep imagePrompt under 15 words. Keep action under 6 words.
 Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
 [{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 5000))
@@ -213,9 +264,10 @@ Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
     const buildScene = async (shot, i) => {
       const isProduct = shot.isProductShot && productImageUrl
       const prompt = `${shot.imagePrompt}
-${avatarUrl ? `Character: ${avatarPrompt.label} — maintain exact appearance from reference portrait.` : ''}
-${isProduct ? 'Feature the product prominently — maintain exact product appearance from reference.' : ''}
-Shot: ${shot.shotType}. ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
+Character: ${avatarPrompt.label}${avatarUrl ? ' — match reference portrait exactly' : ''}.
+${isProduct ? 'Feature product prominently — match reference image exactly.' : ''}
+Shot: ${shot.shotType}. ${direction.colorWorld}. ${direction.lighting}. ${direction.environment}.
+Cinematic, photorealistic, editorial quality. No text or logos.`
       const imageUrl = await generateImage(prompt, {
         avatarUrl,
         productUrl: isProduct ? productImageUrl : undefined,
