@@ -246,13 +246,15 @@ const shotList = (await Promise.all(
             const buildScene = async (shot, i) => {
               const isProduct = shot.isProductShot && productImageUrl
               const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ', match portrait' : ''}. ${isProduct ? 'Feature product.' : ''} ${direction.colorWorld}. ${direction.lighting}. Cinematic photorealistic. No text.`
-              const imageUrl = await generateImage(prompt, {
+              const dataUrl = await generateImage(prompt, {
                 avatarUrl,
                 productUrl: isProduct ? productImageUrl : undefined,
                 aspectRatio,
                 imageSize: '1K',
               })
-              return { imageUrl, loading: false, shot }
+              // Upload to storage to get a URL — never store base64 in DB
+              const storedUrl = await uploadToStorage(dataUrl, `auto-briefs/${clientId}/c${conceptIdx}-scene-${i}`)
+              return { imageUrl: storedUrl || dataUrl, loading: false, shot }
             }
 
             // All scenes in parallel — 6 max at 1K is fast
@@ -276,7 +278,7 @@ const shotList = (await Promise.all(
               script_duration: 30,
               chosen_script: script,
               chosen_direction: direction,
-              chosen_avatar: avatarDataUrl,
+              chosen_avatar: avatarUrl || avatarDataUrl,
               scenes: sceneResults,
               aspect_ratio: aspectRatio,
               concept_title: concept.title,
