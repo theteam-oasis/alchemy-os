@@ -191,11 +191,17 @@ ONLY JSON: {"label":"4-word archetype","imagePrompt":"30-word portrait photo pro
     }
 
     console.log(`Concept ${conceptIdx + 1}: generating avatar`)
-    const avatarDataUrl = await generateImage(
-      avatarPrompt.imagePrompt + ' Chest-up portrait, editorial photography, neutral background. No text.',
-      { aspectRatio: '3:4' }
-    )
-    const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
+    let avatarDataUrl = null
+    let avatarUrl = null
+    try {
+      avatarDataUrl = await generateImage(
+        avatarPrompt.imagePrompt + ' Chest-up portrait, editorial photography, neutral background. No text.',
+        { aspectRatio: '3:4' }
+      )
+      avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
+    } catch (e) {
+      console.log(`Avatar generation failed, continuing without: ${e.message}`)
+    }
 
     // Shot list — grounded in brand's world, character, and concept
     const SCENE_COUNT = 6
