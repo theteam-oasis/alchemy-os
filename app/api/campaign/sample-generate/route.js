@@ -102,16 +102,18 @@ function slugify(name) {
 // Handles ONE concept per call — called 2x in parallel from frontend
 export async function POST(request) {
   try {
-    const { clientId, clientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl } = await request.json()
+    const { clientId, clientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl, productPageUrl } = await request.json()
 
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
-    // Script — use only theme/emotion, NOT title (titles like "The Doctor Will See You Now" trigger refusals)
+    // Script — use product details from analysis for accuracy
+    const productContext = analysis.productDetails ? `PRODUCT DETAILS: ${analysis.productDetails}` : ''
     const script = parseJSON(await claude(`Write a 30-second commercial ad script for a lifestyle brand.
 CAMPAIGN THEME: ${concept.theme}
 EMOTIONAL FRAME: ${concept.emotionalFrame}
 VISUAL UNIVERSE: ${concept.visualUniverse}
-~70 words of uplifting, positive spoken voiceover. No medical claims, no specific product names.
+${productContext}
+~70 words of uplifting, positive spoken voiceover. No medical claims.
 Respond ONLY with JSON (no markdown):
 {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
 
