@@ -205,13 +205,16 @@ ONLY JSON: {"label":"4-word archetype","imagePrompt":"30-word portrait photo pro
 
     // Shot list — grounded in brand's world, character, and concept
     const SCENE_COUNT = 6
-    const shotList = parseJSON(await claude(`Shot list. 30s commercial. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}.
-Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}.
-Ref: ${direction.cinematicReference}. Concept: ${concept.theme}. Format: ${aspectRatio}.
-${productImageUrl ? 'Include 2-3 product shots.' : ''}
-Vary: EWS/WS/MS/CU/ECU/INSERT/CUTAWAY/POV/MCU/DUTCH. imagePrompt max 12 words. action max 5 words.
-ONLY JSON array of exactly ${SCENE_COUNT} no markdown:
-[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 8000))
+    const shotPrompt = `Shot list for 30s commercial. Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}.
+imagePrompt max 10 words. action max 4 words. ONLY JSON array, no markdown:
+[{"sceneIndex":0,"shotType":"EWS/WS/MS/CU/ECU/INSERT/CUTAWAY","action":"","imagePrompt":"","isProductShot":false}]`
+
+    // Split into 2 calls of 3 shots each to avoid truncation
+    const [shots1, shots2] = await Promise.all([
+      claude(shotPrompt + `\nGenerate shots 0,1,2 only. Array of exactly 3.`, 2000).then(parseJSON),
+      claude(shotPrompt + `\nGenerate shots 3,4,5 only (sceneIndex 3,4,5). Array of exactly 3. ${productImageUrl ? 'Include 1 product shot.' : ''}`, 2000).then(parseJSON),
+    ])
+    const shotList = [...(Array.isArray(shots1) ? shots1 : []), ...(Array.isArray(shots2) ? shots2 : [])]
 
     console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
 
