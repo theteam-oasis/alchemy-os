@@ -180,64 +180,31 @@ ONLY JSON array of 4 (no markdown):
             sendEvent(controller, 'progress', { step: 'concept_start', message: `Concept ${conceptIdx + 1}: Writing script...`, conceptIdx })
 
             // Script — brand-specific
-            const scriptText = await claude(`World-class copywriter. Write a 30-second Super Bowl-caliber ad script.
+            const scriptText = await claude(`Ad copywriter. 30-second voiceover script.
+Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Tone: ${analysis.websiteTone}.
+Concept: ${concept.title}. Big idea: ${concept.bigIdea}. Mood: ${concept.tone}.
+Transformation: ${analysis.desiredTransformation}.
+65-75 words. Brand voice. No medical claims.
+ONLY JSON: {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 800)
 
-BRAND: ${analysis.brandName}
-PRODUCT: ${analysis.heroProduct}
-TARGET: ${analysis.targetCustomer}
-TRANSFORMATION: ${analysis.desiredTransformation}
-PRODUCT DETAILS: ${analysis.productDetails}
-BRAND TONE: ${analysis.websiteTone}
-KEY PHRASES: ${analysis.keyPhrasing?.join(', ')}
-
-CAMPAIGN: ${concept.title}
-BIG IDEA: ${concept.bigIdea}
-TONE: ${concept.tone}
-EMOTIONAL FRAME: ${concept.emotionalFrame}
-
-Write 65-75 words of spoken voiceover. Sound exactly like this brand. Use their actual language. Reference the real transformation. Make it cinematic and memorable. No medical claims.
-
-Respond ONLY with JSON:
-{"title":"","hook":"one sentence that opens the spot","body":"the middle — develops the idea","cta":"closing line or call to action","fullScript":"complete 65-75 word script","mood":""}`, 1200)
-
-            const script = parseJSON(scriptText)
+            const script = safeParseJSON(scriptText, {title:"",hook:"",body:"",cta:"",fullScript:"",mood:""})
 
             // Visual direction — derived from brand's actual visual world
-            const directionText = await claude(`Creative director. Define the visual direction for this campaign.
+            const directionText = await claude(`Creative director. Visual direction for this campaign.
+Brand: ${analysis.brandName}. Visual cues: ${analysis.visualCues}. Customer: ${analysis.targetCustomer}.
+Concept: ${concept.title}. Universe: ${concept.visualUniverse}.
+ONLY JSON: {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 700)
 
-BRAND: ${analysis.brandName}
-VISUAL CUES: ${analysis.visualCues}
-BRAND TONE: ${analysis.websiteTone}
-TARGET CUSTOMER: ${analysis.targetCustomer}
-
-CONCEPT: ${concept.title}
-BIG IDEA: ${concept.bigIdea}
-VISUAL UNIVERSE: ${concept.visualUniverse}
-TONE: ${concept.tone}
-
-Define a cinematic visual direction true to this brand's customer's world. Be specific — think about where they live, their aesthetic, what their hands look like, what they drink in the morning.
-
-Respond ONLY with JSON:
-{"title":"","colorWorld":"specific palette","lighting":"specific light quality","lensAndCamera":"specific lens choice","environment":"where we are","texture":"what materials/surfaces","editingFeel":"rhythm and pace","cinematicReference":"specific directors or films","customerArchetype":"specific description of the character","summary":""}`, 1000)
-
-            const direction = parseJSON(directionText)
+            const direction = safeParseJSON(directionText, {title:"",colorWorld:"",lighting:"",lensAndCamera:"",environment:"",texture:"",editingFeel:"",cinematicReference:"",customerArchetype:"",summary:""})
 
             // Avatar — built from real customer description
-            const avatarText = await claude(`Casting director. Describe a portrait character for this commercial.
-
-BRAND: ${analysis.brandName}
-CUSTOMER: ${direction.customerArchetype || analysis.targetCustomer}
-STYLE: ${direction.colorWorld}, ${direction.lighting}
-CONCEPT TONE: ${concept.tone}
-
-Describe the ideal person to represent this brand's customer. Be specific: age, energy, style, expression. This person should feel real, not like a stock photo.
-Safe, professional, mainstream advertising appropriate.
-
-Respond ONLY with JSON:
-{"label":"character in 4 words","imagePrompt":"precise 40-word portrait photo prompt"}`, 700)
+            const avatarText = await claude(`Portrait character for ad campaign.
+Brand: ${analysis.brandName}. Customer: ${direction.customerArchetype||analysis.targetCustomer}. Style: ${direction.colorWorld}, ${direction.lighting}.
+Safe, professional. Chest-up portrait, real not stock.
+ONLY JSON: {"label":"4-word character","imagePrompt":"30-word portrait photo prompt"}`, 500)
 
             let avatarPrompt
-            try { avatarPrompt = parseJSON(avatarText) }
+            try { avatarPrompt = safeParseJSON(avatarText, null) || null }
             catch { avatarPrompt = { label: analysis.targetCustomer || 'brand customer', imagePrompt: `Portrait photo of ${analysis.targetCustomer || 'a person'}, chest-up, ${direction.colorWorld} aesthetic, ${direction.lighting}, editorial photography, clean background` } }
 
             sendEvent(controller, 'progress', { step: 'avatar', message: `Concept ${conceptIdx + 1}: Generating character...`, conceptIdx })
@@ -268,7 +235,7 @@ const shotList = (await Promise.all(
   )
 )).filter(Boolean)
 
-            const shotList = parseJSON(shotListText)
+            // shotList built above via per-shot calls
 
             sendEvent(controller, 'progress', { step: 'scenes', message: `Concept ${conceptIdx + 1}: Generating 8 scenes...`, conceptIdx })
 
