@@ -115,13 +115,19 @@ export async function POST(request) {
 
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
-    // Auto-create client if none provided — only concept 0 creates, concept 1 finds it
+    // Auto-create client if none provided
+    // Only concept 0 creates — concept 1 waits 3s then finds it
     let clientId = incomingClientId
     let clientName = incomingClientName || analysis.brandName || 'Brand'
 
     if (!clientId) {
       const sampleName = `SAMPLE - ${clientName}`
-      // Check if already exists (concept 1 may have already created it)
+
+      if (conceptIdx > 0) {
+        // Wait for concept 0 to create the record first
+        await new Promise(r => setTimeout(r, 3000))
+      }
+
       const { data: existing } = await supabase
         .from('clients')
         .select('id, name')
@@ -132,6 +138,7 @@ export async function POST(request) {
         clientId = existing.id
         clientName = existing.name
       } else {
+        // Only concept 0 should reach here
         const { data: created, error: createError } = await supabase
           .from('clients')
           .insert({ name: sampleName })
@@ -184,9 +191,9 @@ CHARACTER: ${avatarPrompt.label}
 FORMAT: ${aspectRatio}
 ${productImageUrl ? 'PRODUCT: Feature the product naturally in 2-3 shots.' : ''}
 Vary shot types: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV, MCU, DUTCH
-Keep imagePrompt under 25 words each.
+Keep imagePrompt under 15 words. Keep action under 6 words.
 Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
-[{"sceneIndex":0,"shotType":"","action":"","environment":"","cameraMove":"","mood":"","isProductShot":false,"imagePrompt":""}]`, 4000))
+[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 5000))
 
     console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
 
@@ -198,8 +205,7 @@ Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
       const prompt = `${shot.imagePrompt}
 ${avatarUrl ? `Character: ${avatarPrompt.label} — maintain exact appearance from reference portrait.` : ''}
 ${isProduct ? 'Feature the product prominently — maintain exact product appearance from reference.' : ''}
-Shot: ${shot.shotType}. Camera: ${shot.cameraMove}.
-${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
+Shot: ${shot.shotType}. ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
       const imageUrl = await generateImage(prompt, {
         avatarUrl,
         productUrl: isProduct ? productImageUrl : undefined,
