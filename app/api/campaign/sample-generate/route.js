@@ -15,14 +15,28 @@ function parseJSON(text) {
   return JSON.parse(clean)
 }
 
-async function claude(prompt, maxTokens = 1500) {
+async function claude(prompt, maxTokens = 1500, retryOnRefusal = true) {
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: maxTokens,
     messages: [{ role: 'user', content: prompt }],
   })
   const block = msg.content?.find(b => b.type === 'text')
-  if (!block?.text) throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
+  if (!block?.text) {
+    if (msg.stop_reason === 'end_turn' || !retryOnRefusal) {
+      throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
+    }
+    // Retry with simpler prompt on refusal
+    console.log('Claude refused, retrying with simplified prompt...')
+    const retryMsg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt + '\n\nKeep it simple and professional. Respond with valid JSON only.' }],
+    })
+    const retryBlock = retryMsg.content?.find(b => b.type === 'text')
+    if (!retryBlock?.text) throw new Error(`Claude refused after retry. Stop reason: ${retryMsg.stop_reason}`)
+    return retryBlock.text.trim()
+  }
   return block.text.trim()
 }
 
@@ -102,13 +116,14 @@ CONCEPT: ${concept.title}, TONE: ${analysis.websiteTone}
 Respond ONLY with JSON (no markdown):
 {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","summary":""}`, 800))
 
-    // Avatar prompt
-    const avatarPrompt = parseJSON(await claude(`1 avatar portrait prompt.
-CONCEPT: ${concept.title}, STYLE: ${direction.colorWorld} ${direction.lighting}
-TARGET: ${analysis.targetCustomer}
-Chest-up portrait, clear face, neutral background.
-Respond ONLY with JSON (no markdown):
-{"label":"","imagePrompt":""}`, 600))
+    // Avatar prompt — kept generic to avoid content refusals
+    const avatarStyles = [
+      { label: 'Confident professional', imagePrompt: `Portrait photo of a confident smiling professional person, chest-up, looking at camera, clean neutral gray background, soft studio lighting, shallow depth of field, commercial photography style, ${direction.colorWorld} color grade` },
+      { label: 'Friendly lifestyle', imagePrompt: `Portrait photo of a friendly approachable person, chest-up, warm smile, looking at camera, neutral white background, natural soft lighting, editorial photography, ${direction.colorWorld} color grade` },
+      { label: 'Modern creative', imagePrompt: `Portrait photo of a stylish modern person, chest-up, relaxed expression, looking at camera, clean background, cinematic ${direction.lighting} lighting, commercial photography, ${direction.colorWorld} tones` },
+      { label: 'Everyday hero', imagePrompt: `Portrait photo of a relatable everyday person, chest-up, genuine smile, looking at camera, simple background, bright natural lighting, lifestyle photography style, ${direction.colorWorld} color grade` },
+    ]
+    const avatarPrompt = avatarStyles[conceptIdx % avatarStyles.length]
 
     console.log(`Concept ${conceptIdx + 1}: generating avatar`)
     const avatarDataUrl = await generateImage(
