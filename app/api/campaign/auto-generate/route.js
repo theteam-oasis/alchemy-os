@@ -17,20 +17,17 @@ function parseJSON(text) {
 
 function safeParseJSON(text, fallback = null) {
   try {
-    const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    // Try to fix truncated JSON by finding last complete object
-    return JSON.parse(clean)
+    return parseJSON(text)
   } catch {
-    // Try to extract partial array
     try {
-      const match = text.match(/(\[.*\])/s)
+      const match = text.match(/(\[.*\])/s) || text.match(/(\{.*\})/s)
       if (match) return JSON.parse(match[1])
     } catch {}
     return fallback
   }
 }
 
-async function claude(prompt, maxTokens = 2000) {
+async function claude(prompt, maxTokens = 1000) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const msg = await anthropic.messages.create({
@@ -39,7 +36,7 @@ async function claude(prompt, maxTokens = 2000) {
         messages: [{ role: 'user', content: prompt }],
       })
       const block = msg.content?.find(b => b.type === 'text')
-      if (!block?.text) throw new Error(`Empty response. Stop: ${msg.stop_reason}`)
+      if (!block?.text) throw new Error('Empty response')
       return block.text.trim()
     } catch (e) {
       if (attempt < 2 && (e.message?.includes('529') || e.status === 529)) {
@@ -58,10 +55,9 @@ async function fetchBase64(url) {
 }
 
 async function generateImage(prompt, options = {}) {
-  const { avatarUrl, productUrl, aspectRatio = '16:9', imageSize = '2K' } = options
+  const { avatarUrl, productUrl, aspectRatio = '16:9' } = options
   const apiKey = process.env.GOOGLE_API_KEY
   const parts = [{ text: prompt }]
-
   if (avatarUrl) {
     const img = await fetchBase64(avatarUrl)
     if (img) parts.push({ inlineData: img })
@@ -70,7 +66,6 @@ async function generateImage(prompt, options = {}) {
     const img = await fetchBase64(productUrl)
     if (img) parts.push({ inlineData: img })
   }
-
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent?key=${apiKey}`,
@@ -79,7 +74,7 @@ async function generateImage(prompt, options = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize, aspectRatio } },
+          generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { imageSize: '1K', aspectRatio } },
         }),
       }
     )
@@ -98,15 +93,17 @@ async function generateImage(prompt, options = {}) {
   }
 }
 
-async function uploadToStorage(dataUrl, filename) {
+async function uploadToStorage(dataUrl, path) {
   try {
     const base64 = dataUrl.split(',')[1]
-    const mimeType = dataUrl.match(/data:([^;]+);/)?.[1] || 'image/png'
+    const mimeType = dataUrl.match(/data:([^;]+);/)?.[1] || 'image/jpeg'
     const ext = mimeType.includes('jpeg') ? 'jpg' : 'png'
     const buffer = Buffer.from(base64, 'base64')
-    const { error } = await supabase.storage.from('brand-assets').upload(`${filename}.${ext}`, buffer, { contentType: mimeType, upsert: true })
+    const { error } = await supabase.storage
+      .from('brand-assets')
+      .upload(`${path}.${ext}`, buffer, { contentType: mimeType, upsert: true })
     if (error) throw error
-    const { data: { publicUrl } } = supabase.storage.from('brand-assets').getPublicUrl(`${filename}.${ext}`)
+    const { data: { publicUrl } } = supabase.storage.from('brand-assets').getPublicUrl(`${path}.${ext}`)
     return publicUrl
   } catch (e) {
     console.error('Upload failed:', e.message)
@@ -121,151 +118,115 @@ function sendEvent(controller, event, data) {
 
 export async function POST(request) {
   const { clientId, productPageUrl, websiteUrl, productName, offerNotes, creativeKeywords, aspectRatio = '16:9', productImageUrl } = await request.json()
-
   const targetUrl = productPageUrl || websiteUrl
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Step 1: Scrape and analyze
+        // ── ANALYZE ──
         sendEvent(controller, 'progress', { step: 'analyzing', message: 'Analyzing brand...' })
-
         let pageContent = ''
         try {
-          const r = await fetch(targetUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AlchemyOS/1.0)' },
-            signal: AbortSignal.timeout(8000)
-          })
+          const r = await fetch(targetUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) })
           const html = await r.text()
-          pageContent = html
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 6000)
-        } catch {
-          pageContent = `Product: ${productName}. Notes: ${offerNotes}`
-        }
+          pageContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000)
+        } catch { pageContent = `${productName}. ${offerNotes}` }
 
-        const analysisText = await claude(`Brand strategist. Extract brand intelligence. Be specific, ground in actual page content.
-Page: ${targetUrl}. Product: ${productName||'See page'}. Notes: ${offerNotes||'None'}.
-Content: ${pageContent.slice(0,4000)}
-ONLY JSON:
-{"brandName":"","coreOffer":"","heroProduct":"","targetCustomer":"","corePainPoint":"","desiredTransformation":"","differentiators":[],"proofPoints":[],"websiteTone":"","keyPhrasing":[],"visualCues":"","productCategory":"","productDetails":"","brandPersonality":""}`, 1500)
+        const analysis = safeParseJSON(await claude(`Brand strategist. Extract brand intelligence from page content.
+URL: ${targetUrl}. Product: ${productName||'see page'}. Notes: ${offerNotes||'none'}.
+Content: ${pageContent}
+ONLY JSON (no markdown): {"brandName":"","coreOffer":"","heroProduct":"","targetCustomer":"","corePainPoint":"","desiredTransformation":"","differentiators":[],"websiteTone":"","keyPhrasing":[],"visualCues":"","productCategory":"","productDetails":"","brandPersonality":""}`, 1200), { brandName: productName || 'Brand', coreOffer: '', heroProduct: productName || '', targetCustomer: '', corePainPoint: '', desiredTransformation: '', differentiators: [], websiteTone: '', keyPhrasing: [], visualCues: '', productCategory: '', productDetails: '', brandPersonality: '' })
 
-        const analysis = safeParseJSON(analysisText, {brandName:'Brand',coreOffer:'',heroProduct:'',targetCustomer:'',corePainPoint:'',desiredTransformation:'',differentiators:[],websiteTone:'',keyPhrasing:[],visualCues:'',productCategory:'',productDetails:'',brandPersonality:''})
         sendEvent(controller, 'analysis_complete', { analysis })
 
-        // Step 2: Generate 4 deeply specific concepts
-        sendEvent(controller, 'progress', { step: 'concepts', message: 'Generating 4 campaign concepts...' })
-
+        // ── CONCEPTS ──
+        sendEvent(controller, 'progress', { step: 'concepts', message: 'Generating 4 concepts...' })
         const keywords = creativeKeywords ? creativeKeywords.split(',').map(k => k.trim()).filter(Boolean) : []
 
-        const conceptsText = await claude(`Creative director. 4 Super Bowl-caliber concepts for this brand.
+        const concepts = safeParseJSON(await claude(`Creative director. 4 Super Bowl-caliber campaign concepts.
 Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Customer: ${analysis.targetCustomer}.
-Pain: ${analysis.corePainPoint}. Transformation: ${analysis.desiredTransformation}.
-Tone: ${analysis.websiteTone}. Visual: ${analysis.visualCues}.
-Keywords: ${keywords.join(', ')||'none'}.
-Rules: completely different territories, brand-specific, reference real directors, human truths.
-ONLY JSON array of 4 (no markdown):
-[{"title":"","bigIdea":"","theme":"","visualUniverse":"","emotionalFrame":"","whyItFits":"","tone":""}]`, 6000)
+Pain: ${analysis.corePainPoint}. Change: ${analysis.desiredTransformation}.
+Tone: ${analysis.websiteTone}. Visual: ${analysis.visualCues}. Keywords: ${keywords.join(',')||'none'}.
+Each concept: completely different territory, brand-specific, real human truth, specific visual reference.
+ONLY JSON array of 4 (no markdown): [{"title":"","bigIdea":"","theme":"","visualUniverse":"","emotionalFrame":"","whyItFits":"","tone":""}]`, 4000), [])
 
-        const rawConcepts = safeParseJSON(conceptsText, [])
-        if (!rawConcepts?.length) throw new Error('Failed to parse concepts')
-        const concepts = rawConcepts.slice(0, 4)
+        if (!concepts?.length) throw new Error('Failed to generate concepts')
         sendEvent(controller, 'concepts_complete', { concepts })
-        sendEvent(controller, 'progress', { step: 'building', message: 'Building 4 full campaigns...' })
+        sendEvent(controller, 'progress', { step: 'building', message: 'Building 4 campaigns...' })
 
-        // Step 3: Build all 4 concepts in parallel
-        const campaignPromises = concepts.map(async (concept, conceptIdx) => {
+        // ── BUILD EACH CONCEPT ── (sequential to avoid DB connection exhaustion)
+        for (const [conceptIdx, concept] of concepts.slice(0, 4).entries()) {
           try {
-            sendEvent(controller, 'progress', { step: 'concept_start', message: `Concept ${conceptIdx + 1}: Writing script...`, conceptIdx })
+            sendEvent(controller, 'progress', { step: 'concept_start', message: `Concept ${conceptIdx + 1}: Writing...`, conceptIdx })
 
-            // Script — brand-specific
-            const scriptText = await claude(`Ad copywriter. 30-second voiceover script.
+            // Script
+            const script = safeParseJSON(await claude(`Ad copywriter. 30s voiceover script.
 Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Tone: ${analysis.websiteTone}.
-Concept: ${concept.title}. Big idea: ${concept.bigIdea}. Mood: ${concept.tone}.
-Transformation: ${analysis.desiredTransformation}.
+Concept: ${concept.title}. Idea: ${concept.bigIdea}. Mood: ${concept.tone}.
 65-75 words. Brand voice. No medical claims.
-ONLY JSON: {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 800)
+ONLY JSON: {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 800), { title: '', hook: '', body: '', cta: '', fullScript: '', mood: '' })
 
-            const script = safeParseJSON(scriptText, {title:"",hook:"",body:"",cta:"",fullScript:"",mood:""})
-
-            // Visual direction — derived from brand's actual visual world
-            const directionText = await claude(`Creative director. Visual direction for this campaign.
-Brand: ${analysis.brandName}. Visual cues: ${analysis.visualCues}. Customer: ${analysis.targetCustomer}.
+            // Direction
+            const direction = safeParseJSON(await claude(`Creative director. Visual direction.
+Brand: ${analysis.brandName}. Cues: ${analysis.visualCues}. Customer: ${analysis.targetCustomer}.
 Concept: ${concept.title}. Universe: ${concept.visualUniverse}.
-ONLY JSON: {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 700)
+ONLY JSON: {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 700), { title: '', colorWorld: '', lighting: '', lensAndCamera: '', environment: '', cinematicReference: '', customerArchetype: '', summary: '' })
 
-            const direction = safeParseJSON(directionText, {title:"",colorWorld:"",lighting:"",lensAndCamera:"",environment:"",texture:"",editingFeel:"",cinematicReference:"",customerArchetype:"",summary:""})
-
-            // Avatar — built from real customer description
-            const avatarText = await claude(`Portrait character for ad campaign.
-Brand: ${analysis.brandName}. Customer: ${direction.customerArchetype||analysis.targetCustomer}. Style: ${direction.colorWorld}, ${direction.lighting}.
-Safe, professional. Chest-up portrait, real not stock.
-ONLY JSON: {"label":"4-word character","imagePrompt":"30-word portrait photo prompt"}`, 500)
-
-            let avatarPrompt
-            try { avatarPrompt = safeParseJSON(avatarText, null) || null }
-            catch { avatarPrompt = { label: analysis.targetCustomer || 'brand customer', imagePrompt: `Portrait photo of ${analysis.targetCustomer || 'a person'}, chest-up, ${direction.colorWorld} aesthetic, ${direction.lighting}, editorial photography, clean background` } }
+            // Avatar prompt
+            const avatarPrompt = safeParseJSON(await claude(`Casting director. Ad campaign character.
+Brand: ${analysis.brandName}. Customer: ${direction.customerArchetype || analysis.targetCustomer}. Style: ${direction.colorWorld}, ${direction.lighting}.
+Safe, professional, mainstream. Chest-up portrait.
+ONLY JSON: {"label":"4-word character","imagePrompt":"25-word portrait photo prompt"}`, 400), { label: analysis.targetCustomer || 'brand customer', imagePrompt: `Portrait of ${analysis.targetCustomer || 'person'}, chest-up, ${direction.colorWorld}, ${direction.lighting}, editorial photography, neutral background` })
 
             sendEvent(controller, 'progress', { step: 'avatar', message: `Concept ${conceptIdx + 1}: Generating character...`, conceptIdx })
 
-            // Avatar image — non-fatal
-            let avatarDataUrl = null
+            // Avatar image + upload
             let avatarUrl = null
             try {
-              avatarDataUrl = await generateImage(
-                avatarPrompt.imagePrompt + '. Chest-up portrait, editorial photography, clean neutral background. No text.',
-                { aspectRatio: '3:4', imageSize: '2K' }
+              const avatarDataUrl = await generateImage(
+                avatarPrompt.imagePrompt + '. Chest-up portrait, editorial photography, neutral background. No text.',
+                { aspectRatio: '3:4' }
               )
               avatarUrl = await uploadToStorage(avatarDataUrl, `auto-briefs/${clientId}/c${conceptIdx}-avatar`)
-            } catch (e) {
-              console.log(`Concept ${conceptIdx + 1} avatar failed: ${e.message}`)
-            }
+            } catch (e) { console.log(`Concept ${conceptIdx + 1} avatar failed: ${e.message}`) }
 
-            // Shot list — 8 scenes, brand-specific world
-            // Split into 2 calls of 4 shots each to avoid truncation
-// Generate 6 individual shots - one per Claude call to avoid truncation
-const shotCtx = `Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}. Format: ${aspectRatio}.`
-const SHOT_TYPES = ['EWS','WS','MS','CU','ECU','INSERT']
-const shotList = (await Promise.all(
-  SHOT_TYPES.map((shotType, idx) =>
-    claude(`${shotCtx} Generate 1 cinematic shot. Shot type: ${shotType}. Index: ${idx}.${idx===4&&productImageUrl?' isProductShot: true.':''} imagePrompt 6 words max. ONLY JSON object: {"sceneIndex":${idx},"shotType":"${shotType}","action":"3 words","imagePrompt":"6 word scene description","isProductShot":${idx===4&&productImageUrl?'true':'false'}}`, 400)
-    .then(t => { try { return parseJSON(t) } catch { return {sceneIndex:idx,shotType,action:'scene',imagePrompt:`${direction.colorWorld} ${shotType} shot`,isProductShot:false} } })
-    .catch(() => ({sceneIndex:idx,shotType,action:'scene',imagePrompt:`${direction.colorWorld} ${shotType} shot`,isProductShot:false}))
-  )
-)).filter(Boolean)
+            // Shots — one call per shot, all parallel per concept
+            sendEvent(controller, 'progress', { step: 'scenes', message: `Concept ${conceptIdx + 1}: Generating scenes...`, conceptIdx })
+            const SHOT_TYPES = ['EWS', 'WS', 'MS', 'CU', 'ECU', 'INSERT']
+            const ctx = `Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}.`
+            const shots = await Promise.all(
+              SHOT_TYPES.map((shotType, idx) =>
+                claude(`${ctx} One shot. Type: ${shotType}. Index: ${idx}. imagePrompt 6 words max.
+ONLY JSON object: {"sceneIndex":${idx},"shotType":"${shotType}","action":"3 words","imagePrompt":"6 words","isProductShot":${idx === 4 && productImageUrl ? 'true' : 'false'}}`, 200)
+                  .then(t => safeParseJSON(t, { sceneIndex: idx, shotType, action: 'scene action', imagePrompt: `${direction.colorWorld} ${shotType} cinematic`, isProductShot: false }))
+                  .catch(() => ({ sceneIndex: idx, shotType, action: 'scene action', imagePrompt: `${direction.colorWorld} ${shotType} cinematic`, isProductShot: false }))
+              )
+            )
 
-            // shotList built above via per-shot calls
-
-            sendEvent(controller, 'progress', { step: 'scenes', message: `Concept ${conceptIdx + 1}: Generating 8 scenes...`, conceptIdx })
-
-            // Generate scenes in 2 batches of 4
-            const SCENE_COUNT = Math.min(shotList.length, 6)
-            const sceneResults = new Array(SCENE_COUNT).fill(null)
-
-            const buildScene = async (shot, i) => {
-              const isProduct = shot.isProductShot && productImageUrl
-              const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ', match portrait' : ''}. ${isProduct ? 'Feature product.' : ''} ${direction.colorWorld}. ${direction.lighting}. Cinematic photorealistic. No text.`
-              const dataUrl = await generateImage(prompt, {
-                avatarUrl,
-                productUrl: isProduct ? productImageUrl : undefined,
-                aspectRatio,
-                imageSize: '1K',
+            // Generate scene images in parallel, upload sequentially
+            const sceneDataUrls = await Promise.all(
+              shots.map(async (shot) => {
+                try {
+                  const isProduct = shot.isProductShot && productImageUrl
+                  const prompt = `${shot.imagePrompt}. ${avatarUrl ? 'Match character portrait.' : ''} ${direction.colorWorld}. ${direction.lighting}. ${shot.shotType} shot. Cinematic photorealistic. No text.`
+                  return await generateImage(prompt, { avatarUrl, productUrl: isProduct ? productImageUrl : undefined, aspectRatio })
+                } catch { return null }
               })
-              // Upload to storage to get a URL — never store base64 in DB
-              const storedUrl = await uploadToStorage(dataUrl, `auto-briefs/${clientId}/c${conceptIdx}-scene-${i}`)
-              return { imageUrl: storedUrl || dataUrl, loading: false, shot }
-            }
+            )
 
-            // All scenes in parallel — 6 max at 1K is fast
-            const allResults = await Promise.allSettled(shotList.slice(0, SCENE_COUNT).map((shot, i) => buildScene(shot, i)))
-            allResults.forEach((r, i) => {
-              sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
-            })
+            // Upload scenes sequentially to avoid connection pool exhaustion
+            const sceneResults = []
+            for (let i = 0; i < shots.length; i++) {
+              const dataUrl = sceneDataUrls[i]
+              let imageUrl = null
+              if (dataUrl) {
+                imageUrl = await uploadToStorage(dataUrl, `auto-briefs/${clientId}/c${conceptIdx}-scene-${i}`)
+              }
+              sceneResults.push({ imageUrl, loading: false, shot: shots[i] })
+            }
 
             sendEvent(controller, 'progress', { step: 'saving', message: `Concept ${conceptIdx + 1}: Saving...`, conceptIdx })
 
-            // Save
             const { data: saved, error } = await supabase.from('campaigns').insert({
               client_id: clientId,
               status: 'complete',
@@ -278,7 +239,7 @@ const shotList = (await Promise.all(
               script_duration: 30,
               chosen_script: script,
               chosen_direction: direction,
-              chosen_avatar: avatarUrl || avatarDataUrl,
+              chosen_avatar: avatarUrl,
               scenes: sceneResults,
               aspect_ratio: aspectRatio,
               concept_title: concept.title,
@@ -287,29 +248,18 @@ const shotList = (await Promise.all(
 
             if (error) throw error
 
-            sendEvent(controller, 'concept_complete', {
-              conceptIdx,
-              campaignId: saved.id,
-              conceptTitle: concept.title,
-            })
+            sendEvent(controller, 'concept_complete', { conceptIdx, campaignId: saved.id, conceptTitle: concept.title })
 
-            return saved.id
           } catch (e) {
             console.error(`Concept ${conceptIdx + 1} failed:`, e.message)
             sendEvent(controller, 'concept_error', { conceptIdx, error: e.message })
-            return null
           }
-        })
+        }
 
-        await Promise.allSettled(campaignPromises)
-
-        sendEvent(controller, 'complete', {
-          clientId,
-          message: 'All concepts complete.',
-        })
+        sendEvent(controller, 'complete', { clientId })
 
       } catch (e) {
-        console.error('Auto-generate error:', e)
+        console.error('Auto-generate error:', e.message)
         sendEvent(controller, 'error', { message: e.message })
       } finally {
         controller.close()
@@ -318,10 +268,6 @@ const shotList = (await Promise.all(
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
   })
 }
