@@ -44,14 +44,17 @@ export default function SampleBriefPage() {
       .then(({ data }) => { if (data) setClients(data) })
   }, [])
 
+  const [brandIntake, setBrandIntake] = useState(null)
+
   useEffect(() => {
-    if (!selectedClientId) { setClientProductImages([]); return }
-    supabase.from('brand_intake').select('website, brand_name, product_image_urls').eq('client_id', selectedClientId).maybeSingle()
+    if (!selectedClientId) { setClientProductImages([]); setBrandIntake(null); return }
+    supabase.from('brand_intake').select('*').eq('client_id', selectedClientId).maybeSingle()
       .then(({ data }) => {
         if (data) {
           if (data.website) setWebsiteUrl(data.website)
           if (data.brand_name) setProductName(data.brand_name)
           setClientProductImages(data.product_image_urls?.length ? data.product_image_urls : [])
+          setBrandIntake(data)
         }
       })
   }, [selectedClientId])
@@ -86,7 +89,7 @@ export default function SampleBriefPage() {
       setOverallMessage('Analyzing brand...')
       const analyzeRes = await fetch('/api/campaign/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ websiteUrl, productName, offerNotes }),
+        body: JSON.stringify({ websiteUrl, productName, offerNotes, brandIntake }),
       })
       const analyzeJson = await analyzeRes.json()
       if (!analyzeJson.success) throw new Error(analyzeJson.error)
@@ -98,6 +101,7 @@ export default function SampleBriefPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           analysis,
+          brandIntake,
           creativeKeywords: creativeKeywords.split(',').map(k => k.trim()).filter(Boolean),
           count: 2,
           previousConcepts: [],
