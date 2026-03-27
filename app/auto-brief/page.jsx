@@ -6,6 +6,7 @@ function fileToDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader(
 function slugify(n){return(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
 
 export default function AutoBriefPage() {
+  const [mounted, setMounted] = useState(false)
   const [phase, setPhase] = useState('input') // input | running | done | error
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -34,7 +35,7 @@ export default function AutoBriefPage() {
   const productInputRef = useRef(null)
 
   useEffect(()=>{
-    supabase.from('clients').select('id,name,created_at').order('name').then(({data})=>{
+    supabase.from('clients').select('id,name').order('name').then(({data})=>{
       if(!data)return
       // Deduplicate by name — keep first occurrence (alphabetically sorted)
       const seen=new Set()
@@ -314,7 +315,9 @@ export default function AutoBriefPage() {
           {/* Client selector — required */}
           <div className="section">
             <label className="label">Client <em>required</em></label>
-            {clients.length===0?(
+            {!mounted ? (
+              <p style={{fontSize:13,color:'#cccccc'}}>Loading...</p>
+            ) : clients.length===0?(
               <p style={{fontSize:13,color:'#aaaaaa'}}>No clients found. <a href="/clients" style={{color:'#111111'}}>Add one in the CRM →</a></p>
             ):(
               <>
