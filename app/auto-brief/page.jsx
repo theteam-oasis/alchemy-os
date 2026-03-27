@@ -19,6 +19,7 @@ export default function AutoBriefPage() {
   const [extracting, setExtracting] = useState(false)
   const [selectedImageUrl, setSelectedImageUrl] = useState(null)
   const [clientSearch, setClientSearch] = useState('')
+  const [imageSource, setImageSource] = useState('none') // 'client' | 'scraped' | 'none'
 
   const [progress, setProgress] = useState([])
   const [conceptStatus, setConceptStatus] = useState([
@@ -49,8 +50,24 @@ export default function AutoBriefPage() {
 
   useEffect(()=>{
     if(!selectedClientId)return
-    supabase.from('brand_intake').select('website').eq('client_id',selectedClientId).maybeSingle()
-      .then(({data})=>{if(data?.website&&!productPageUrl)setProductPageUrl(data.website)})
+    // Reset image state when client changes
+    setExtractedImages([])
+    setSelectedImageUrl(null)
+    setUploadedImage(null)
+    supabase.from('brand_intake').select('website, product_image_urls').eq('client_id',selectedClientId).maybeSingle()
+      .then(({data})=>{
+        if(!data)return
+        // Priority 1: client uploaded images from brand_intake
+        if(data.product_image_urls?.length){
+          setExtractedImages(data.product_image_urls)
+          setSelectedImageUrl(data.product_image_urls[0])
+          setImageSource('client')
+        }
+        // Priority 2: website URL for scraping (only if no uploaded images)
+        if(data.website&&!productPageUrl){
+          setProductPageUrl(data.website)
+        }
+      })
   },[selectedClientId])
 
   useEffect(()=>{
@@ -64,7 +81,7 @@ export default function AutoBriefPage() {
     try{
       const res=await fetch('/api/campaign/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productPageUrl:url,extractImagesOnly:true})})
       const j=await res.json()
-      if(j.productImages?.length){setExtractedImages(j.productImages);setSelectedImageUrl(j.productImages[0])}
+      if(j.productImages?.length){setExtractedImages(j.productImages);setSelectedImageUrl(j.productImages[0]);setImageSource('scraped')}
     }catch{}
     setExtracting(false)
   }
@@ -343,7 +360,7 @@ export default function AutoBriefPage() {
             <div className="card">
               {(extractedImages.length>0||extracting)&&(<>
                 <div className="card-hdr">
-                  <span className="card-lbl">From page</span>
+                  <span className="card-lbl">{imageSource==='client'?'Client images':'From page'}</span>
                   {extractedImages.length>0&&<span className="card-cnt">{extractedImages.length} found</span>}
                 </div>
                 <div className="img-grid">
