@@ -117,42 +117,32 @@ Respond ONLY with JSON (no markdown):
 
 
 
-    // Shot list — 8 scenes
-    const SCENE_COUNT = 8
+    // Shot list — 6 scenes, all generated in parallel
+    const SCENE_COUNT = 6
     const shotList = parseJSON(await claude(`${SCENE_COUNT} shots for a 30-second ad.
 CAMPAIGN: ${concept.title}, DIRECTION: ${direction.colorWorld} ${direction.lighting}
 CHARACTER: ${avatarPrompt.label}, SCRIPT: "${script.fullScript}", FORMAT: ${aspectRatio}
-Vary shot types cinematically: EWS, WS, MS, MCU, CU, ECU, INSERT, CUTAWAY
-Open wide, build close, mix throughout.
+Vary shot types: EWS, WS, MS, CU, INSERT, CUTAWAY
 Respond ONLY with JSON array of exactly ${SCENE_COUNT} (no markdown):
-[{"sceneIndex":0,"shotType":"","scriptMoment":"","action":"","environment":"","cameraMove":"","mood":"","imagePrompt":""}]`, 3000))
+[{"sceneIndex":0,"shotType":"","scriptMoment":"","action":"","environment":"","cameraMove":"","mood":"","imagePrompt":""}]`, 2500))
 
-    console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
+    console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in parallel`)
 
-    // Generate in 2 batches of 4 — parallel within each batch, sequential between batches
-    const sceneResultsFlat = new Array(SCENE_COUNT).fill(null)
-
-    for (let batchStart = 0; batchStart < SCENE_COUNT; batchStart += 4) {
-      const batch = shotList.slice(batchStart, batchStart + 4)
-      const batchResults = await Promise.allSettled(
-        batch.map(async (shot, bi) => {
-          const prompt = `${shot.imagePrompt}
+    // All scenes in parallel — fastest approach
+    const sceneResultsRaw = await Promise.allSettled(
+      shotList.map(async (shot) => {
+        const prompt = `${shot.imagePrompt}
 Character: ${avatarPrompt.label} — match reference portrait exactly.
 Shot: ${shot.shotType}. Camera: ${shot.cameraMove}.
 ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No text.`
-          const imageUrl = await generateImage(prompt, { avatarUrl, aspectRatio })
-          return { imageUrl, loading: false, shot }
-        })
-      )
-      batchResults.forEach((r, bi) => {
-        sceneResultsFlat[batchStart + bi] = r.status === 'fulfilled'
-          ? r.value
-          : { imageUrl: null, loading: false, shot: shotList[batchStart + bi] }
+        const imageUrl = await generateImage(prompt, { avatarUrl, aspectRatio })
+        return { imageUrl, loading: false, shot }
       })
-      console.log(`Concept ${conceptIdx + 1}: batch ${batchStart / 4 + 1} done`)
-    }
+    )
 
-    const scenes = sceneResultsFlat
+    const scenes = sceneResultsRaw.map((r, i) =>
+      r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
+    )
 
     // Save to Supabase
     const { data: saved, error } = await supabase.from('campaigns').insert({
@@ -169,7 +159,6 @@ ${direction.colorWorld}, ${direction.lighting}. Cinematic, photorealistic. No te
       chosen_direction: direction,
       chosen_avatar: avatarDataUrl,
       scenes,
-      aspect_ratio: aspectRatio,
       concept_title: concept.title,
     }).select('id').single()
 
