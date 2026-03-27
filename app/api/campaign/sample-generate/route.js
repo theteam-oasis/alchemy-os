@@ -135,7 +135,7 @@ export async function POST(request) {
 
       if (conceptIdx > 0) {
         // Wait for concept 0 to create the record first
-        await new Promise(r => setTimeout(r, 3000))
+        await new Promise(r => setTimeout(r, 8000))
       }
 
       const { data: existing } = await supabase
@@ -236,14 +236,14 @@ Respond ONLY with JSON (no markdown):
     const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
 
     // Shot list — grounded in brand's world, character, and concept
-    const SCENE_COUNT = 10
+    const SCENE_COUNT = 8
     const shotList = parseJSON(await claude(`Shot list. 30s commercial. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}.
 Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}.
 Ref: ${direction.cinematicReference}. Concept: ${concept.theme}. Format: ${aspectRatio}.
 ${productImageUrl ? 'Include 2-3 product shots.' : ''}
 Vary: EWS/WS/MS/CU/ECU/INSERT/CUTAWAY/POV/MCU/DUTCH. imagePrompt max 12 words. action max 5 words.
 ONLY JSON array of exactly ${SCENE_COUNT} no markdown:
-[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 5000))
+[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 8000))
 
     console.log(`Concept ${conceptIdx + 1}: generating ${SCENE_COUNT} scenes in 2 batches`)
 
@@ -266,16 +266,16 @@ Cinematic, photorealistic, editorial quality. No text or logos.`
     }
 
     // Batch 1: first 5
-    const batch1 = await Promise.allSettled(shotList.slice(0, 5).map((shot, i) => buildScene(shot, i)))
+    const batch1 = await Promise.allSettled(shotList.slice(0, 4).map((shot, i) => buildScene(shot, i)))
     batch1.forEach((r, i) => {
       sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
     })
     console.log(`Concept ${conceptIdx + 1}: batch 1 done`)
 
     // Batch 2: last 5
-    const batch2 = await Promise.allSettled(shotList.slice(5, 10).map((shot, i) => buildScene(shot, i + 5)))
+    const batch2 = await Promise.allSettled(shotList.slice(4, 8).map((shot, i) => buildScene(shot, i + 5)))
     batch2.forEach((r, i) => {
-      sceneResults[i + 5] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 5] }
+      sceneResults[i + 4] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 4] }
     })
     console.log(`Concept ${conceptIdx + 1}: batch 2 done`)
 
