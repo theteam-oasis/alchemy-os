@@ -8,281 +8,556 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-const STATUS = {
-  approved: { label: 'Approved', bg: '#16a34a22', border: '#16a34a66', text: '#4ade80', icon: '✓' },
-  revisions: { label: 'Revisions Requested', bg: '#d9770622', border: '#d9770666', text: '#fb923c', icon: '✎' },
-  declined: { label: 'Declined', bg: '#dc262622', border: '#dc262666', text: '#f87171', icon: '✕' },
-  pending: { label: 'Awaiting Review', bg: '#ffffff11', border: '#333', text: '#555', icon: '○' },
-}
-
-export default function ClientProfilePage({ params }) {
+export default function BriefPage({ params }) {
   const { clientId } = params
+
   const [client, setClient] = useState(null)
   const [campaigns, setCampaigns] = useState([])
-  const [intake, setIntake] = useState(null)
+  const [activeConcept, setActiveConcept] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('briefs')
+  const [actionState, setActionState] = useState({}) // { [campaignId]: 'approved'|'revisions'|'declined' }
+  const [revisionText, setRevisionText] = useState({}) // { [campaignId]: string }
+  const [submitting, setSubmitting] = useState({}) // { [campaignId]: bool }
+  const [submitted, setSubmitted] = useState({}) // { [campaignId]: bool }
 
   useEffect(() => {
     loadData()
   }, [clientId])
 
   async function loadData() {
-    const [{ data: clientData }, { data: campaignData }, { data: intakeData }] = await Promise.all([
-      supabase.from('clients').select('*').eq('id', clientId).single(),
-      supabase.from('campaigns').select('*').eq('client_id', clientId).eq('storyboard_complete', true).order('created_at', { ascending: false }),
-      supabase.from('brand_intake').select('*').eq('client_id', clientId).maybeSingle(),
-    ])
-    if (clientData) setClient(clientData)
-    if (campaignData) setCampaigns(campaignData)
-    if (intakeData) setIntake(intakeData)
-    setLoading(false)
+    setLoading(true)
+    try {
+      // Load client
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single()
+      setClient(clientData)
+
+      // Load all complete campaigns for this client
+      const { data: campaignData } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('storyboard_complete', true)
+        .order('created_at', { ascending: false })
+        .limit(4)
+
+      if (campaignData) {
+        setCampaigns(campaignData)
+        // Init action state from saved data
+        const savedActions = {}
+        const savedRevisions = {}
+        campaignData.forEach(c => {
+          if (c.client_status && c.client_status !== 'pending') {
+            savedActions[c.id] = c.client_status
+          }
+          if (c.revision_notes) {
+            savedRevisions[c.id] = c.revision_notes
+          }
+        })
+        setActionState(savedActions)
+        setRevisionText(savedRevisions)
+        setSubmitted(Object.fromEntries(Object.keys(savedActions).map(k => [k, true])))
+      }
+
+      // Mark as viewed
+      if (campaignData?.length) {
+        campaignData.forEach(c => {
+          fetch('/api/brief/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ campaignId: c.id }),
+          })
+        })
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 44, height: 44, border: '2px solid #FFD60A22', borderTopColor: '#FFD60A', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  )
+  async function handleSubmit(campaignId) {
+    const status = actionState[campaignId]
+    if (!status) return
+    setSubmitting(prev => ({ ...prev, [campaignId]: true }))
+    try {
+      await fetch('/api/brief/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId,
+          clientStatus: status,
+          revisionNotes: revisionText[campaignId] || null,
+        }),
+      })
+      setSubmitted(prev => ({ ...prev, [campaignId]: true }))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSubmitting(prev => ({ ...prev, [campaignId]: false }))
+    }
+  }
 
-  const approved = campaigns.filter(c => c.client_status === 'approved')
-  const pending = campaigns.filter(c => !c.client_status || c.client_status === 'pending')
-  const revisions = campaigns.filter(c => c.client_status === 'revisions')
-  const declined = campaigns.filter(c => c.client_status === 'declined')
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 48, height: 48, border: '2px solid #FFD60A22', borderTopColor: '#FFD60A', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ color: '#555', fontSize: 13, letterSpacing: '0.05em' }}>Loading brief...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
+  if (!campaigns.length) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#555', fontSize: 14 }}>No completed campaigns found for this client.</p>
+      </div>
+    )
+  }
+
+  const campaign = campaigns[activeConcept]
+  if (!campaign) return null
+
+  const concept = campaign.chosen_concept
+  const script = campaign.chosen_script
+  const direction = campaign.chosen_direction
+  const scenes = campaign.scenes || []
+  const aspectRatio = campaign.aspect_ratio || '16:9'
+  const isVertical = aspectRatio === '9:16'
 
   return (
     <>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { background: #0a0a0a; color: #e8e8e8; font-family: 'DM Sans','SF Pro Display',-apple-system,sans-serif; min-height: 100vh; }
-        @keyframes fadeIn { from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)} }
-        .shell { min-height: 100vh; }
-        .header { display:flex; align-items:center; justify-content:space-between; padding:20px 48px; border-bottom:1px solid #1a1a1a; }
-        .logo { display:flex; align-items:center; gap:10px; }
-        .logo-mark { width:28px; height:28px; background:#FFD60A; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:#0a0a0a; }
-        .logo-text { font-size:13px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#888; }
-        .logo-text span { color:#FFD60A; }
-        .nav { display:flex; gap:10px; }
-        .nav-link { font-size:12px; color:#555; text-decoration:none; padding:6px 12px; border-radius:6px; border:1px solid #222; transition:all 0.15s; }
-        .nav-link:hover { color:#aaa; border-color:#333; }
-        .container { max-width:1000px; margin:0 auto; padding:48px 40px; animation:fadeIn 0.3s ease; }
+        body, html { background: #0a0a0a; color: #e8e8e8; font-family: 'DM Sans', 'SF Pro Display', -apple-system, sans-serif; min-height: 100vh; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .brief-shell { min-height: 100vh; background: #0a0a0a; }
 
-        /* Profile hero */
-        .profile-hero { display:flex; align-items:flex-start; gap:24px; margin-bottom:40px; }
-        .profile-avatar { width:64px; height:64px; border-radius:50%; background:#FFD60A22; border:2px solid #FFD60A44; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#FFD60A; flex-shrink:0; }
-        .profile-info { flex:1; }
-        .profile-name { font-size:28px; font-weight:800; color:#f0f0f0; margin-bottom:6px; }
-        .profile-meta { font-size:13px; color:#555; display:flex; gap:16px; flex-wrap:wrap; }
-        .profile-actions { display:flex; gap:10px; }
-        .btn { padding:10px 20px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.15s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
-        .btn-primary { background:#FFD60A; color:#0a0a0a; border:none; }
-        .btn-primary:hover { background:#ffe033; }
-        .btn-secondary { background:transparent; color:#888; border:1px solid #2a2a2a; }
-        .btn-secondary:hover { border-color:#444; color:#aaa; }
+        /* Header */
+        .brief-header { padding: 32px 48px 0; border-bottom: 1px solid #1a1a1a; }
+        .brief-agency { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #FFD60A; font-weight: 600; margin-bottom: 8px; }
+        .brief-client-name { font-size: 32px; font-weight: 800; color: #f0f0f0; margin-bottom: 4px; }
+        .brief-subtitle { font-size: 14px; color: #444; margin-bottom: 24px; }
 
-        /* Stats row */
-        .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:32px; }
-        .stat-card { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:14px 18px; }
-        .stat-num { font-size:22px; font-weight:800; color:#f0f0f0; margin-bottom:3px; }
-        .stat-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#555; font-weight:600; }
+        /* Concept tabs */
+        .concept-tabs { display: flex; gap: 0; border-bottom: 1px solid #1a1a1a; }
+        .concept-tab { padding: 14px 28px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; color: #555; transition: all 0.15s; font-family: inherit; background: none; border-top: none; border-left: none; border-right: none; letter-spacing: 0.03em; position: relative; }
+        .concept-tab:hover { color: #888; }
+        .concept-tab.active { color: #FFD60A; border-bottom-color: #FFD60A; }
+        .concept-tab-status { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; }
+        .status-approved { background: #22c55e; }
+        .status-revisions { background: #f59e0b; }
+        .status-declined { background: #ef4444; }
+        .status-pending { background: #333; }
 
-        /* Tabs */
-        .tabs { display:flex; gap:0; border-bottom:1px solid #1a1a1a; margin-bottom:28px; }
-        .tab { padding:12px 20px; font-size:13px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; color:#555; transition:all 0.15s; background:none; border-top:none; border-left:none; border-right:none; font-family:inherit; }
-        .tab:hover { color:#888; }
-        .tab.active { color:#FFD60A; border-bottom-color:#FFD60A; }
+        /* Main content */
+        .brief-body { padding: 48px; max-width: 1100px; margin: 0 auto; animation: fadeIn 0.3s ease; }
 
-        /* Campaign cards */
-        .campaigns-list { display:flex; flex-direction:column; gap:12px; }
-        .campaign-card { background:#111; border:1px solid #1e1e1e; border-radius:12px; padding:20px 24px; }
-        .campaign-card-top { display:flex; align-items:center; gap:16px; margin-bottom:12px; }
-        .campaign-title { font-size:15px; font-weight:600; color:#f0f0f0; flex:1; }
-        .status-badge { font-size:11px; padding:4px 12px; border-radius:100px; border:1px solid; font-weight:600; }
-        .campaign-meta { font-size:12px; color:#555; margin-bottom:16px; }
-        .campaign-scenes { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
-        .scene-thumb { width:60px; height:34px; border-radius:5px; object-fit:cover; border:1px solid #1e1e1e; }
-        .scene-thumb.portrait { width:34px; height:52px; }
-        .revision-box { background:#0e0e0e; border:1px solid #1e1e1e; border-radius:8px; padding:14px 16px; margin-bottom:16px; }
-        .revision-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#fb923c; font-weight:600; margin-bottom:6px; }
-        .revision-text { font-size:13px; color:#888; line-height:1.6; }
-        .campaign-actions { display:flex; gap:8px; }
-        .script-box { background:#0e0e0e; border:1px solid #1e1e1e; border-radius:8px; padding:14px 16px; margin-bottom:16px; }
-        .script-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#555; font-weight:600; margin-bottom:6px; }
-        .script-text { font-size:13px; color:#777; line-height:1.7; font-style:italic; }
+        /* Section */
+        .brief-section { margin-bottom: 48px; }
+        .section-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #FFD60A; font-weight: 600; margin-bottom: 16px; }
+        .section-title { font-size: 22px; font-weight: 700; color: #f0f0f0; margin-bottom: 8px; }
+        .section-text { font-size: 14px; color: #888; line-height: 1.8; }
 
-        /* Brand intake */
-        .intake-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        .intake-card { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:18px 20px; }
-        .intake-card-title { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#555; font-weight:600; margin-bottom:12px; }
-        .intake-row { display:grid; grid-template-columns:110px 1fr; gap:10px; padding:8px 0; border-bottom:1px solid #1a1a1a; }
-        .intake-row:last-child { border-bottom:none; }
-        .intake-label { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:#444; font-weight:600; }
-        .intake-value { font-size:12px; color:#888; line-height:1.5; }
-        .product-images { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
-        .product-img { width:64px; height:64px; border-radius:8px; object-fit:cover; border:1px solid #1e1e1e; }
-        .empty { text-align:center; padding:60px 0; color:#444; font-size:14px; }
+        /* Hero concept card */
+        .concept-hero { background: #111; border: 1px solid #1e1e1e; border-radius: 16px; padding: 32px; margin-bottom: 48px; }
+        .concept-hero-title { font-size: 28px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; }
+        .concept-hero-theme { font-size: 15px; color: #666; margin-bottom: 24px; line-height: 1.6; }
+        .concept-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .concept-meta-item { }
+        .concept-meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 6px; }
+        .concept-meta-value { font-size: 13px; color: #aaa; line-height: 1.5; }
+
+        /* Divider */
+        .divider { height: 1px; background: #1a1a1a; margin: 40px 0; }
+
+        /* Two col layout */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .info-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 24px; }
+        .info-card-title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 16px; }
+        .info-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a1a; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #444; font-weight: 600; padding-top: 1px; }
+        .info-value { font-size: 12px; color: #888; line-height: 1.5; }
+
+        /* Avatar */
+        .avatar-section { display: flex; gap: 32px; align-items: flex-start; }
+        .avatar-img { width: 160px; height: 200px; border-radius: 12px; object-fit: cover; border: 1px solid #1e1e1e; flex-shrink: 0; }
+        .avatar-img-placeholder { width: 160px; height: 200px; border-radius: 12px; background: #111; border: 1px solid #1e1e1e; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #333; font-size: 32px; }
+        .avatar-details { flex: 1; }
+
+        /* Script */
+        .script-box { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 28px; }
+        .script-hook { font-size: 18px; color: #FFD60A; font-style: italic; line-height: 1.5; margin-bottom: 20px; font-weight: 500; }
+        .script-full { font-size: 14px; color: #888; line-height: 2; white-space: pre-wrap; }
+        .script-meta { display: flex; gap: 12px; margin-top: 16px; }
+        .script-chip { font-size: 11px; padding: 4px 12px; border-radius: 100px; border: 1px solid #222; color: #555; }
+
+        /* Storyboard */
+        .storyboard-grid { display: grid; gap: 8px; margin-bottom: 8px; }
+        .storyboard-grid.landscape { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+        .storyboard-grid.portrait { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+        .storyboard-tile { border-radius: 8px; overflow: hidden; border: 1px solid #1e1e1e; background: #111; }
+        .storyboard-tile img { width: 100%; display: block; object-fit: cover; }
+        .storyboard-tile img.landscape { aspect-ratio: 16/9; }
+        .storyboard-tile img.portrait { aspect-ratio: 9/16; }
+        .storyboard-tile-label { padding: 6px 8px; font-size: 9px; color: #444; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; }
+        .storyboard-tile-shot { color: #FFD60A88; }
+        .storyboard-empty { aspect-ratio: 16/9; background: #111; display: flex; align-items: center; justify-content: center; color: #333; font-size: 11px; }
+
+        /* Shot list */
+        .shot-list { display: flex; flex-direction: column; gap: 0; border: 1px solid #1e1e1e; border-radius: 12px; overflow: hidden; }
+        .shot-row { display: grid; grid-template-columns: 60px 80px 1fr 120px; gap: 16px; padding: 12px 16px; border-bottom: 1px solid #1a1a1a; align-items: center; transition: background 0.1s; }
+        .shot-row:last-child { border-bottom: none; }
+        .shot-row:hover { background: #111; }
+        .shot-num { font-size: 11px; color: #444; font-weight: 600; }
+        .shot-type { font-size: 11px; color: #FFD60A; font-weight: 700; letter-spacing: 0.05em; }
+        .shot-moment { font-size: 12px; color: #777; line-height: 1.4; }
+        .shot-camera { font-size: 11px; color: #555; font-style: italic; }
+        .shot-list-header { display: grid; grid-template-columns: 60px 80px 1fr 120px; gap: 16px; padding: 10px 16px; background: #0e0e0e; border-bottom: 1px solid #1e1e1e; }
+        .shot-list-header span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; }
+
+        /* Action panel */
+        .action-panel { background: #0e0e0e; border: 1px solid #1e1e1e; border-radius: 16px; padding: 32px; margin-top: 48px; }
+        .action-panel-title { font-size: 16px; font-weight: 700; color: #f0f0f0; margin-bottom: 6px; }
+        .action-panel-sub { font-size: 13px; color: #555; margin-bottom: 28px; }
+        .action-buttons { display: flex; gap: 12px; margin-bottom: 24px; }
+        .action-btn { flex: 1; padding: 16px; border-radius: 10px; border: 1px solid; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .action-btn-approve { border-color: #16a34a44; color: #4ade80; background: #16a34a11; }
+        .action-btn-approve:hover, .action-btn-approve.selected { border-color: #16a34a; background: #16a34a22; }
+        .action-btn-revisions { border-color: #d9770644; color: #fb923c; background: #d9770611; }
+        .action-btn-revisions:hover, .action-btn-revisions.selected { border-color: #d97706; background: #d9770622; }
+        .action-btn-decline { border-color: #dc262644; color: #f87171; background: #dc262611; }
+        .action-btn-decline:hover, .action-btn-decline.selected { border-color: #dc2626; background: #dc262622; }
+        .revision-box { width: 100%; background: #111; border: 1px solid #222; border-radius: 8px; color: #e8e8e8; font-size: 14px; padding: 14px 16px; outline: none; resize: vertical; min-height: 100px; font-family: inherit; line-height: 1.6; margin-bottom: 16px; }
+        .revision-box:focus { border-color: #FFD60A44; }
+        .submit-btn { background: #FFD60A; color: #0a0a0a; border: none; border-radius: 8px; padding: 14px 32px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .submit-btn:hover { background: #ffe033; }
+        .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .submitted-state { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 10px; background: #111; border: 1px solid #1e1e1e; }
+        .submitted-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+        .submitted-text { font-size: 13px; color: #888; }
+        .submitted-text strong { color: #e0e0e0; display: block; margin-bottom: 2px; }
+
+        /* Footer */
+        .brief-footer { padding: 40px 48px; border-top: 1px solid #1a1a1a; display: flex; align-items: center; justify-content: space-between; }
+        .footer-logo { display: flex; align-items: center; gap: 10px; }
+        .footer-logo-mark { width: 24px; height: 24px; background: #FFD60A; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #0a0a0a; }
+        .footer-logo-text { font-size: 12px; color: #444; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+        .footer-note { font-size: 11px; color: #333; }
       `}</style>
 
-      <div className="shell">
-        <header className="header">
-          <div className="logo">
-            <div className="logo-mark">A</div>
-            <span className="logo-text">Alchemy <span>CRM</span></span>
-          </div>
-          <div className="nav">
-            <a href="/clients" className="nav-link">← All Clients</a>
-            <a href={`/brief/${clientId}`} target="_blank" className="nav-link">View Client Brief ↗</a>
-          </div>
-        </header>
+      <div className="brief-shell">
+        {/* Header */}
+        <div className="brief-header">
+          <p className="brief-agency">Alchemy — Campaign Brief</p>
+          <h1 className="brief-client-name">{client?.name || 'Client'}</h1>
+          <p className="brief-subtitle">
+            {campaigns.length} concept{campaigns.length !== 1 ? 's' : ''} prepared for your review
+            {campaign.created_at && ` · ${new Date(campaign.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`}
+          </p>
 
-        <div className="container">
-          {/* Profile hero */}
-          <div className="profile-hero">
-            <div className="profile-avatar">{client?.name?.[0]?.toUpperCase()}</div>
-            <div className="profile-info">
-              <h1 className="profile-name">{client?.name}</h1>
-              <div className="profile-meta">
-                {client?.email && <span>✉ {client.email}</span>}
-                {client?.phone && <span>📞 {client.phone}</span>}
-                {intake?.website && <a href={intake.website} target="_blank" style={{color:'#FFD60A',textDecoration:'none'}}>🌐 {intake.website}</a>}
-                <span>📅 {new Date(client?.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          {/* Concept tabs */}
+          {campaigns.length > 1 && (
+            <div className="concept-tabs">
+              {campaigns.map((c, i) => {
+                const status = actionState[c.id] || c.client_status || 'pending'
+                return (
+                  <button key={c.id} className={`concept-tab ${activeConcept === i ? 'active' : ''}`} onClick={() => setActiveConcept(i)}>
+                    Concept {i + 1}{c.chosen_concept?.title ? ` — ${c.chosen_concept.title}` : ''}
+                    <span className={`concept-tab-status ${status !== 'pending' ? `status-${status}` : 'status-pending'}`} />
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="brief-body" key={activeConcept}>
+
+          {/* Concept hero */}
+          {concept && (
+            <div className="concept-hero">
+              <p className="section-label">Campaign Concept</p>
+              <h2 className="concept-hero-title">{concept.title}</h2>
+              <p className="concept-hero-theme">{concept.theme}</p>
+              <div className="concept-meta">
+                <div className="concept-meta-item">
+                  <p className="concept-meta-label">Visual Universe</p>
+                  <p className="concept-meta-value">{concept.visualUniverse}</p>
+                </div>
+                <div className="concept-meta-item">
+                  <p className="concept-meta-label">Metaphor</p>
+                  <p className="concept-meta-value">{concept.metaphorBridge}</p>
+                </div>
+                <div className="concept-meta-item">
+                  <p className="concept-meta-label">Emotional Frame</p>
+                  <p className="concept-meta-value">{concept.emotionalFrame}</p>
+                </div>
               </div>
             </div>
-            <div className="profile-actions">
-              <a href={`/sample-brief`} className="btn btn-primary">+ New Brief</a>
-              <a href={`/brief/${clientId}`} target="_blank" className="btn btn-secondary">Share Brief ↗</a>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="stats-row">
-            <div className="stat-card"><p className="stat-num">{campaigns.length}</p><p className="stat-label">Total Briefs</p></div>
-            <div className="stat-card"><p className="stat-num" style={{color:'#4ade80'}}>{approved.length}</p><p className="stat-label">Approved</p></div>
-            <div className="stat-card"><p className="stat-num" style={{color:'#fb923c'}}>{revisions.length}</p><p className="stat-label">Revisions</p></div>
-            <div className="stat-card"><p className="stat-num" style={{color:'#555'}}>{pending.length}</p><p className="stat-label">Pending</p></div>
-          </div>
-
-          {/* Tabs */}
-          <div className="tabs">
-            {[
-              { key: 'briefs', label: `Briefs (${campaigns.length})` },
-              { key: 'brand', label: 'Brand Info' },
-            ].map(t => (
-              <button key={t.key} className={`tab ${activeTab === t.key ? 'active' : ''}`} onClick={() => setActiveTab(t.key)}>{t.label}</button>
-            ))}
-          </div>
-
-          {/* Briefs tab */}
-          {activeTab === 'briefs' && (
-            campaigns.length === 0 ? (
-              <div className="empty">No briefs generated yet. <a href="/sample-brief" style={{color:'#FFD60A'}}>Generate one →</a></div>
-            ) : (
-              <div className="campaigns-list">
-                {campaigns.map(campaign => {
-                  const s = STATUS[campaign.client_status || 'pending']
-                  const scenes = campaign.scenes || []
-                  const isPortrait = campaign.aspect_ratio === '9:16'
-                  return (
-                    <div key={campaign.id} className="campaign-card">
-                      <div className="campaign-card-top">
-                        <div style={{flex:1}}>
-                          <p className="campaign-title">{campaign.concept_title || campaign.chosen_concept?.title || 'Campaign'}</p>
-                          <p className="campaign-meta">
-                            {new Date(campaign.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            {' · '}{scenes.length} scenes
-                            {campaign.aspect_ratio && ` · ${campaign.aspect_ratio}`}
-                          </p>
-                        </div>
-                        <span className="status-badge" style={{ background: s.bg, borderColor: s.border, color: s.text }}>
-                          {s.icon} {s.label}
-                        </span>
-                      </div>
-
-                      {/* Scene thumbnails */}
-                      {scenes.length > 0 && (
-                        <div className="campaign-scenes">
-                          {scenes.slice(0, 8).map((scene, i) => scene.imageUrl && (
-                            <img key={i} src={scene.imageUrl} alt={`Scene ${i+1}`} className={`scene-thumb ${isPortrait ? 'portrait' : ''}`} />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Script */}
-                      {campaign.chosen_script?.fullScript && (
-                        <div className="script-box">
-                          <p className="script-label">Script</p>
-                          <p className="script-text">"{campaign.chosen_script.fullScript}"</p>
-                        </div>
-                      )}
-
-                      {/* Revision notes */}
-                      {campaign.revision_notes && (
-                        <div className="revision-box">
-                          <p className="revision-label">✎ Client Revision Notes</p>
-                          <p className="revision-text">{campaign.revision_notes}</p>
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      <div className="campaign-actions">
-                        <a href={`/brief/${clientId}`} target="_blank" className="btn btn-secondary" style={{fontSize:11}}>View Brief ↗</a>
-                        <a href={`/sample-brief`} className="btn btn-secondary" style={{fontSize:11}}>Regenerate</a>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
           )}
 
-          {/* Brand Info tab */}
-          {activeTab === 'brand' && (
-            !intake ? (
-              <div className="empty">No brand intake data found for this client.</div>
-            ) : (
-              <div className="intake-grid">
-                <div className="intake-card">
-                  <p className="intake-card-title">Brand Details</p>
+          {/* Brand analysis */}
+          {campaign.website_analysis && (
+            <div className="brief-section">
+              <p className="section-label">Brand Intelligence</p>
+              <div className="two-col">
+                <div className="info-card">
+                  <p className="info-card-title">Audience & Market</p>
                   {[
-                    ['Brand Name', intake.brand_name],
-                    ['Website', intake.website],
-                    ['Industry', intake.industry],
-                    ['Location', intake.location],
+                    ['Target Customer', campaign.website_analysis.targetCustomer],
+                    ['Core Pain Point', campaign.website_analysis.corePainPoint],
+                    ['Transformation', campaign.website_analysis.desiredTransformation],
+                    ['Product Category', campaign.website_analysis.productCategory],
                   ].filter(([,v]) => v).map(([l,v]) => (
-                    <div key={l} className="intake-row">
-                      <span className="intake-label">{l}</span>
-                      <span className="intake-value">{v}</span>
+                    <div key={l} className="info-row">
+                      <span className="info-label">{l}</span>
+                      <span className="info-value">{v}</span>
                     </div>
                   ))}
                 </div>
-                <div className="intake-card">
-                  <p className="intake-card-title">Campaign Context</p>
+                <div className="info-card">
+                  <p className="info-card-title">Brand Voice</p>
                   {[
-                    ['Target', intake.target_audience],
-                    ['Goals', intake.campaign_goals],
-                    ['Budget', intake.budget],
-                    ['Timeline', intake.timeline],
+                    ['Core Offer', campaign.website_analysis.coreOffer],
+                    ['Tone', campaign.website_analysis.websiteTone],
+                    ['Key Differentiators', campaign.website_analysis.differentiators?.join(', ')],
+                    ['Key Phrases', campaign.website_analysis.keyPhrasing?.slice(0,3).join(', ')],
                   ].filter(([,v]) => v).map(([l,v]) => (
-                    <div key={l} className="intake-row">
-                      <span className="intake-label">{l}</span>
-                      <span className="intake-value">{v}</span>
+                    <div key={l} className="info-row">
+                      <span className="info-label">{l}</span>
+                      <span className="info-value">{v}</span>
                     </div>
                   ))}
                 </div>
-                {intake.product_image_urls?.length > 0 && (
-                  <div className="intake-card" style={{gridColumn:'1/-1'}}>
-                    <p className="intake-card-title">Product Images</p>
-                    <div className="product-images">
-                      {intake.product_image_urls.map((url, i) => (
-                        <img key={i} src={url} alt={`Product ${i+1}`} className="product-img" />
-                      ))}
+              </div>
+            </div>
+          )}
+
+          <div className="divider" />
+
+          {/* Visual direction */}
+          {campaign.chosen_direction && (
+            <div className="brief-section">
+              <p className="section-label">Visual Direction</p>
+              <h3 className="section-title">{campaign.chosen_direction.title}</h3>
+              <p className="section-text" style={{marginBottom:20}}>{campaign.chosen_direction.summary}</p>
+              <div className="two-col">
+                <div className="info-card">
+                  <p className="info-card-title">Cinematography</p>
+                  {[
+                    ['Color World', campaign.chosen_direction.colorWorld],
+                    ['Lighting', campaign.chosen_direction.lighting],
+                    ['Lens & Camera', campaign.chosen_direction.lensAndCamera],
+                    ['Texture', campaign.chosen_direction.texture],
+                  ].filter(([,v]) => v).map(([l,v]) => (
+                    <div key={l} className="info-row">
+                      <span className="info-label">{l}</span>
+                      <span className="info-value">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="info-card">
+                  <p className="info-card-title">Production Feel</p>
+                  {[
+                    ['Environment', campaign.chosen_direction.environment],
+                    ['Editing Feel', campaign.chosen_direction.editingFeel],
+                    ['Design Language', campaign.chosen_direction.designLanguage],
+                    ['Cinematic Reference', campaign.chosen_direction.cinematicReference],
+                  ].filter(([,v]) => v).map(([l,v]) => (
+                    <div key={l} className="info-row">
+                      <span className="info-label">{l}</span>
+                      <span className="info-value">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="divider" />
+
+          {/* Avatar */}
+          {campaign.chosen_avatar && (
+            <div className="brief-section">
+              <p className="section-label">Campaign Character</p>
+              <div className="avatar-section">
+                <img src={campaign.chosen_avatar} alt="Campaign avatar" className="avatar-img" />
+                <div className="avatar-details">
+                  <h3 className="section-title" style={{marginBottom:16}}>Locked Character</h3>
+                  <p className="section-text">This character appears consistently across all scenes of the campaign, maintaining visual identity and brand coherence throughout the ad.</p>
+                  {campaign.chosen_direction && (
+                    <div style={{marginTop:20}}>
+                      <div className="info-row"><span className="info-label">Color Grade</span><span className="info-value">{campaign.chosen_direction.colorWorld}</span></div>
+                      <div className="info-row"><span className="info-label">Lighting</span><span className="info-value">{campaign.chosen_direction.lighting}</span></div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="divider" />
+
+          {/* Script */}
+          {script && (
+            <div className="brief-section">
+              <p className="section-label">Script</p>
+              <div className="script-box">
+                <p className="script-hook">"{script.hook}"</p>
+                <p className="script-full">{script.fullScript}</p>
+                <div className="script-meta">
+                  {script.mood && <span className="script-chip">{script.mood}</span>}
+                  {script.estimatedDuration && <span className="script-chip">{script.estimatedDuration}</span>}
+                  {campaign.aspect_ratio && <span className="script-chip">{campaign.aspect_ratio}</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="divider" />
+
+          {/* Storyboard */}
+          {scenes.length > 0 && (
+            <div className="brief-section">
+              <p className="section-label">Full Storyboard — {scenes.length} Scenes</p>
+              <div className={`storyboard-grid ${isVertical ? 'portrait' : 'landscape'}`}>
+                {scenes.map((scene, i) => (
+                  <div key={i} className="storyboard-tile">
+                    {scene.imageUrl
+                      ? <img src={scene.imageUrl} alt={`Scene ${i+1}`} className={isVertical ? 'portrait' : 'landscape'} />
+                      : <div className="storyboard-empty">Scene {i+1}</div>
+                    }
+                    <div className="storyboard-tile-label">
+                      <span>Scene {i+1}</span>
+                      {scene.shot && <span className="storyboard-tile-shot">{scene.shot.shotType}</span>}
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            )
+            </div>
           )}
+
+          {/* Shot list */}
+          {scenes.length > 0 && scenes[0]?.shot && (
+            <div className="brief-section">
+              <p className="section-label">Shot List</p>
+              <div className="shot-list">
+                <div className="shot-list-header">
+                  <span>#</span>
+                  <span>Shot</span>
+                  <span>Script Moment</span>
+                  <span>Camera</span>
+                </div>
+                {scenes.map((scene, i) => scene.shot && (
+                  <div key={i} className="shot-row">
+                    <span className="shot-num">{i+1}</span>
+                    <span className="shot-type">{scene.shot.shotType}</span>
+                    <span className="shot-moment">{scene.shot.scriptMoment || scene.shot.action}</span>
+                    <span className="shot-camera">{scene.shot.cameraMove}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="divider" />
+
+          {/* Action panel */}
+          <div className="action-panel">
+            <p className="action-panel-title">Your Feedback</p>
+            <p className="action-panel-sub">
+              {campaigns.length > 1
+                ? `Review each concept using the tabs above and submit your feedback for Concept ${String(activeConcept + 1)} below.`
+                : 'Let us know how you would like to move forward with this concept.'}
+            </p>
+
+            {submitted[campaign.id] ? (
+              <div className="submitted-state">
+                <div className={`submitted-icon ${
+                  actionState[campaign.id] === 'approved' ? 'status-approved' :
+                  actionState[campaign.id] === 'revisions' ? 'status-revisions' : 'status-declined'
+                }`} style={{
+                  background: actionState[campaign.id] === 'approved' ? '#16a34a33' :
+                    actionState[campaign.id] === 'revisions' ? '#d9770633' : '#dc262633'
+                }}>
+                  {actionState[campaign.id] === 'approved' ? '✓' :
+                   actionState[campaign.id] === 'revisions' ? '✎' : '✕'}
+                </div>
+                <div className="submitted-text">
+                  <strong>
+                    {actionState[campaign.id] === 'approved' ? 'Concept Approved' :
+                     actionState[campaign.id] === 'revisions' ? 'Revisions Requested' : 'Concept Declined'}
+                  </strong>
+                  {revisionText[campaign.id] && <span>{revisionText[campaign.id]}</span>}
+                  <button style={{background:'none',border:'none',color:'#555',fontSize:11,cursor:'pointer',marginLeft:8,fontFamily:'inherit'}}
+                    onClick={() => setSubmitted(prev => ({...prev, [campaign.id]: false}))}>
+                    Change
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="action-buttons">
+                  <button
+                    className={`action-btn action-btn-approve ${actionState[campaign.id] === 'approved' ? 'selected' : ''}`}
+                    onClick={() => setActionState(prev => ({...prev, [campaign.id]: 'approved'}))}
+                  >
+                    ✓ Approve
+                  </button>
+                  <button
+                    className={`action-btn action-btn-revisions ${actionState[campaign.id] === 'revisions' ? 'selected' : ''}`}
+                    onClick={() => setActionState(prev => ({...prev, [campaign.id]: 'revisions'}))}
+                  >
+                    ✎ Request Revisions
+                  </button>
+                  <button
+                    className={`action-btn action-btn-decline ${actionState[campaign.id] === 'declined' ? 'selected' : ''}`}
+                    onClick={() => setActionState(prev => ({...prev, [campaign.id]: 'declined'}))}
+                  >
+                    ✕ Decline
+                  </button>
+                </div>
+
+                {(actionState[campaign.id] === 'revisions' || actionState[campaign.id] === 'declined') && (
+                  <textarea
+                    className="revision-box"
+                    placeholder={actionState[campaign.id] === 'revisions'
+                      ? "What would you like us to change? Please be as specific as possible..."
+                      : "Optional: let us know why this concept isn't the right fit..."}
+                    value={revisionText[campaign.id] || ''}
+                    onChange={e => setRevisionText(prev => ({...prev, [campaign.id]: e.target.value}))}
+                  />
+                )}
+
+                <button
+                  className="submit-btn"
+                  disabled={!actionState[campaign.id] || submitting[campaign.id]}
+                  onClick={() => handleSubmit(campaign.id)}
+                >
+                  {submitting[campaign.id] ? 'Submitting...' : 'Submit Feedback'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="brief-footer">
+          <div className="footer-logo">
+            <div className="footer-logo-mark">A</div>
+            <span className="footer-logo-text">Alchemy Agency</span>
+          </div>
+          <p className="footer-note">This brief is confidential and prepared exclusively for {client?.name}.</p>
         </div>
       </div>
     </>
