@@ -130,31 +130,11 @@ export async function POST(request) {
           pageContent = `Product: ${productName}. Notes: ${offerNotes}`
         }
 
-        const analysisText = await claude(`Senior brand strategist. Extract deep brand intelligence from this page.
-
-PAGE: ${targetUrl}
-CONTENT: ${pageContent}
-PRODUCT: ${productName || 'See page'}
-NOTES: ${offerNotes || 'None'}
-
-Be specific — ground everything in actual content from the page. No generic marketing language.
-Respond ONLY with JSON:
-{
-  "brandName": "",
-  "coreOffer": "",
-  "heroProduct": "",
-  "targetCustomer": "specific person, their life, their problem",
-  "corePainPoint": "the real problem they have",
-  "desiredTransformation": "how their life changes after using this",
-  "differentiators": ["what makes this genuinely different"],
-  "proofPoints": ["real claims, stats, testimonials from the page"],
-  "websiteTone": "how the brand sounds",
-  "keyPhrasing": ["actual phrases from the page"],
-  "visualCues": "aesthetic and visual themes",
-  "productCategory": "market category",
-  "productDetails": "specific ingredients, features, specs from the page",
-  "brandPersonality": "3 words that describe this brand"
-}`, 1500)
+        const analysisText = await claude(`Brand strategist. Extract brand intelligence. Be specific, ground in actual page content.
+Page: ${targetUrl}. Product: ${productName||'See page'}. Notes: ${offerNotes||'None'}.
+Content: ${pageContent.slice(0,4000)}
+ONLY JSON:
+{"brandName":"","coreOffer":"","heroProduct":"","targetCustomer":"","corePainPoint":"","desiredTransformation":"","differentiators":[],"proofPoints":[],"websiteTone":"","keyPhrasing":[],"visualCues":"","productCategory":"","productDetails":"","brandPersonality":""}`, 1500)
 
         const analysis = parseJSON(analysisText)
         sendEvent(controller, 'analysis_complete', { analysis })
@@ -164,42 +144,14 @@ Respond ONLY with JSON:
 
         const keywords = creativeKeywords ? creativeKeywords.split(',').map(k => k.trim()).filter(Boolean) : []
 
-        const conceptsText = await claude(`World-class creative director at the best ad agency in the world. Generate 4 Super Bowl-caliber campaign concepts for this brand.
-
-BRAND: ${analysis.brandName}
-CORE OFFER: ${analysis.coreOffer}
-HERO PRODUCT: ${analysis.heroProduct}
-TARGET CUSTOMER: ${analysis.targetCustomer}
-PAIN POINT: ${analysis.corePainPoint}
-TRANSFORMATION: ${analysis.desiredTransformation}
-DIFFERENTIATORS: ${analysis.differentiators?.join(', ')}
-BRAND TONE: ${analysis.websiteTone}
-KEY PHRASES: ${analysis.keyPhrasing?.join(', ')}
-VISUAL CUES: ${analysis.visualCues}
-PRODUCT DETAILS: ${analysis.productDetails}
-BRAND PERSONALITY: ${analysis.brandPersonality}
-CREATIVE KEYWORDS: ${keywords.join(', ') || 'none'}
-
-REQUIREMENTS:
-- Each concept from a COMPLETELY different creative territory
-- Each must feel like it was written specifically for this brand — no generic ideas
-- The "Big Idea" (theme) must be a specific human truth this brand's customer lives
-- The visualUniverse must reference specific directors, photographers, or visual movements
-- Think Super Bowl: entertaining, emotionally resonant, impossible to ignore
-- The metaphorBridge must be specific — NOT generic like "journey" or "transformation"
-
-Respond ONLY with JSON array of exactly 4:
-[{
-  "title": "Campaign title (3-5 words, evocative)",
-  "bigIdea": "The single insight this whole campaign is built on — one sentence, specific",
-  "theme": "What this campaign is really about — the human truth",
-  "visualUniverse": "Specific aesthetic world — reference real directors/photographers/movements",
-  "metaphorBridge": "The specific metaphor or device that makes this concept work",
-  "emotionalFrame": "Exactly how the viewer feels at the END of watching this",
-  "whyItFits": "Why this specific brand, not any brand",
-  "openingImage": "The very first frame — describe it precisely",
-  "tone": "The specific tone of this campaign"
-}]`, 5000)
+        const conceptsText = await claude(`Creative director. 4 Super Bowl-caliber concepts for this brand.
+Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Customer: ${analysis.targetCustomer}.
+Pain: ${analysis.corePainPoint}. Transformation: ${analysis.desiredTransformation}.
+Tone: ${analysis.websiteTone}. Visual: ${analysis.visualCues}.
+Keywords: ${keywords.join(', ')||'none'}.
+Rules: completely different territories, brand-specific, reference real directors, human truths.
+ONLY JSON array of 4 (no markdown):
+[{"title":"","bigIdea":"","theme":"","visualUniverse":"","emotionalFrame":"","whyItFits":"","tone":""}]`, 6000)
 
         const concepts = parseJSON(conceptsText)
         sendEvent(controller, 'concepts_complete', { concepts })
@@ -287,51 +239,42 @@ Respond ONLY with JSON:
             }
 
             // Shot list — 8 scenes, brand-specific world
-            const shotListText = await claude(`Cinematographer. Build an 8-shot storyboard for a Super Bowl ad.
-
-BRAND: ${analysis.brandName}
-CHARACTER: ${avatarPrompt.label}
-STYLE: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}
-REFERENCE: ${direction.cinematicReference}
-CONCEPT: ${concept.title} — ${concept.bigIdea}
-SCRIPT: "${script.fullScript}"
-FORMAT: ${aspectRatio}
-${productImageUrl ? 'PRODUCT: Feature product naturally in 2 shots.' : ''}
-
-Build 8 shots that tell a complete visual story. Each shot should feel like it belongs in THIS brand's world.
-Use: EWS, WS, MS, CU, ECU, INSERT, CUTAWAY, POV
-imagePrompt max 12 words. action max 5 words.
-
-ONLY JSON array of exactly 8:
-[{"sceneIndex":0,"shotType":"","action":"","imagePrompt":"","isProductShot":false}]`, 6000)
+            // Split into 2 calls of 4 shots each to avoid truncation
+const shotBase = `Shot list. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}. Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}. Concept: ${concept.title}. Format: ${aspectRatio}.${productImageUrl?' Include 1 product shot.':''} imagePrompt max 10 words. action max 4 words. ONLY JSON array, no markdown:`
+const [shots1, shots2] = await Promise.all([
+  claude(shotBase + `\nShots 0-3 only (sceneIndex 0,1,2,3). Array of exactly 4:\n[{"sceneIndex":0,"shotType":"EWS","action":"","imagePrompt":"","isProductShot":false}]`, 3000).then(parseJSON),
+  claude(shotBase + `\nShots 4-7 only (sceneIndex 4,5,6,7). Array of exactly 4:\n[{"sceneIndex":4,"shotType":"MS","action":"","imagePrompt":"","isProductShot":false}]`, 3000).then(parseJSON),
+])
+const shotList = [...(Array.isArray(shots1)?shots1:[]),...(Array.isArray(shots2)?shots2:[])]
 
             const shotList = parseJSON(shotListText)
 
             sendEvent(controller, 'progress', { step: 'scenes', message: `Concept ${conceptIdx + 1}: Generating 8 scenes...`, conceptIdx })
 
             // Generate scenes in 2 batches of 4
-            const sceneResults = new Array(8).fill(null)
+            const SCENE_COUNT = Math.min(shotList.length, 6)
+            const sceneResults = new Array(SCENE_COUNT).fill(null)
 
             const buildScene = async (shot, i) => {
               const isProduct = shot.isProductShot && productImageUrl
-              const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ' — match reference portrait' : ''}. ${isProduct ? 'Feature product — match reference.' : ''} Shot: ${shot.shotType}. ${direction.colorWorld}. ${direction.lighting}. ${direction.environment}. Cinematic 2K photorealistic. No text.`
+              const prompt = `${shot.imagePrompt}. Character: ${avatarPrompt.label}${avatarUrl ? ' — match reference portrait' : ''}. ${isProduct ? 'Feature product.' : ''} Shot: ${shot.shotType}. ${direction.colorWorld}. ${direction.lighting}. Cinematic photorealistic. No text.`
               const imageUrl = await generateImage(prompt, {
                 avatarUrl,
                 productUrl: isProduct ? productImageUrl : undefined,
                 aspectRatio,
-                imageSize: '2K',
+                imageSize: '1K',
               })
               return { imageUrl, loading: false, shot }
             }
 
-            const batch1 = await Promise.allSettled(shotList.slice(0, 4).map((shot, i) => buildScene(shot, i)))
+            const batch1 = await Promise.allSettled(shotList.slice(0, 3).map((shot, i) => buildScene(shot, i)))
             batch1.forEach((r, i) => {
               sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
             })
 
-            const batch2 = await Promise.allSettled(shotList.slice(4, 8).map((shot, i) => buildScene(shot, i + 4)))
+            const batch2 = await Promise.allSettled(shotList.slice(3, 6).map((shot, i) => buildScene(shot, i + 3)))
             batch2.forEach((r, i) => {
-              sceneResults[i + 4] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 4] }
+              sceneResults[i + 3] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 3] }
             })
 
             sendEvent(controller, 'progress', { step: 'saving', message: `Concept ${conceptIdx + 1}: Saving...`, conceptIdx })
