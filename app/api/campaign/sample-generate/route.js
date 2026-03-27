@@ -162,60 +162,22 @@ export async function POST(request) {
     }
 
     // Script — fully grounded in brand analysis + concept
-    const script = parseJSON(await claude(`You are a world-class copywriter. Write a 30-second commercial script.
-
-BRAND: ${analysis.brandName}
-PRODUCT: ${analysis.heroProduct}
-TARGET CUSTOMER: ${analysis.targetCustomer}
-CORE PAIN POINT: ${analysis.corePainPoint}
-TRANSFORMATION: ${analysis.desiredTransformation}
-KEY PHRASES FROM BRAND: ${analysis.keyPhrasing?.join(', ')}
-PRODUCT DETAILS: ${analysis.productDetails || 'N/A'}
-BRAND TONE: ${analysis.websiteTone}
-
-CAMPAIGN CONCEPT: ${concept.theme}
-EMOTIONAL FRAME: ${concept.emotionalFrame}
-
-Write ~70 words of voiceover. Use the brand's actual tone and language. Reference the real transformation the product delivers. Sound like this specific brand, not a generic ad.
-No medical claims. No superlatives like "revolutionary" or "amazing".
-Respond ONLY with JSON (no markdown):
-{"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1200))
+    const script = parseJSON(await claude(`30-second commercial voiceover script.
+Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Tone: ${analysis.websiteTone}.
+Theme: ${concept.theme}. Emotion: ${concept.emotionalFrame}.
+Transformation: ${analysis.desiredTransformation}.
+70 words. Sound like this brand. No medical claims.
+ONLY JSON: {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
 
     // Visual direction — grounded in brand's actual visual world
-    const direction = parseJSON(await claude(`You are a creative director. Define the visual direction for this campaign.
-
-BRAND: ${analysis.brandName}
-VISUAL CUES FROM BRAND: ${analysis.visualCues}
-BRAND TONE: ${analysis.websiteTone}
-TARGET CUSTOMER: ${analysis.targetCustomer}
-PRODUCT CATEGORY: ${analysis.productCategory}
-
-CONCEPT VISUAL UNIVERSE: ${concept.visualUniverse}
-EMOTIONAL FRAME: ${concept.emotionalFrame}
-
-Define a specific, cinematic visual direction that feels true to this brand and its customer's world. Think about where this customer actually lives, what their aesthetic is, what time of day, what textures and light feel right for them.
-Respond ONLY with JSON (no markdown):
-{"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 1000))
+    const direction = parseJSON(await claude(`Visual direction for a commercial. Brand: ${analysis.brandName}. Tone: ${analysis.websiteTone}. Customer: ${analysis.targetCustomer}. Visual cues: ${analysis.visualCues}. Concept: ${concept.visualUniverse}.
+ONLY JSON: {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 800))
 
     // Avatar — built from the actual target customer description
-    const avatarClaudePrompt = await claude(`You are a casting director and photographer. Describe a portrait photo for a commercial campaign character.
-
-BRAND: ${analysis.brandName}
-TARGET CUSTOMER: ${analysis.targetCustomer}
-BRAND TONE: ${analysis.websiteTone}
-VISUAL DIRECTION: ${direction.colorWorld}, ${direction.lighting}
-CUSTOMER ARCHETYPE: ${direction.customerArchetype || analysis.targetCustomer}
-
-Describe a chest-up portrait of the ideal customer for this brand. Be specific about:
-- Age range, general appearance, energy/vibe
-- What they're wearing (simple, brand-appropriate)
-- Expression and body language
-- Background/setting (simple, on-brand)
-- Photography style and lighting
-
-Keep it safe, professional, and appropriate for mainstream advertising. No specific ethnicities, no medical conditions, no controversial elements.
-Respond ONLY with JSON (no markdown):
-{"label":"customer archetype in 4 words","imagePrompt":"detailed portrait photo prompt, 40-50 words"}`, 800)
+    const avatarClaudePrompt = await claude(`Portrait photo prompt for a commercial character.
+Brand: ${analysis.brandName}. Customer: ${direction.customerArchetype || analysis.targetCustomer}. Style: ${direction.colorWorld}, ${direction.lighting}.
+Chest-up portrait, on-brand, mainstream advertising safe. No ethnicities, no medical.
+ONLY JSON: {"label":"4-word archetype","imagePrompt":"30-word portrait photo prompt"}`, 600)
 
     let avatarPrompt
     try {
@@ -236,7 +198,7 @@ Respond ONLY with JSON (no markdown):
     const avatarUrl = await uploadToStorage(avatarDataUrl, `samples/${clientId}/c${conceptIdx}-avatar`)
 
     // Shot list — grounded in brand's world, character, and concept
-    const SCENE_COUNT = 8
+    const SCENE_COUNT = 6
     const shotList = parseJSON(await claude(`Shot list. 30s commercial. Brand: ${analysis.brandName}. Character: ${avatarPrompt.label}.
 Style: ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}.
 Ref: ${direction.cinematicReference}. Concept: ${concept.theme}. Format: ${aspectRatio}.
@@ -266,16 +228,16 @@ Cinematic, photorealistic, editorial quality. No text or logos.`
     }
 
     // Batch 1: first 5
-    const batch1 = await Promise.allSettled(shotList.slice(0, 4).map((shot, i) => buildScene(shot, i)))
+    const batch1 = await Promise.allSettled(shotList.slice(0, 3).map((shot, i) => buildScene(shot, i)))
     batch1.forEach((r, i) => {
       sceneResults[i] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i] }
     })
     console.log(`Concept ${conceptIdx + 1}: batch 1 done`)
 
     // Batch 2: last 5
-    const batch2 = await Promise.allSettled(shotList.slice(4, 8).map((shot, i) => buildScene(shot, i + 5)))
+    const batch2 = await Promise.allSettled(shotList.slice(3, 6).map((shot, i) => buildScene(shot, i + 5)))
     batch2.forEach((r, i) => {
-      sceneResults[i + 4] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 4] }
+      sceneResults[i + 3] = r.status === 'fulfilled' ? r.value : { imageUrl: null, loading: false, shot: shotList[i + 3] }
     })
     console.log(`Concept ${conceptIdx + 1}: batch 2 done`)
 
