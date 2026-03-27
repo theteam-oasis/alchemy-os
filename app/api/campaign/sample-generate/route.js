@@ -16,14 +16,23 @@ function parseJSON(text) {
 }
 
 async function claude(prompt, maxTokens = 1500) {
-  const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: maxTokens,
-    messages: [{ role: 'user', content: prompt }],
-  })
-  const block = msg.content?.find(b => b.type === 'text')
-  if (!block?.text) throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
-  return block.text.trim()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      const block = msg.content?.find(b => b.type === 'text')
+      if (!block?.text) throw new Error(`Empty response from Claude. Stop reason: ${msg.stop_reason}`)
+      return block.text.trim()
+    } catch (e) {
+      if (attempt < 2 && (e.message?.includes('529') || e.status === 529)) {
+        console.log(`Claude overloaded, retrying in ${(attempt + 1) * 3}s...`)
+        await new Promise(r => setTimeout(r, (attempt + 1) * 3000))
+      } else throw e
+    }
+  }
 }
 
 async function fetchImageAsBase64(url) {
