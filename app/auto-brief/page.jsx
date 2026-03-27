@@ -1,12 +1,14 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+const getSupabase = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 function fileToDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(f)})}
 function slugify(n){return(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
 
 export default function AutoBriefPage() {
-  const [mounted, setMounted] = useState(false)
   const [phase, setPhase] = useState('input') // input | running | done | error
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
@@ -35,7 +37,7 @@ export default function AutoBriefPage() {
   const productInputRef = useRef(null)
 
   useEffect(()=>{
-    supabase.from('clients').select('id,name').order('name').then(({data})=>{
+    getSupabase().from('clients').select('id,name').order('name').then(({data})=>{
       if(!data)return
       // Deduplicate by name — keep first occurrence (alphabetically sorted)
       const seen=new Set()
@@ -55,7 +57,7 @@ export default function AutoBriefPage() {
     setExtractedImages([])
     setSelectedImageUrl(null)
     setUploadedImage(null)
-    supabase.from('brand_intake').select('website, product_image_urls').eq('client_id',selectedClientId).maybeSingle()
+    getSupabase().from('brand_intake').select('website, product_image_urls').eq('client_id',selectedClientId).maybeSingle()
       .then(({data})=>{
         if(!data)return
         // Priority 1: client uploaded images from brand_intake
@@ -315,9 +317,7 @@ export default function AutoBriefPage() {
           {/* Client selector — required */}
           <div className="section">
             <label className="label">Client <em>required</em></label>
-            {!mounted ? (
-              <p style={{fontSize:13,color:'#cccccc'}}>Loading...</p>
-            ) : clients.length===0?(
+            {clients.length===0?(
               <p style={{fontSize:13,color:'#aaaaaa'}}>No clients found. <a href="/clients" style={{color:'#111111'}}>Add one in the CRM →</a></p>
             ):(
               <>
