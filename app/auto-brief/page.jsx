@@ -1,502 +1,429 @@
 'use client'
-
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = e => resolve(e.target.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-const STAGES = [
-  { key: 'analyzing', label: 'Analyzing brand', icon: '🔍' },
-  { key: 'concepts', label: 'Building 4 campaign concepts', icon: '💡' },
-  { key: 'images', label: 'Generating avatars', icon: '👤' },
-  { key: 'scenes', label: 'Building storyboards', icon: '🎬' },
-  { key: 'saving', label: 'Saving to database', icon: '💾' },
-]
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+function fileToDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(f)})}
+function slugify(n){return(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
 
 export default function AutoBriefPage() {
-  const [phase, setPhase] = useState('input') // input | generating | done | error
+  const [phase, setPhase] = useState('input') // input | running | done | error
   const [clients, setClients] = useState([])
   const [selectedClientId, setSelectedClientId] = useState(null)
-  const [websiteUrl, setWebsiteUrl] = useState('')
-  const [productName, setProductName] = useState('')
+  const [productPageUrl, setProductPageUrl] = useState('')
   const [offerNotes, setOfferNotes] = useState('')
   const [creativeKeywords, setCreativeKeywords] = useState('')
   const [aspectRatio, setAspectRatio] = useState('16:9')
-  const [productImageDataUrl, setProductImageDataUrl] = useState(null)
-  const [clientProductImages, setClientProductImages] = useState([])
-  const [selectedProductUrls, setSelectedProductUrls] = useState([])
+  const [productImageUrl, setProductImageUrl] = useState(null)
+  const [uploadedImage, setUploadedImage] = useState(null)
+  const [extractedImages, setExtractedImages] = useState([])
+  const [extracting, setExtracting] = useState(false)
+  const [selectedImageUrl, setSelectedImageUrl] = useState(null)
+
   const [progress, setProgress] = useState([])
-  const [conceptProgress, setConceptProgress] = useState([null, null, null, null])
-  const [currentStage, setCurrentStage] = useState('')
+  const [conceptStatus, setConceptStatus] = useState([
+    {status:'waiting',title:''},
+    {status:'waiting',title:''},
+    {status:'waiting',title:''},
+    {status:'waiting',title:''},
+  ])
+  const [analysis, setAnalysis] = useState(null)
+  const [doneClientSlug, setDoneClientSlug] = useState(null)
   const [error, setError] = useState(null)
-  const [doneClientId, setDoneClientId] = useState(null)
   const productInputRef = useRef(null)
 
-  useEffect(() => {
-    supabase.from('clients').select('id, name').order('name')
-      .then(({ data }) => { if (data) setClients(data) })
-  }, [])
+  useEffect(()=>{supabase.from('clients').select('id,name').order('name').then(({data})=>{if(data)setClients(data)})},[])
 
-  useEffect(() => {
-    if (!selectedClientId) return
-    supabase.from('brand_intake').select('website, brand_name, product_image_urls').eq('client_id', selectedClientId).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          if (data.website) setWebsiteUrl(data.website)
-          if (data.brand_name) setProductName(data.brand_name)
-          if (data.product_image_urls?.length) setClientProductImages(data.product_image_urls)
-          else setClientProductImages([])
-        }
-      })
-  }, [selectedClientId])
+  useEffect(()=>{
+    if(!selectedClientId)return
+    supabase.from('brand_intake').select('website').eq('client_id',selectedClientId).maybeSingle()
+      .then(({data})=>{if(data?.website&&!productPageUrl)setProductPageUrl(data.website)})
+  },[selectedClientId])
 
-  async function handleProductUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const dataUrl = await fileToDataUrl(file)
-    setProductImageDataUrl(dataUrl)
-    setSelectedProductUrls([])
+  useEffect(()=>{
+    if(!productPageUrl||!productPageUrl.startsWith('http'))return
+    const t=setTimeout(()=>extractImages(productPageUrl),1500)
+    return()=>clearTimeout(t)
+  },[productPageUrl])
+
+  async function extractImages(url){
+    setExtracting(true);setExtractedImages([]);setSelectedImageUrl(null)
+    try{
+      const res=await fetch('/api/campaign/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productPageUrl:url,extractImagesOnly:true})})
+      const j=await res.json()
+      if(j.productImages?.length){setExtractedImages(j.productImages);setSelectedImageUrl(j.productImages[0])}
+    }catch{}
+    setExtracting(false)
   }
 
-  function toggleClientProductUrl(url) {
-    setSelectedProductUrls(prev => {
-      if (prev.includes(url)) return prev.filter(u => u !== url)
-      if (prev.length >= 4) return prev
-      return [...prev, url]
-    })
-    setProductImageDataUrl(null)
-  }
+  async function handleUpload(e){const f=e.target.files?.[0];if(!f)return;const d=await fileToDataUrl(f);setUploadedImage(d);setSelectedImageUrl(null)}
+  const effectiveImage = uploadedImage || selectedImageUrl
 
-  async function handleGenerate() {
-    if (!selectedClientId && !productName) {
-      setError('Select a client or enter a product name.')
-      return
-    }
+  async function handleGenerate(){
+    if(!productPageUrl||!selectedClientId){setError('Select a client and enter a product URL.');return}
+    setPhase('running');setError(null);setProgress([])
+    setConceptStatus([{status:'waiting',title:''},{status:'waiting',title:''},{status:'waiting',title:''},{status:'waiting',title:''}])
 
-    // If no client selected, we need one — create a temp approach
-    const clientId = selectedClientId
-    if (!clientId) {
-      setError('Please select a client to link the briefs to.')
-      return
-    }
+    const clientName = clients.find(c=>c.id===selectedClientId)?.name||'Client'
 
-    setPhase('generating')
-    setProgress([])
-    setConceptProgress([null, null, null, null])
-    setError(null)
-
-    try {
-      const res = await fetch('/api/campaign/auto-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId,
-          websiteUrl,
-          productName,
+    try{
+      const res = await fetch('/api/campaign/auto-generate',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          clientId:selectedClientId,
+          clientName,
+          productPageUrl,
           offerNotes,
           creativeKeywords,
           aspectRatio,
-        }),
+          productImageUrl: selectedImageUrl||null,
+        })
       })
-
-      if (!res.ok) throw new Error('Generation failed to start')
-      if (!res.body) throw new Error('No response stream')
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
+      while(true){
+        const {done,value} = await reader.read()
+        if(done)break
+        buffer += decoder.decode(value, {stream:true})
         const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+        buffer = lines.pop()
 
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.slice(7).trim()
-            continue
-          }
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
+        for(const line of lines){
+          if(line.startsWith('data:')){
+            try{
+              const data = JSON.parse(line.slice(5))
+              const eventLine = lines.find(l=>l.startsWith('event:'))
+              const event = eventLine?.slice(7)?.trim()
 
-              if (data.step) {
-                setCurrentStage(data.step)
-                setProgress(prev => [...prev, { 
-                  time: new Date().toLocaleTimeString(), 
-                  message: data.message,
-                  conceptIdx: data.conceptIdx
-                }])
+              if(event==='progress'){
+                setProgress(p=>[...p.slice(-4),{message:data.message,conceptIdx:data.conceptIdx}])
+                if(data.conceptIdx!==undefined){
+                  setConceptStatus(prev=>{const u=[...prev];if(u[data.conceptIdx])u[data.conceptIdx]={...u[data.conceptIdx],status:'building'};return u})
+                }
               }
-
-              if (data.conceptTitle !== undefined) {
-                // concept_complete event
-                setConceptProgress(prev => {
-                  const updated = [...prev]
-                  updated[data.conceptIdx] = { title: data.conceptTitle, status: 'done' }
-                  return updated
-                })
+              if(event==='concepts_complete'){
+                // Set concept titles
+                setConceptStatus(prev=>data.concepts.map((c,i)=>({status:prev[i]?.status||'waiting',title:c.title})))
               }
-
-              if (data.error && data.conceptIdx !== undefined) {
-                setConceptProgress(prev => {
-                  const updated = [...prev]
-                  updated[data.conceptIdx] = { title: `Concept ${data.conceptIdx + 1}`, status: 'error' }
-                  return updated
-                })
+              if(event==='concept_complete'){
+                setConceptStatus(prev=>{const u=[...prev];u[data.conceptIdx]={...u[data.conceptIdx],status:'done',title:data.conceptTitle};return u})
               }
-
-              if (data.clientId && data.successCount !== undefined) {
-                // complete event
-                setDoneClientId(data.clientId)
+              if(event==='concept_error'){
+                setConceptStatus(prev=>{const u=[...prev];u[data.conceptIdx]={...u[data.conceptIdx],status:'error'};return u})
+              }
+              if(event==='analysis_complete'){
+                setAnalysis(data.analysis)
+              }
+              if(event==='complete'){
+                const slug = slugify(clientName)
+                setDoneClientSlug(slug)
                 setPhase('done')
               }
-
-              if (data.message && !data.step && !data.clientId) {
-                setError(data.message)
-                setPhase('error')
+              if(event==='error'){
+                setError(data.message);setPhase('error')
               }
-            } catch {}
+            }catch{}
           }
         }
       }
-    } catch (e) {
-      setError(e.message)
-      setPhase('error')
-    }
+    }catch(e){setError(e.message);setPhase('error')}
   }
 
-  return (
-    <>
-      <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { background: #0a0a0a; color: #e8e8e8; font-family: 'DM Sans','SF Pro Display',-apple-system,sans-serif; min-height: 100vh; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  const completedCount = conceptStatus.filter(c=>c.status==='done').length
 
-        .shell { min-height: 100vh; display: flex; flex-direction: column; }
+  return(<>
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400&display=swap');
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body,html{background:#ffffff;color:#111111;font-family:'DM Sans',-apple-system,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+      @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+      .shell{min-height:100vh;}
+      .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 40px;background:white;border-bottom:1px solid #eeeeee;position:sticky;top:0;z-index:100;}
+      .nl{display:flex;align-items:center;gap:9px;text-decoration:none;}
+      .lm{width:26px;height:26px;background:#111111;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;}
+      .lt{font-size:13px;font-weight:500;color:#111111;}
+      .lt em{color:#aaaaaa;font-style:normal;font-weight:300;}
+      .navlinks{display:flex;gap:2px;}
+      .navlink{font-size:12px;font-weight:500;color:#aaaaaa;text-decoration:none;padding:6px 12px;border-radius:6px;transition:all 0.15s;}
+      .navlink:hover{color:#111111;background:#f5f5f5;}
+      .navlink.a{color:#111111;background:#f0f0f0;font-weight:600;}
 
-        /* Header */
-        .header { display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; border-bottom: 1px solid #1a1a1a; }
-        .logo { display: flex; align-items: center; gap: 10px; }
-        .logo-mark { width: 28px; height: 28px; background: #FFD60A; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #0a0a0a; }
-        .logo-text { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #888; }
-        .logo-text span { color: #FFD60A; }
-        .header-nav { display: flex; gap: 16px; }
-        .nav-link { font-size: 12px; color: #555; text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid #222; transition: all 0.15s; }
-        .nav-link:hover { color: #aaa; border-color: #333; }
+      /* Input */
+      .container{max-width:600px;margin:0 auto;padding:52px 24px 80px;animation:fadeUp 0.3s ease;}
+      .eyebrow{font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#aaaaaa;margin-bottom:12px;}
+      .title{font-size:34px;font-weight:300;letter-spacing:-0.02em;line-height:1.1;color:#111111;margin-bottom:10px;}
+      .title strong{font-weight:600;}
+      .sub{font-size:14px;color:#888888;line-height:1.65;margin-bottom:14px;font-weight:300;}
+      .cost-pill{display:inline-flex;align-items:center;gap:8px;background:#f5f5f5;border:1px solid #eeeeee;border-radius:100px;padding:4px 12px;font-size:11px;color:#aaaaaa;margin-bottom:40px;}
+      .cost-pill span{color:#111111;font-weight:500;}
+      .section{margin-bottom:18px;}
+      .label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#aaaaaa;display:block;margin-bottom:7px;}
+      .label em{font-size:10px;color:#cccccc;text-transform:none;letter-spacing:0;font-weight:400;margin-left:6px;font-style:normal;}
+      .input{background:white;border:1px solid #e5e5e5;border-radius:8px;color:#111111;font-size:14px;padding:11px 14px;outline:none;width:100%;font-family:'DM Sans',sans-serif;transition:border-color 0.15s;}
+      .input::placeholder{color:#cccccc;}
+      .input:focus{border-color:#111111;}
+      .textarea{background:white;border:1px solid #e5e5e5;border-radius:8px;color:#111111;font-size:14px;padding:11px 14px;outline:none;width:100%;resize:vertical;min-height:72px;line-height:1.6;font-family:'DM Sans',sans-serif;transition:border-color 0.15s;}
+      .textarea::placeholder{color:#cccccc;}
+      .textarea:focus{border-color:#111111;}
+      .hint{font-size:11px;color:#cccccc;margin-top:5px;}
+      .url-wrap{position:relative;}
+      .url-badge{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:10px;display:flex;align-items:center;gap:5px;}
+      .url-spin{width:11px;height:11px;border:1.5px solid #eeeeee;border-top-color:#111111;border-radius:50%;animation:spin 0.7s linear infinite;}
+      .url-ok{color:#111111;font-weight:600;}
 
-        /* Input phase */
-        .input-container { max-width: 680px; margin: 60px auto; padding: 0 40px; width: 100%; animation: fadeIn 0.3s ease; }
-        .page-eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #FFD60A; font-weight: 600; margin-bottom: 10px; }
-        .page-title { font-size: 36px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; line-height: 1.2; }
-        .page-sub { font-size: 14px; color: #555; margin-bottom: 40px; line-height: 1.6; }
+      /* Client selector */
+      .client-select{display:flex;flex-direction:column;gap:6px;}
+      .client-option{display:flex;align-items:center;gap:12px;padding:12px 16px;background:white;border:1px solid #e5e5e5;border-radius:8px;cursor:pointer;transition:all 0.15s;}
+      .client-option:hover{border-color:#111111;}
+      .client-option.selected{border-color:#111111;background:#f8f8f8;}
+      .client-radio{width:16px;height:16px;border-radius:50%;border:1.5px solid #cccccc;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+      .client-option.selected .client-radio{border-color:#111111;background:#111111;}
+      .client-radio-dot{width:6px;height:6px;border-radius:50%;background:white;}
+      .client-name-text{font-size:13px;font-weight:500;color:#111111;}
 
-        .form-section { margin-bottom: 28px; }
-        .form-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 8px; display: block; }
-        .form-input, .form-textarea { background: #111; border: 1px solid #222; border-radius: 8px; color: #e8e8e8; font-size: 14px; padding: 12px 16px; outline: none; transition: border-color 0.15s; font-family: inherit; width: 100%; }
-        .form-input:focus, .form-textarea:focus { border-color: #FFD60A44; }
-        .form-textarea { resize: vertical; min-height: 80px; }
-        .form-hint { font-size: 11px; color: #444; margin-top: 6px; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      /* Image picker */
+      .card{background:white;border:1px solid #eeeeee;border-radius:10px;padding:16px;}
+      .card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+      .card-lbl{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#cccccc;}
+      .card-cnt{font-size:10px;color:#111111;font-weight:500;}
+      .img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px;margin-bottom:12px;}
+      .img-item{border-radius:6px;overflow:hidden;border:1.5px solid #eeeeee;cursor:pointer;transition:all 0.15s;aspect-ratio:1;background:#f8f8f8;position:relative;}
+      .img-item:hover{border-color:#111111;}
+      .img-item.sel{border-color:#111111;border-width:2px;}
+      .img-item img{width:100%;height:100%;object-fit:cover;display:block;}
+      .img-check{position:absolute;top:3px;right:3px;width:16px;height:16px;background:#111111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:white;}
+      .img-shimmer{aspect-ratio:1;background:linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.8s ease-in-out infinite;border-radius:6px;}
+      .div{height:1px;background:#eeeeee;margin:12px 0;}
+      .upload-row{display:flex;align-items:center;gap:12px;cursor:pointer;}
+      .upload-box{width:40px;height:40px;border-radius:6px;background:#f5f5f5;border:1px dashed #dddddd;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+      .upload-prev{width:40px;height:40px;border-radius:6px;object-fit:contain;background:#f5f5f5;border:1px solid #eeeeee;}
+      .upload-text{flex:1;font-size:12px;color:#aaaaaa;}
+      .upload-btn{font-size:11px;color:#111111;border:1px solid #dddddd;border-radius:6px;padding:4px 10px;background:white;cursor:pointer;font-family:'DM Sans',sans-serif;}
+      .upload-btn:hover{background:#f5f5f5;}
+      .sel-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8f8f8;border:1px solid #eeeeee;border-radius:8px;margin-top:8px;}
+      .sel-row img{width:32px;height:32px;border-radius:5px;object-fit:cover;}
+      .sel-row-text{flex:1;font-size:11px;color:#aaaaaa;}
+      .clear{background:none;border:none;color:#cccccc;cursor:pointer;font-size:12px;font-family:'DM Sans',sans-serif;}
 
-        /* Client pills */
-        .client-box { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; margin-bottom: 28px; }
-        .client-box-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; font-weight: 600; margin-bottom: 12px; }
-        .client-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-        .client-pill { padding: 7px 14px; border-radius: 100px; border: 1px solid #2a2a2a; background: transparent; color: #666; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
-        .client-pill:hover { border-color: #444; color: #aaa; }
-        .client-pill.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A11; }
+      /* Format */
+      .format-row{display:flex;gap:8px;}
+      .fmt-btn{flex:1;padding:10px;background:white;border:1px solid #e5e5e5;border-radius:8px;color:#aaaaaa;font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:7px;}
+      .fmt-btn:hover{border-color:#111111;color:#111111;}
+      .fmt-btn.a{border-color:#111111;color:#111111;background:#f8f8f8;font-weight:600;}
 
-        /* Aspect toggle */
-        .aspect-row { display: flex; gap: 10px; }
-        .aspect-btn { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #2a2a2a; background: transparent; color: #555; font-size: 12px; cursor: pointer; transition: all 0.2s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .aspect-btn:hover { border-color: #444; }
-        .aspect-btn.active { border-color: #FFD60A; color: #FFD60A; background: #FFD60A08; }
+      .error-bar{background:#fff5f5;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;font-size:13px;color:#dc2626;margin-bottom:20px;}
 
-        /* Product upload */
-        .product-upload { border: 1px dashed #2a2a2a; border-radius: 10px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.15s; background: #0e0e0e; }
-        .product-upload:hover { border-color: #444; }
-        .product-upload.has-img { border-color: #FFD60A44; }
-        .product-preview { width: 52px; height: 52px; border-radius: 8px; object-fit: contain; background: #1a1a1a; }
-        .product-placeholder { width: 52px; height: 52px; border-radius: 8px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .product-text { flex: 1; }
-        .product-title { font-size: 13px; color: #888; font-weight: 500; }
-        .product-sub { font-size: 11px; color: #444; margin-top: 2px; }
-        .product-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
-        .product-picker { background: #0e0e0e; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; }
-        .product-picker-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #555; margin-bottom: 12px; font-weight: 600; display: flex; justify-content: space-between; }
-        .product-picker-count { color: #FFD60A; }
-        .product-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-bottom: 12px; }
-        .product-picker-item { position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #1e1e1e; cursor: pointer; transition: all 0.2s; aspect-ratio: 1; }
-        .product-picker-item:hover { border-color: #444; }
-        .product-picker-item.selected { border-color: #FFD60A; }
-        .product-picker-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .product-picker-check { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; background: #FFD60A; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #0a0a0a; }
-        .product-picker-divider { height: 1px; background: #1e1e1e; margin: 12px 0; }
-        .product-own { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-        .product-own-preview { width: 44px; height: 44px; border-radius: 8px; object-fit: contain; background: #1a1a1a; border: 1px solid #222; }
-        .product-own-placeholder { width: 44px; height: 44px; border-radius: 8px; background: #1a1a1a; border: 1px dashed #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-        .product-own-text { flex: 1; font-size: 12px; color: #666; }
-        .product-own-btn { font-size: 11px; color: #FFD60A; border: 1px solid #FFD60A44; border-radius: 6px; padding: 5px 10px; background: transparent; cursor: pointer; font-family: inherit; white-space: nowrap; }
+      .gen-btn{width:100%;padding:14px;background:#111111;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:28px;letter-spacing:-0.01em;}
+      .gen-btn:hover{background:#333333;}
+      .gen-btn:disabled{opacity:0.25;cursor:not-allowed;}
+      .gen-btn-meta{font-size:11px;opacity:0.5;font-weight:400;}
 
-        /* Generate button */
-        .generate-btn { width: 100%; padding: 18px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; transition: all 0.15s; font-family: inherit; letter-spacing: 0.02em; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
-        .generate-btn:hover { background: #ffe033; transform: translateY(-1px); }
-        .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-        .generate-btn-cost { font-size: 11px; opacity: 0.6; font-weight: 400; }
+      /* Running state */
+      .run-container{max-width:580px;margin:0 auto;padding:52px 24px 80px;animation:fadeUp 0.3s ease;}
+      .run-header{margin-bottom:36px;}
+      .run-title{font-size:26px;font-weight:300;letter-spacing:-0.02em;color:#111111;margin-bottom:6px;}
+      .run-sub{font-size:13px;color:#aaaaaa;font-weight:300;}
+      .run-brand{font-weight:500;color:#111111;}
 
-        /* Error */
-        .error-bar { background: #2a1010; border: 1px solid #5a1a1a; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #ff6b6b; margin-bottom: 20px; }
+      .progress-log{background:#f8f8f8;border-radius:8px;padding:14px 16px;margin-bottom:28px;min-height:56px;}
+      .progress-line{font-size:12px;color:#888888;line-height:1.8;font-family:'DM Mono',monospace;}
+      .progress-line.latest{color:#111111;font-weight:500;}
 
-        /* Generating phase */
-        .generating-container { max-width: 680px; margin: 60px auto; padding: 0 40px; width: 100%; animation: fadeIn 0.3s ease; }
-        .generating-header { text-align: center; margin-bottom: 48px; }
-        .generating-spinner { width: 56px; height: 56px; border: 2px solid #FFD60A22; border-top-color: #FFD60A; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        .generating-title { font-size: 22px; font-weight: 700; color: #f0f0f0; margin-bottom: 6px; }
-        .generating-sub { font-size: 13px; color: #555; }
+      .concepts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+      .cc{background:white;border:1px solid #eeeeee;border-radius:10px;padding:16px;position:relative;overflow:hidden;transition:border-color 0.2s;}
+      .cc.building{border-color:#111111;}
+      .cc.done{border-color:#111111;background:#fafafa;}
+      .cc.error{border-color:#fecaca;}
+      .cc-sweep{position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,0,0,0.015),transparent);background-size:200%;animation:shimmer 2.5s ease-in-out infinite;}
+      .cc-num{font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#cccccc;margin-bottom:5px;}
+      .cc-title{font-size:13px;font-weight:500;color:#111111;margin-bottom:4px;min-height:18px;line-height:1.4;}
+      .cc-status{font-size:11px;}
 
-        /* Concept progress cards */
-        .concept-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 32px; }
-        .concept-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
-        .concept-card.done { border-color: #FFD60A44; }
-        .concept-card.error { border-color: #5a1a1a; }
-        .concept-card-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, #FFD60A08 50%, transparent 100%); background-size: 200% 100%; animation: shimmer 2s infinite; }
-        .concept-card-num { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 8px; }
-        .concept-card-title { font-size: 14px; font-weight: 600; color: #f0f0f0; margin-bottom: 4px; min-height: 20px; }
-        .concept-card-status { font-size: 11px; }
-        .status-building { color: #FFD60A; animation: pulse 1.5s infinite; }
-        .status-done { color: #4ade80; }
-        .status-error { color: #f87171; }
-        .status-waiting { color: #444; }
-        .concept-card-check { position: absolute; top: 16px; right: 16px; width: 24px; height: 24px; background: #4ade8022; border: 1px solid #4ade8066; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #4ade80; }
+      .overall-progress{margin-top:24px;}
+      .op-track{background:#f0f0f0;border-radius:100px;height:2px;margin-bottom:8px;overflow:hidden;}
+      .op-fill{height:100%;background:#111111;border-radius:100px;transition:width 0.5s ease;}
+      .op-label{font-size:10px;color:#cccccc;font-family:'DM Mono',monospace;}
 
-        /* Live log */
-        .live-log { background: #0e0e0e; border: 1px solid #1a1a1a; border-radius: 10px; padding: 16px; max-height: 200px; overflow-y: auto; }
-        .live-log-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #444; font-weight: 600; margin-bottom: 12px; }
-        .log-item { display: flex; gap: 10px; margin-bottom: 8px; animation: fadeIn 0.2s ease; }
-        .log-time { font-size: 10px; color: #333; white-space: nowrap; padding-top: 1px; }
-        .log-msg { font-size: 12px; color: #666; line-height: 1.4; }
-        .log-dot { width: 6px; height: 6px; border-radius: 50%; background: #FFD60A; margin-top: 5px; flex-shrink: 0; }
+      /* Done */
+      .done-container{max-width:480px;margin:100px auto;padding:0 24px;text-align:center;animation:fadeUp 0.4s ease;}
+      .done-icon{font-size:40px;margin-bottom:20px;}
+      .done-title{font-size:26px;font-weight:300;letter-spacing:-0.02em;color:#111111;margin-bottom:8px;}
+      .done-sub{font-size:14px;color:#aaaaaa;line-height:1.6;margin-bottom:28px;font-weight:300;}
+      .done-btn{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:#111111;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;transition:background 0.15s;}
+      .done-btn:hover{background:#333333;}
+      .done-link{display:block;margin-top:14px;font-size:12px;color:#cccccc;cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;}
+      .done-link:hover{color:#888888;}
+    `}</style>
+    <div className="shell">
+      <nav className="nav">
+        <a href="/" className="nl"><div className="lm">A</div><span className="lt">Alchemy <em>OS</em></span></a>
+        <div className="navlinks">
+          <a href="/clients" className="navlink">CRM</a>
+          <a href="/sample-brief" className="navlink">Sample Brief</a>
+          <a href="/auto-brief" className="navlink a">Full Brief</a>
+        </div>
+      </nav>
 
-        /* Done phase */
-        .done-container { max-width: 560px; margin: 80px auto; padding: 0 40px; text-align: center; animation: fadeIn 0.4s ease; }
-        .done-icon { font-size: 56px; margin-bottom: 24px; }
-        .done-title { font-size: 28px; font-weight: 800; color: #f0f0f0; margin-bottom: 8px; }
-        .done-sub { font-size: 14px; color: #555; margin-bottom: 32px; line-height: 1.6; }
-        .done-btn { display: inline-block; padding: 16px 40px; background: #FFD60A; color: #0a0a0a; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; text-decoration: none; transition: all 0.15s; }
-        .done-btn:hover { background: #ffe033; transform: translateY(-1px); }
-        .done-secondary { display: inline-block; margin-top: 16px; font-size: 13px; color: #555; cursor: pointer; text-decoration: none; }
-        .done-secondary:hover { color: #888; }
-      `}</style>
+      {/* INPUT */}
+      {(phase==='input'||phase==='error')&&(
+        <div className="container">
+          <p className="eyebrow">Full Brief</p>
+          <h1 className="title"><strong>4 concepts.</strong> Full production.</h1>
+          <p className="sub">Deep brand analysis, 4 complete campaign concepts, 8 scenes each at 2K quality. Everything a client needs to make a decision.</p>
+          <div className="cost-pill">2K quality · <span>~$4.30 per run</span> · ~8–12 min</div>
 
-      <div className="shell">
-        <header className="header">
-          <div className="logo">
-            <div className="logo-mark">A</div>
-            <span className="logo-text">Alchemy <span>Auto Brief</span></span>
-          </div>
-          <div className="header-nav">
-            <a href="/campaign-builder" className="nav-link">Manual Builder</a>
-          </div>
-        </header>
+          {error&&<div className="error-bar">⚠ {error}</div>}
 
-        {/* INPUT PHASE */}
-        {phase === 'input' && (
-          <div className="input-container">
-            <p className="page-eyebrow">One-Click Brief Machine</p>
-            <h1 className="page-title">Auto-Generate 4 Concepts</h1>
-            <p className="page-sub">Enter brand details and we'll automatically build 4 complete campaign briefs — concepts, scripts, avatars, and full storyboards — ready for client review.</p>
-
-            {error && <div className="error-bar">⚠ {error}</div>}
-
-            {/* Client selector */}
-            {clients.length > 0 && (
-              <div className="client-box">
-                <p className="client-box-label">Select Client</p>
-                <div className="client-pills">
-                  {clients.map(c => (
-                    <button key={c.id} className={`client-pill ${selectedClientId === c.id ? 'active' : ''}`} onClick={() => setSelectedClientId(c.id)}>{c.name}</button>
-                  ))}
-                </div>
+          {/* Client selector — required */}
+          <div className="section">
+            <label className="label">Client <em>required</em></label>
+            {clients.length===0?(
+              <p style={{fontSize:13,color:'#aaaaaa'}}>No clients found. <a href="/clients" style={{color:'#111111'}}>Add one in the CRM →</a></p>
+            ):(
+              <div className="client-select">
+                {clients.slice(0,8).map(c=>(
+                  <div key={c.id} className={`client-option ${selectedClientId===c.id?'selected':''}`} onClick={()=>setSelectedClientId(c.id)}>
+                    <div className="client-radio">
+                      {selectedClientId===c.id&&<div className="client-radio-dot"/>}
+                    </div>
+                    <span className="client-name-text">{c.name}</span>
+                  </div>
+                ))}
               </div>
             )}
+          </div>
 
-            <div className="form-grid" style={{marginBottom:20}}>
-              <div className="form-section" style={{marginBottom:0}}>
-                <label className="form-label">Website URL</label>
-                <input className="form-input" type="url" placeholder="https://yourbrand.com" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} />
-              </div>
-              <div className="form-section" style={{marginBottom:0}}>
-                <label className="form-label">Product / Service</label>
-                <input className="form-input" placeholder="What are we advertising?" value={productName} onChange={e => setProductName(e.target.value)} />
-              </div>
+          {/* URL */}
+          <div className="section">
+            <label className="label">Product Page URL</label>
+            <div className="url-wrap">
+              <input className="input" type="url" style={{paddingRight:90}} placeholder="https://brand.com/products/item"
+                value={productPageUrl} onChange={e=>{setProductPageUrl(e.target.value);setExtractedImages([]);setSelectedImageUrl(null)}}/>
+              {productPageUrl&&<div className="url-badge">
+                {extracting?<><div className="url-spin"/><span style={{fontSize:10,color:'#cccccc'}}>Scanning</span></>:extractedImages.length>0?<span className="url-ok">✓ {extractedImages.length} images</span>:null}
+              </div>}
             </div>
+            <p className="hint">We do a deep scrape of this page for brand intelligence</p>
+          </div>
 
-            <div className="form-section">
-              <label className="form-label">Offer or Context <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
-              <textarea className="form-textarea" placeholder="Any specific offer, launch details, or campaign context..." value={offerNotes} onChange={e => setOfferNotes(e.target.value)} />
-            </div>
-
-            <div className="form-section">
-              <label className="form-label">Creative Keywords <span style={{color:'#333',fontWeight:400}}>(optional)</span></label>
-              <input className="form-input" placeholder="ritual, cinematic, rebellion, luxury, transformation..." value={creativeKeywords} onChange={e => setCreativeKeywords(e.target.value)} />
-              <p className="form-hint">Comma-separated — steers creative direction across all 4 concepts</p>
-            </div>
-
-            <div className="form-section">
-              <label className="form-label">Video Format</label>
-              <div className="aspect-row">
-                <button className={`aspect-btn ${aspectRatio === '16:9' ? 'active' : ''}`} onClick={() => setAspectRatio('16:9')}>🖥 16:9 — Landscape</button>
-                <button className={`aspect-btn ${aspectRatio === '9:16' ? 'active' : ''}`} onClick={() => setAspectRatio('9:16')}>📱 9:16 — Vertical</button>
-              </div>
-            </div>
-
-            <div className="form-section">
-              <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional — up to 4)</span></label>
-              <div className="product-picker">
-                {clientProductImages.length > 0 && (
-                  <>
-                    <div className="product-picker-label">
-                      <span>From Client Onboarding</span>
-                      <span className="product-picker-count">{selectedProductUrls.length}/4 selected</span>
-                    </div>
-                    <div className="product-picker-grid">
-                      {clientProductImages.map((url, i) => (
-                        <div key={i} className={`product-picker-item ${selectedProductUrls.includes(url) ? 'selected' : ''}`} onClick={() => toggleClientProductUrl(url)}>
-                          <img src={url} alt={`Product ${i+1}`} />
-                          {selectedProductUrls.includes(url) && <div className="product-picker-check">{selectedProductUrls.indexOf(url)+1}</div>}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="product-picker-divider" />
-                  </>
-                )}
-                <div className="product-own" onClick={() => productInputRef.current?.click()}>
-                  {productImageDataUrl
-                    ? <img src={productImageDataUrl} alt="Uploaded" className="product-own-preview" />
-                    : <div className="product-own-placeholder">📦</div>
-                  }
-                  <span className="product-own-text">
-                    {productImageDataUrl ? 'Custom image uploaded' : clientProductImages.length > 0 ? 'Or upload your own' : 'Upload a product photo'}
-                  </span>
-                  <button className="product-own-btn" onClick={e => { e.stopPropagation(); productInputRef.current?.click() }}>
-                    {productImageDataUrl ? 'Change' : 'Upload'}
-                  </button>
+          {/* Product image */}
+          <div className="section">
+            <label className="label">Product Image<em>auto-extracted or upload</em></label>
+            <div className="card">
+              {(extractedImages.length>0||extracting)&&(<>
+                <div className="card-hdr">
+                  <span className="card-lbl">From page</span>
+                  {extractedImages.length>0&&<span className="card-cnt">{extractedImages.length} found</span>}
                 </div>
-              </div>
-              <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductUpload} />
-            </div>
-
-            <button className="generate-btn" disabled={!selectedClientId || (!websiteUrl && !productName)} onClick={handleGenerate}>
-              ⚡ Auto-Generate 4 Briefs
-              <span className="generate-btn-cost">~$4.30 · ~3-5 min</span>
-            </button>
-          </div>
-        )}
-
-        {/* GENERATING PHASE */}
-        {phase === 'generating' && (
-          <div className="generating-container">
-            <div className="generating-header">
-              <div className="generating-spinner" />
-              <h2 className="generating-title">Building your briefs...</h2>
-              <p className="generating-sub">All 4 concepts are generating in parallel. This takes 3-5 minutes.</p>
-            </div>
-
-            {/* 4 concept cards */}
-            <div className="concept-cards">
-              {[0,1,2,3].map(i => {
-                const cp = conceptProgress[i]
-                return (
-                  <div key={i} className={`concept-card ${cp?.status === 'done' ? 'done' : cp?.status === 'error' ? 'error' : ''}`}>
-                    {!cp && <div className="concept-card-shimmer" />}
-                    <p className="concept-card-num">Concept {i+1}</p>
-                    <p className="concept-card-title">{cp?.title || '—'}</p>
-                    <p className={`concept-card-status ${
-                      !cp ? 'status-waiting' :
-                      cp.status === 'done' ? 'status-done' :
-                      cp.status === 'error' ? 'status-error' : 'status-building'
-                    }`}>
-                      {!cp ? 'Waiting...' :
-                       cp.status === 'done' ? '✓ Complete' :
-                       cp.status === 'error' ? '✕ Failed' : '● Building...'}
-                    </p>
-                    {cp?.status === 'done' && <div className="concept-card-check">✓</div>}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Live log */}
-            <div className="live-log">
-              <p className="live-log-title">Live Progress</p>
-              {progress.slice(-8).map((p, i) => (
-                <div key={i} className="log-item">
-                  <div className="log-dot" />
-                  <span className="log-time">{p.time}</span>
-                  <span className="log-msg">{p.message}</span>
+                <div className="img-grid">
+                  {extractedImages.map((url,i)=>(
+                    <div key={i} className={`img-item ${selectedImageUrl===url&&!uploadedImage?'sel':''}`} onClick={()=>{setSelectedImageUrl(url);setUploadedImage(null)}}>
+                      <img src={url} alt="" onError={e=>e.target.parentElement.style.display='none'}/>
+                      {selectedImageUrl===url&&!uploadedImage&&<div className="img-check">✓</div>}
+                    </div>
+                  ))}
+                  {extracting&&!extractedImages.length&&Array(4).fill(null).map((_,i)=><div key={i} className="img-shimmer"/>)}
                 </div>
-              ))}
-              {progress.length === 0 && <p className="log-msg" style={{color:'#333'}}>Starting...</p>}
+                <div className="div"/>
+              </>)}
+              <div className="upload-row" onClick={()=>productInputRef.current?.click()}>
+                {uploadedImage?<img src={uploadedImage} alt="" className="upload-prev"/>:<div className="upload-box">📦</div>}
+                <span className="upload-text">{uploadedImage?'Custom image uploaded':extractedImages.length>0?'Or upload your own':'Upload a product image'}</span>
+                <button className="upload-btn" onClick={e=>{e.stopPropagation();productInputRef.current?.click()}}>{uploadedImage?'Change':'Upload'}</button>
+              </div>
+            </div>
+            <input ref={productInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleUpload}/>
+            {effectiveImage&&(
+              <div className="sel-row">
+                <img src={effectiveImage} alt=""/>
+                <span className="sel-row-text">{uploadedImage?'Custom upload':'Page image'} · appears in scenes</span>
+                <button className="clear" onClick={()=>{setSelectedImageUrl(null);setUploadedImage(null)}}>✕</button>
+              </div>
+            )}
+          </div>
+
+          {/* Offer notes */}
+          <div className="section">
+            <label className="label">Campaign Context<em>optional</em></label>
+            <textarea className="textarea" placeholder="Specific offer, launch, angles to explore, anything the creative team should know..." value={offerNotes} onChange={e=>setOfferNotes(e.target.value)}/>
+          </div>
+
+          {/* Keywords */}
+          <div className="section">
+            <label className="label">Creative Direction<em>optional</em></label>
+            <input className="input" placeholder="e.g. documentary, emotional, humour, cinematic, product-focused..." value={creativeKeywords} onChange={e=>setCreativeKeywords(e.target.value)}/>
+          </div>
+
+          {/* Format */}
+          <div className="section">
+            <label className="label">Format</label>
+            <div className="format-row">
+              <button className={`fmt-btn ${aspectRatio==='16:9'?'a':''}`} onClick={()=>setAspectRatio('16:9')}>⬛ 16:9 Landscape</button>
+              <button className={`fmt-btn ${aspectRatio==='9:16'?'a':''}`} onClick={()=>setAspectRatio('9:16')}>▮ 9:16 Vertical</button>
             </div>
           </div>
-        )}
 
-        {/* DONE PHASE */}
-        {phase === 'done' && (
-          <div className="done-container">
-            <div className="done-icon">🎬</div>
-            <h2 className="done-title">Briefs ready.</h2>
-            <p className="done-sub">
-              4 complete campaign concepts have been built and saved. Your client brief is ready to share.
-            </p>
-            <a href={`/brief/${doneClientId}`} className="done-btn">
-              Open Client Brief ↗
-            </a>
-            <br />
-            <a href={`/brief/${doneClientId}`} target="_blank" rel="noopener noreferrer" className="done-secondary">
-              Copy shareable link →
-            </a>
-            <br />
-            <button className="done-secondary" style={{background:'none',border:'none',cursor:'pointer',marginTop:8}} onClick={() => {
-              setPhase('input')
-              setProgress([])
-              setConceptProgress([null,null,null,null])
-              setDoneClientId(null)
-            }}>
-              Generate new briefs
-            </button>
-          </div>
-        )}
+          <button className="gen-btn" disabled={!productPageUrl||!selectedClientId} onClick={handleGenerate}>
+            ⚡ Generate Full Brief
+            <span className="gen-btn-meta">4 concepts · 2K · ~8–12 min</span>
+          </button>
+        </div>
+      )}
 
-        {/* ERROR PHASE */}
-        {phase === 'error' && (
-          <div className="done-container">
-            <div className="done-icon">⚠️</div>
-            <h2 className="done-title">Something went wrong</h2>
-            <p className="done-sub">{error}</p>
-            <button className="done-btn" onClick={() => { setPhase('input'); setError(null) }}>Try Again</button>
+      {/* RUNNING */}
+      {phase==='running'&&(
+        <div className="run-container">
+          <div className="run-header">
+            <h1 className="run-title">Building your brief</h1>
+            {analysis&&<p className="run-sub">Analyzing <span className="run-brand">{analysis.brandName}</span> — generating 4 Super Bowl-caliber concepts</p>}
           </div>
-        )}
-      </div>
-    </>
-  )
+
+          <div className="progress-log">
+            {progress.slice(-3).map((p,i)=>(
+              <p key={i} className={`progress-line ${i===Math.min(progress.length,3)-1?'latest':''}`}>→ {p.message}</p>
+            ))}
+            {progress.length===0&&<p className="progress-line">→ Starting up...</p>}
+          </div>
+
+          <div className="concepts-grid">
+            {conceptStatus.map((cs,i)=>(
+              <div key={i} className={`cc ${cs.status}`}>
+                {cs.status==='building'&&<div className="cc-sweep"/>}
+                <p className="cc-num">Concept {i+1}</p>
+                <p className="cc-title">{cs.title||'—'}</p>
+                <p className="cc-status" style={{color:cs.status==='error'?'#dc2626':cs.status==='done'?'#111111':'#aaaaaa',animation:cs.status==='building'?'pulse 1.5s infinite':'none'}}>
+                  {cs.status==='waiting'&&'○ Waiting'}
+                  {cs.status==='building'&&'● Building...'}
+                  {cs.status==='done'&&'✓ Complete'}
+                  {cs.status==='error'&&'✕ Error'}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="overall-progress">
+            <div className="op-track"><div className="op-fill" style={{width:`${(completedCount/4)*100}%`}}/></div>
+            <p className="op-label">{completedCount} of 4 concepts complete · this takes 8–12 minutes</p>
+          </div>
+        </div>
+      )}
+
+      {/* DONE */}
+      {phase==='done'&&(
+        <div className="done-container">
+          <div className="done-icon">🎬</div>
+          <h2 style={{fontSize:26,fontWeight:300,letterSpacing:'-0.02em',color:'#111111',marginBottom:8}}><strong>{completedCount}</strong> concepts ready.</h2>
+          <p style={{fontSize:14,color:'#aaaaaa',lineHeight:1.6,marginBottom:28,fontWeight:300}}>Full brief complete. Open the client brief link to review all concepts.</p>
+          {doneClientSlug&&<a href={`/${doneClientSlug}/briefs`} className="done-btn">Open Client Brief ↗</a>}
+          <button className="done-link" onClick={()=>{setPhase('input');setDoneClientSlug(null);setConceptStatus([{status:'waiting',title:''},{status:'waiting',title:''},{status:'waiting',title:''},{status:'waiting',title:''}]);setProgress([]);setAnalysis(null)}}>Generate another →</button>
+        </div>
+      )}
+    </div>
+  </>)
 }
