@@ -14,69 +14,109 @@ async function scrapeUrl(url) {
       signal: AbortSignal.timeout(8000),
     })
     const html = await res.text()
-    return html
+    return { html, text: html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 4000)
+      .slice(0, 6000)
+    }
   } catch {
     return null
   }
 }
 
+function extractImages(html, baseUrl) {
+  const images = new Set()
+  const base = new URL(baseUrl)
+
+  const patterns = [
+    /property=["']og:image["'][^>]*content=["']([^"']+)["']/gi,
+    /content=["']([^"']+)["'][^>]*property=["']og:image["']/gi,
+    /"og:image","content":"([^"]+)"/gi,
+    /data-src=["']([^"'?#]+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)/gi,
+    /<img[^>]+src=["']([^"']*(?:cdn|product|hero|main|primary|1000|2000|800|large|full|detail)[^"']*\.(?:jpg|jpeg|png|webp)[^"']*)["']/gi,
+    /"url":"(https?:[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/gi,
+  ]
+
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(html)) !== null) {
+      try {
+        const raw = match[1].replace(/\\/g, '').split('?')[0]
+        const imgUrl = raw.startsWith('http') ? raw : new URL(raw, base.origin).href
+        if (imgUrl.match(/\.(jpg|jpeg|png|webp)/i)
+          && !imgUrl.match(/icon|logo|avatar|sprite|badge|placeholder|blank/i)
+          && imgUrl.length < 500) {
+          images.add(imgUrl)
+        }
+      } catch {}
+    }
+  }
+
+  return [...images].slice(0, 8)
+}
+
 export async function POST(request) {
   try {
-    const { websiteUrl, productPageUrl, productName, offerNotes } = await request.json()
+    const { productPageUrl, offerNotes, extractImagesOnly } = await request.json()
 
-    // Scrape both URLs in parallel
-    const [websiteContent, productContent] = await Promise.all([
-      websiteUrl ? scrapeUrl(websiteUrl) : Promise.resolve(null),
-      productPageUrl ? scrapeUrl(productPageUrl) : Promise.resolve(null),
-    ])
+    if (!productPageUrl) {
+      return Response.json({ success: false, error: 'Product page URL required' }, { status: 400 })
+    }
 
-    const contentBlock = [
-      websiteContent ? `BRAND WEBSITE:\n${websiteContent}` : null,
-      productContent ? `PRODUCT PAGE (${productPageUrl}):\n${productContent}` : null,
-    ].filter(Boolean).join('\n\n---\n\n') || `Product: ${productName}. Notes: ${offerNotes}`
+    const scraped = await scrapeUrl(productPageUrl)
+    if (!scraped) {
+      return Response.json({ success: false, error: 'Could not fetch product page. Check the URL.' }, { status: 400 })
+    }
 
-    const prompt = `You are a senior brand strategist analyzing a brand for an ad campaign.
+    const productImages = extractImages(scraped.html, productPageUrl)
 
-${contentBlock}
+    // Fast path — just return images
+    if (extractImagesOnly) {
+      return Response.json({ success: true, productImages })
+    }
 
-PRODUCT/SERVICE BEING ADVERTISED: ${productName || 'See product page above'}
+    // Full analysis
+    const prompt = `You are a senior brand strategist analyzing a product page for an ad campaign.
+
+PRODUCT PAGE: ${productPageUrl}
+PAGE CONTENT:
+${scraped.text}
+
 ADDITIONAL NOTES: ${offerNotes || 'None'}
 
-Extract brand intelligence. Prioritize the product page content for product-specific details, and the brand website for tone, personality, and brand-level positioning.
+Extract brand and product intelligence. Be specific and grounded in the actual page content.
 
-Respond ONLY with a valid JSON object, no markdown fences:
+Respond ONLY with valid JSON, no markdown:
 {
-  "coreOffer": "The single clearest thing this brand sells",
-  "heroProduct": "The specific product being advertised",
-  "targetCustomer": "Who this product is for — be specific",
-  "corePainPoint": "The core problem this product solves",
-  "desiredTransformation": "What changes in the customer life after using this",
-  "differentiators": ["what makes this product unique"],
-  "proofPoints": ["claims, stats, ingredients, testimonials found on the page"],
+  "brandName": "The brand name",
+  "coreOffer": "What this brand sells",
+  "heroProduct": "The specific product on this page",
+  "targetCustomer": "Who this is for — be specific",
+  "corePainPoint": "The core problem this solves",
+  "desiredTransformation": "What changes after using this",
+  "differentiators": ["what makes this unique"],
+  "proofPoints": ["claims, stats, ingredients, testimonials from the page"],
   "websiteTone": "How the brand sounds",
-  "keyPhrasing": ["memorable phrases pulled from the pages"],
-  "visualCues": "Visual and aesthetic themes from the site",
-  "productCategory": "What market category this fits",
-  "productDetails": "Specific product details, ingredients, features, or specs found on the product page"
+  "keyPhrasing": ["memorable phrases from the page"],
+  "visualCues": "Visual and aesthetic themes",
+  "productCategory": "Market category",
+  "productDetails": "Key product details, ingredients, features, specs"
 }`
 
     const message = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 1200,
       messages: [{ role: 'user', content: prompt }],
     })
 
     const block = message.content.find(b => b.type === 'text')
-    if (!block || !block.text) throw new Error('No text response from Claude')
+    if (!block?.text) throw new Error('No response from Claude')
 
     const analysis = parseJSON(block.text)
-    return Response.json({ success: true, analysis })
+    return Response.json({ success: true, analysis, productImages })
   } catch (error) {
     console.error('Analyze error:', error)
     return Response.json({ success: false, error: error.message }, { status: 500 })
