@@ -18,6 +18,7 @@ export default function AutoBriefPage() {
   const [extractedImages, setExtractedImages] = useState([])
   const [extracting, setExtracting] = useState(false)
   const [selectedImageUrl, setSelectedImageUrl] = useState(null)
+  const [clientSearch, setClientSearch] = useState('')
 
   const [progress, setProgress] = useState([])
   const [conceptStatus, setConceptStatus] = useState([
@@ -31,7 +32,20 @@ export default function AutoBriefPage() {
   const [error, setError] = useState(null)
   const productInputRef = useRef(null)
 
-  useEffect(()=>{supabase.from('clients').select('id,name').order('name').then(({data})=>{if(data)setClients(data)})},[])
+  useEffect(()=>{
+    supabase.from('clients').select('id,name,created_at').order('name').then(({data})=>{
+      if(!data)return
+      // Deduplicate by name — keep first occurrence (alphabetically sorted)
+      const seen=new Set()
+      const deduped=data.filter(c=>{
+        const key=c.name?.trim().toLowerCase()
+        if(seen.has(key))return false
+        seen.add(key)
+        return true
+      })
+      setClients(deduped)
+    })
+  },[])
 
   useEffect(()=>{
     if(!selectedClientId)return
@@ -286,16 +300,27 @@ export default function AutoBriefPage() {
             {clients.length===0?(
               <p style={{fontSize:13,color:'#aaaaaa'}}>No clients found. <a href="/clients" style={{color:'#111111'}}>Add one in the CRM →</a></p>
             ):(
-              <div className="client-select">
-                {clients.slice(0,8).map(c=>(
-                  <div key={c.id} className={`client-option ${selectedClientId===c.id?'selected':''}`} onClick={()=>setSelectedClientId(c.id)}>
-                    <div className="client-radio">
-                      {selectedClientId===c.id&&<div className="client-radio-dot"/>}
-                    </div>
-                    <span className="client-name-text">{c.name}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <input
+                  className="input"
+                  placeholder="Search clients..."
+                  value={clientSearch}
+                  onChange={e=>setClientSearch(e.target.value)}
+                  style={{marginBottom:8}}
+                />
+                <div className="client-select" style={{maxHeight:280,overflowY:'auto'}}>
+                  {clients
+                    .filter(c=>c.name?.toLowerCase().includes(clientSearch.toLowerCase()))
+                    .map(c=>(
+                      <div key={c.id} className={`client-option ${selectedClientId===c.id?'selected':''}`} onClick={()=>setSelectedClientId(c.id)}>
+                        <div className="client-radio">
+                          {selectedClientId===c.id&&<div className="client-radio-dot"/>}
+                        </div>
+                        <span className="client-name-text">{c.name}</span>
+                      </div>
+                    ))}
+                </div>
+              </>
             )}
           </div>
 
