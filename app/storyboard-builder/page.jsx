@@ -38,8 +38,9 @@ async function compressImage(dataUrl, maxWidth = 512) {
 
 export default function StoryboardBuilder() {
   const [aspectRatio, setAspectRatio] = useState('9:16')
+  const [mounted, setMounted] = useState(false)
   const sessionId = useRef('sb-0')
-  useEffect(() => { sessionId.current = `sb-${Date.now()}` }, [])
+  useEffect(() => { sessionId.current = `sb-${Date.now()}`; setMounted(true) }, [])
 
   const [productImage, setProductImage] = useState(null)
   const [avatarPrompt, setAvatarPrompt] = useState('')
@@ -157,6 +158,8 @@ export default function StoryboardBuilder() {
   }
 
   const isPortrait = aspectRatio === '9:16'
+
+  if (!mounted) return null
 
   return (<>
     <style>{`
