@@ -18,67 +18,36 @@ function downloadImage(url, filename) {
   a.click()
 }
 
-// Upload a dataUrl to Supabase storage via a small API endpoint
-async function uploadAsset(dataUrl, name) {
-  try {
-    const res = await fetch('/api/storyboard/upload-asset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dataUrl, name }),
-    })
-    const j = await res.json()
-    return j.url || null
-  } catch { return null }
-}
-
 export default function StoryboardBuilder() {
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const sessionId = useRef(`sb-${Date.now()}`)
 
-  // Assets
-  const [productImage, setProductImage] = useState(null) // dataUrl (display only)
-  const [productUrl, setProductUrl] = useState(null) // storage URL
-
+  const [productImage, setProductImage] = useState(null)
   const [avatarPrompt, setAvatarPrompt] = useState('')
-  const [avatarImage, setAvatarImage] = useState(null) // dataUrl (display)
-  const [avatarUrl, setAvatarUrl] = useState(null) // storage URL
+  const [avatarImage, setAvatarImage] = useState(null)
   const [avatarLocked, setAvatarLocked] = useState(false)
   const [avatarLoading, setAvatarLoading] = useState(false)
-  const [avatarUploading, setAvatarUploading] = useState(false)
-
   const [envPrompt, setEnvPrompt] = useState('')
-  const [envImage, setEnvImage] = useState(null) // dataUrl (display)
-  const [envUrl, setEnvUrl] = useState(null) // storage URL
+  const [envImage, setEnvImage] = useState(null)
   const [envLocked, setEnvLocked] = useState(false)
   const [envLoading, setEnvLoading] = useState(false)
-  const [envUploading, setEnvUploading] = useState(false)
-
-  // Script + scenes
   const [script, setScript] = useState('')
   const [scenes, setScenes] = useState([])
   const [scenesLoading, setScenesLoading] = useState(false)
-
-  // Per-scene state
   const [sceneImages, setSceneImages] = useState({})
-
   const productRef = useRef(null)
 
   async function handleProductUpload(e) {
     const f = e.target.files?.[0]
     if (!f) return
-    const dataUrl = await fileToDataUrl(f)
-    setProductImage(dataUrl)
-    setProductUrl(null)
-    // Upload immediately
-    const url = await uploadAsset(dataUrl, `${sessionId.current}/product`)
-    setProductUrl(url || dataUrl) // fallback to dataUrl if upload fails
+    setProductImage(await fileToDataUrl(f))
   }
 
   async function generateAsset(type) {
     const prompt = type === 'avatar' ? avatarPrompt : envPrompt
     if (!prompt.trim()) return
-    if (type === 'avatar') { setAvatarLoading(true); setAvatarLocked(false); setAvatarUrl(null) }
-    else { setEnvLoading(true); setEnvLocked(false); setEnvUrl(null) }
+    if (type === 'avatar') { setAvatarLoading(true); setAvatarLocked(false) }
+    else { setEnvLoading(true); setEnvLocked(false) }
     try {
       const res = await fetch('/api/storyboard/generate-asset', {
         method: 'POST',
@@ -95,21 +64,14 @@ export default function StoryboardBuilder() {
     else setEnvLoading(false)
   }
 
-  async function lockAsset(type) {
+  // Lock is purely synchronous — no uploads, no async, no waiting
+  function lockAsset(type) {
     if (type === 'avatar') {
       if (!avatarImage) return
-      setAvatarUploading(true)
-      const url = await uploadAsset(avatarImage, `${sessionId.current}/avatar`)
-      setAvatarUrl(url || avatarImage)
       setAvatarLocked(true)
-      setAvatarUploading(false)
     } else {
       if (!envImage) return
-      setEnvUploading(true)
-      const url = await uploadAsset(envImage, `${sessionId.current}/env`)
-      setEnvUrl(url || envImage)
       setEnvLocked(true)
-      setEnvUploading(false)
     }
   }
 
@@ -124,10 +86,12 @@ export default function StoryboardBuilder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           script,
-          hasProduct: !!productUrl,
-          hasAvatar: avatarLocked && !!avatarUrl,
-          hasEnv: envLocked && !!envUrl,
+          hasProduct: !!productImage,
+          hasAvatar: avatarLocked && !!avatarImage,
+          hasEnv: envLocked && !!envImage,
           aspectRatio,
+          avatarDescription: avatarPrompt,
+          envDescription: envPrompt,
         }),
       })
       const j = await res.json()
@@ -149,10 +113,12 @@ export default function StoryboardBuilder() {
           sceneIndex: idx,
           aspectRatio,
           sessionId: sessionId.current,
-          // Pass storage URLs, not base64
-          productImage: scene.usesProduct && productUrl ? productUrl : null,
-          avatarImage: scene.usesAvatar && avatarLocked && avatarUrl ? avatarUrl : null,
-          envImage: scene.usesEnv && envLocked && envUrl ? envUrl : null,
+          avatarDescription: avatarPrompt,
+          envDescription: envPrompt,
+          // Always pass avatar + env if locked, regardless of scene tags
+          productImage: scene.usesProduct && productImage ? productImage : null,
+          avatarImage: avatarLocked && avatarImage ? avatarImage : null,
+          envImage: envLocked && envImage ? envImage : null,
         }),
       })
       const j = await res.json()
@@ -162,7 +128,6 @@ export default function StoryboardBuilder() {
         setSceneImages(prev => ({ ...prev, [idx]: { ...prev[idx], loading: false, error: j.error } }))
       }
     } catch (e) {
-      console.error(e)
       setSceneImages(prev => ({ ...prev, [idx]: { ...prev[idx], loading: false } }))
     }
   }
@@ -176,7 +141,6 @@ export default function StoryboardBuilder() {
       body,html{background:#ffffff;color:#111111;font-family:'DM Sans',-apple-system,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
       @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
       @keyframes spin{to{transform:rotate(360deg)}}
-      @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
       .shell{min-height:100vh;}
       .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 40px;background:white;border-bottom:1px solid #eeeeee;position:sticky;top:0;z-index:100;}
       .nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;}
@@ -217,11 +181,11 @@ export default function StoryboardBuilder() {
       .btn-gen{flex:1;padding:9px;background:#111111;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:5px;}
       .btn-gen:hover{background:#333333;}
       .btn-gen:disabled{opacity:0.3;cursor:not-allowed;}
-      .btn-lock{padding:9px 12px;background:white;color:#111111;border:1px solid #e5e5e5;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;display:flex;align-items:center;gap:4px;}
-      .btn-lock:hover{border-color:#111111;}
+      .btn-lock{padding:9px 14px;background:#111111;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;}
+      .btn-lock:hover{background:#333333;}
       .btn-unlock{width:100%;margin-top:8px;padding:8px;background:white;color:#888888;border:1px solid #e5e5e5;border-radius:7px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;text-align:center;}
       .btn-unlock:hover{border-color:#111111;color:#111111;}
-      .upload-area{border:1px dashed #dddddd;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;background:#fafafa;margin-bottom:0;}
+      .upload-area{border:1px dashed #dddddd;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;background:#fafafa;}
       .upload-area:hover{border-color:#111111;background:#f5f5f5;}
       .upload-label{font-size:12px;color:#aaaaaa;margin-top:6px;}
       .spinner{width:13px;height:13px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;}
@@ -240,7 +204,7 @@ export default function StoryboardBuilder() {
       .btn-plan:hover{background:#333333;}
       .btn-plan:disabled{opacity:0.3;cursor:not-allowed;}
       .scenes-list{display:flex;flex-direction:column;gap:10px;}
-      .scene-card{background:white;border:1px solid #eeeeee;border-radius:12px;overflow:hidden;transition:border-color 0.15s;}
+      .scene-card{background:white;border:1px solid #eeeeee;border-radius:12px;overflow:hidden;}
       .scene-head{padding:14px 18px;display:flex;align-items:flex-start;gap:14px;}
       .scene-num{width:28px;height:28px;background:#f0f0f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;color:#888888;flex-shrink:0;margin-top:2px;}
       .scene-info{flex:1;}
@@ -270,7 +234,7 @@ export default function StoryboardBuilder() {
       .btn-download:hover{background:#333333;}
       .btn-download:disabled{opacity:0.3;cursor:not-allowed;}
       .empty{text-align:center;padding:48px 0;color:#cccccc;font-size:14px;font-weight:300;}
-      .lock-status{font-size:10px;color:#aaaaaa;margin-top:6px;text-align:center;}
+      .lock-hint{font-size:10px;color:#aaaaaa;margin-top:6px;text-align:center;}
     `}</style>
 
     <div className="shell">
@@ -290,7 +254,7 @@ export default function StoryboardBuilder() {
       <div className="main">
         <p className="page-eyebrow">Storyboard Builder</p>
         <h1 className="page-title"><strong>Scene by scene.</strong> Your script.</h1>
-        <p className="page-sub">Upload your product, generate and lock an avatar and environment, paste your script — then generate each scene individually with 2 options to choose from.</p>
+        <p className="page-sub">Generate and lock your avatar and environment, upload your product, paste your script — then generate each scene with 2 options to choose from.</p>
 
         <div className="format-row">
           <button className={`fmt-btn ${aspectRatio==='9:16'?'active':''}`} onClick={()=>setAspectRatio('9:16')}>▮ 9:16 Vertical</button>
@@ -298,14 +262,13 @@ export default function StoryboardBuilder() {
         </div>
 
         <div className="layout">
-          {/* Sidebar */}
           <div className="sidebar">
 
             {/* Product */}
             <div className="asset-card">
               <div className="asset-header">
                 <span className="asset-title">Product</span>
-                {productUrl && <span style={{fontSize:9,color:'#111111',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Ready</span>}
+                {productImage && <span style={{fontSize:9,color:'#111111',fontWeight:700,letterSpacing:'0.06em',textTransform:'uppercase'}}>Ready</span>}
               </div>
               <div className="asset-body">
                 <div className="upload-area" onClick={()=>productRef.current?.click()}>
@@ -314,9 +277,7 @@ export default function StoryboardBuilder() {
                     : <><div style={{fontSize:24,marginBottom:6}}>📦</div><p className="upload-label">Click to upload product image</p></>
                   }
                 </div>
-                {productImage && !productUrl && <p className="lock-status">Uploading...</p>}
-                {productUrl && <p className="lock-status">✓ Uploaded — used in scenes</p>}
-                {productImage && <button className="btn-unlock" onClick={()=>{setProductImage(null);setProductUrl(null)}}>Remove</button>}
+                {productImage && <button className="btn-unlock" onClick={()=>setProductImage(null)}>Remove</button>}
                 <input ref={productRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleProductUpload}/>
               </div>
             </div>
@@ -336,18 +297,14 @@ export default function StoryboardBuilder() {
                   <textarea className="asset-input" rows={2} placeholder="Describe your avatar character..." value={avatarPrompt} onChange={e=>setAvatarPrompt(e.target.value)}/>
                   <div className="asset-actions">
                     <button className="btn-gen" disabled={!avatarPrompt.trim()||avatarLoading} onClick={()=>generateAsset('avatar')}>
-                      {avatarLoading ? <><div className="spinner"/>Generating...</> : '⚡ Generate'}
+                      {avatarLoading?<><div className="spinner"/>Generating...</>:'⚡ Generate'}
                     </button>
-                    {avatarImage && (
-                      <button className="btn-lock" disabled={avatarUploading} onClick={()=>lockAsset('avatar')}>
-                        {avatarUploading ? <><div className="spinner-dark"/>...</> : 'Lock ✓'}
-                      </button>
-                    )}
+                    {avatarImage&&<button className="btn-lock" onClick={()=>lockAsset('avatar')}>Lock ✓</button>}
                   </div>
                 </>}
-                {avatarLocked && <>
-                  {avatarUrl && <p className="lock-status">✓ Locked and uploaded</p>}
-                  <button className="btn-unlock" onClick={()=>{setAvatarLocked(false);setAvatarUrl(null)}}>Unlock to edit</button>
+                {avatarLocked&&<>
+                  <p className="lock-hint">✓ Locked — used in all scenes</p>
+                  <button className="btn-unlock" onClick={()=>setAvatarLocked(false)}>Unlock to edit</button>
                 </>}
               </div>
             </div>
@@ -363,61 +320,47 @@ export default function StoryboardBuilder() {
                   ? <img src={envImage} alt="Environment" className={`asset-img ${isPortrait?'portrait':'landscape'}`}/>
                   : <div className={`asset-placeholder ${isPortrait?'portrait':'landscape'}`}><span>No environment yet</span></div>
                 }
-                {!envLocked && <>
+                {!envLocked&&<>
                   <textarea className="asset-input" rows={2} placeholder="Describe the environment / setting..." value={envPrompt} onChange={e=>setEnvPrompt(e.target.value)} style={{marginTop:10}}/>
                   <div className="asset-actions">
                     <button className="btn-gen" disabled={!envPrompt.trim()||envLoading} onClick={()=>generateAsset('environment')}>
-                      {envLoading ? <><div className="spinner"/>Generating...</> : '⚡ Generate'}
+                      {envLoading?<><div className="spinner"/>Generating...</>:'⚡ Generate'}
                     </button>
-                    {envImage && (
-                      <button className="btn-lock" disabled={envUploading} onClick={()=>lockAsset('environment')}>
-                        {envUploading ? <><div className="spinner-dark"/>...</> : 'Lock ✓'}
-                      </button>
-                    )}
+                    {envImage&&<button className="btn-lock" onClick={()=>lockAsset('environment')}>Lock ✓</button>}
                   </div>
                 </>}
-                {envLocked && <>
-                  {envUrl && <p className="lock-status">✓ Locked and uploaded</p>}
-                  <button className="btn-unlock" onClick={()=>{setEnvLocked(false);setEnvUrl(null)}}>Unlock to edit</button>
+                {envLocked&&<>
+                  <p className="lock-hint">✓ Locked — used in all scenes</p>
+                  <button className="btn-unlock" onClick={()=>setEnvLocked(false)}>Unlock to edit</button>
                 </>}
               </div>
             </div>
 
           </div>
 
-          {/* Main */}
           <div className="content">
 
-            {/* Script */}
             <div className="section-card">
               <div className="section-head">
                 <span className="section-title">Script</span>
-                {scenes.length>0 && <span style={{fontSize:11,color:'#aaaaaa'}}>{scenes.length} scenes</span>}
+                {scenes.length>0&&<span style={{fontSize:11,color:'#aaaaaa'}}>{scenes.length} scenes</span>}
               </div>
               <div className="section-body">
-                <textarea
-                  className="script-textarea"
-                  placeholder="Paste your voiceover script here. We'll divide it into scenes at 3–4 seconds each (max 15 scenes)..."
-                  value={script}
-                  onChange={e=>setScript(e.target.value)}
-                />
+                <textarea className="script-textarea" placeholder="Paste your voiceover script here. We'll divide it into scenes at 3–4 seconds each (max 15 scenes)..." value={script} onChange={e=>setScript(e.target.value)}/>
                 <div className="script-meta">
-                  <span className="script-hint">
-                    {script.trim() ? `~${Math.min(15,Math.ceil(script.split(' ').length/10))} scenes estimated` : 'Tip: 30s script ≈ 8–10 scenes'}
-                  </span>
+                  <span className="script-hint">{script.trim()?`~${Math.min(15,Math.ceil(script.split(' ').length/10))} scenes estimated`:'Tip: 30s script ≈ 8–10 scenes'}</span>
                   <button className="btn-plan" disabled={!script.trim()||scenesLoading} onClick={handlePlanScenes}>
-                    {scenesLoading ? <><div className="spinner"/>Planning...</> : '→ Plan Scenes'}
+                    {scenesLoading?<><div className="spinner"/>Planning...</>:'→ Plan Scenes'}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Scenes */}
-            {scenes.length > 0 ? (
+            {scenes.length>0?(
               <div className="scenes-list">
-                {scenes.map((scene, idx) => {
-                  const si = sceneImages[idx]
-                  return (
+                {scenes.map((scene,idx)=>{
+                  const si=sceneImages[idx]
+                  return(
                     <div key={idx} className="scene-card">
                       <div className="scene-head">
                         <div className="scene-num">{idx+1}</div>
@@ -425,65 +368,39 @@ export default function StoryboardBuilder() {
                           <p className="scene-line">"{scene.scriptLine}"</p>
                           <p className="scene-prompt">{scene.imagePrompt}</p>
                           <div className="scene-tags">
-                            {scene.usesProduct && productUrl && <span className="tag">Product</span>}
-                            {scene.usesAvatar && avatarLocked && <span className="tag">Avatar</span>}
-                            {scene.usesEnv && envLocked && <span className="tag">Environment</span>}
+                            {scene.usesProduct&&productImage&&<span className="tag">Product</span>}
+                            {avatarLocked&&<span className="tag">Avatar</span>}
+                            {envLocked&&<span className="tag">Environment</span>}
                           </div>
                         </div>
-                        <button
-                          className="scene-gen-btn"
-                          disabled={si?.loading}
-                          onClick={()=>generateScene(idx, false)}
-                        >
-                          {si?.loading ? <><div className="spinner"/>...</> : si?.options?.length ? '↺ Redo' : '⚡ Generate'}
+                        <button className="scene-gen-btn" disabled={si?.loading} onClick={()=>generateScene(idx,false)}>
+                          {si?.loading?<><div className="spinner"/>...</>:si?.options?.length?'↺ Redo':'⚡ Generate'}
                         </button>
                       </div>
-
-                      {si?.loading && (
-                        <div className="scene-loading">
-                          <div className="spinner-dark"/>
-                          Generating 2 options at 2K...
-                        </div>
-                      )}
-
-                      {si?.error && !si?.loading && (
-                        <div className="scene-error">Error: {si.error}</div>
-                      )}
-
-                      {si?.options?.length > 0 && !si?.loading && (<>
+                      {si?.loading&&<div className="scene-loading"><div className="spinner-dark"/>Generating 2 options at 2K...</div>}
+                      {si?.error&&!si?.loading&&<div className="scene-error">Error: {si.error}</div>}
+                      {si?.options?.length>0&&!si?.loading&&(<>
                         <div className="scene-images">
-                          {si.options.map((imgUrl, optIdx) => (
-                            <div
-                              key={optIdx}
-                              className={`scene-img-wrap ${si.selected===optIdx?'selected':''}`}
-                              onClick={()=>setSceneImages(prev=>({...prev,[idx]:{...prev[idx],selected:optIdx}}))}
-                            >
+                          {si.options.map((imgUrl,optIdx)=>(
+                            <div key={optIdx} className={`scene-img-wrap ${si.selected===optIdx?'selected':''}`} onClick={()=>setSceneImages(prev=>({...prev,[idx]:{...prev[idx],selected:optIdx}}))}>
                               <img src={imgUrl} alt={`Option ${optIdx+1}`} className={isPortrait?'portrait':'landscape'}/>
                               <div className="scene-img-overlay">
                                 <span className="img-label">Option {optIdx+1}</span>
-                                {si.selected===optIdx && <div className="img-check">✓</div>}
+                                {si.selected===optIdx&&<div className="img-check">✓</div>}
                               </div>
                             </div>
                           ))}
                         </div>
                         <div className="scene-actions">
                           <button className="btn-redo" onClick={()=>generateScene(idx,true)}>↺ Redo</button>
-                          <button
-                            className="btn-download"
-                            disabled={si.selected==null||si.selected===undefined}
-                            onClick={()=>{if(si.selected!=null)downloadImage(si.options[si.selected],`scene-${idx+1}.png`)}}
-                          >
-                            ↓ Download Scene {idx+1}
-                          </button>
+                          <button className="btn-download" disabled={si.selected==null||si.selected===undefined} onClick={()=>{if(si.selected!=null)downloadImage(si.options[si.selected],`scene-${idx+1}.png`)}}>↓ Download Scene {idx+1}</button>
                         </div>
                       </>)}
                     </div>
                   )
                 })}
               </div>
-            ) : (
-              !scenesLoading && <div className="empty">Paste your script and click "Plan Scenes" to get started</div>
-            )}
+            ):(!scenesLoading&&<div className="empty">Paste your script and click "Plan Scenes" to get started</div>)}
 
           </div>
         </div>
