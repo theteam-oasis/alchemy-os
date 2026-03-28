@@ -1,11 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
 
 const STORAGE_KEY = 'stowic-brief-v4'
 const ADMIN_PASSWORD = 'stowic2024'
@@ -79,48 +73,23 @@ async function compressImage(dataUrl, maxW = 400, quality = 0.6) {
   })
 }
 
-const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/69c806675fdde574550b0af4'
-const JSONBIN_KEY = '$2a$10$a50fv0awIemOQ3fyz6ol6OR2h2YRwz9yahb7UXRcsL8Gu8ZE8NWRG'
-
-async function uploadFile(dataUrl, path) {
-  try {
-    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (!match) return null
-    const mimeType = match[1]
-    const isAudio = mimeType.includes('audio') || mimeType.includes('mpeg')
-    const ext = isAudio ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
-    const fullPath = `stowic-brief/${path}.${ext}`
-    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
-    const { error } = supabase.storage.from('brand-assets').upload
-      ? await supabase.storage.from('brand-assets').upload(fullPath, bytes, { contentType: mimeType, upsert: true }).catch(() => ({ error: true }))
-      : { error: true }
-    if (!error) {
-      const { data } = supabase.storage.from('brand-assets').getPublicUrl(fullPath)
-      if (data?.publicUrl) return data.publicUrl
-    }
-  } catch {}
-  return null
-}
-
 async function saveToBin(data) {
   try {
-    const res = await fetch(JSONBIN_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+    const res = await fetch('/api/stowic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     })
     return res.ok
-  } catch (e) { console.error('JSONBin save failed:', e.message); return false }
+  } catch (e) { console.error('Save failed:', e.message); return false }
 }
 
 async function loadFromBin() {
   try {
-    const res = await fetch(`${JSONBIN_URL}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
-    })
+    const res = await fetch('/api/stowic')
     if (!res.ok) return null
     const j = await res.json()
-    return j.record || null
+    return j.data || null
   } catch { return null }
 }
 
