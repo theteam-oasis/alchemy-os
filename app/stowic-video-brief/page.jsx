@@ -55,8 +55,8 @@ async function fileToDataUrl(f) {
   })
 }
 
-// Compress image to ~50KB for storage
-async function compressImage(dataUrl, maxW = 400, quality = 0.6) {
+// Compress image - keep quality high, just cap dimensions
+async function compressImage(dataUrl, maxW = 1200, quality = 0.92) {
   if (!dataUrl || dataUrl.startsWith('http')) return dataUrl
   return new Promise(res => {
     const img = new Image()
@@ -73,24 +73,34 @@ async function compressImage(dataUrl, maxW = 400, quality = 0.6) {
   })
 }
 
+const REDIS_URL = 'https://vast-cockatoo-86777.upstash.io'
+const REDIS_TOKEN = 'gQAAAAAAAVL5AAIncDIyMTEyMWZkMWM5ZmY0ZmE5Yjg3ZGY1ZWZhMzFjNzcyZHAyODY3Nzc'
+const REDIS_KEY = 'stowic-brief'
+
 async function saveToBin(data) {
   try {
-    const res = await fetch('/api/stowic', {
+    const res = await fetch(`${REDIS_URL}/pipeline`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([['SET', REDIS_KEY, JSON.stringify(data)]]),
     })
-    return res.ok
-  } catch (e) { console.error('Save failed:', e.message); return false }
+    const j = await res.json()
+    return Array.isArray(j) && j[0]?.result === 'OK'
+  } catch (e) { console.error('Redis save failed:', e.message); return false }
 }
 
 async function loadFromBin() {
   try {
-    const res = await fetch('/api/stowic')
+    const res = await fetch(`${REDIS_URL}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([['GET', REDIS_KEY]]),
+    })
     if (!res.ok) return null
     const j = await res.json()
-    return j.data || null
-  } catch { return null }
+    const val = j?.[0]?.result
+    return val ? JSON.parse(val) : null
+  } catch (e) { console.error('Redis load failed:', e.message); return null }
 }
 
 export default function StowicVideoBrief() {
