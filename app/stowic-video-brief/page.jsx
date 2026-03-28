@@ -120,14 +120,15 @@ export default function StowicVideoBrief() {
     return { logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName }
   }
 
-  function handleSave() {
-    const ok = saveLocal(getCurrentData())
-    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
-  }
+  // Use a ref to always have latest data for saving
+  const dataRef = useRef({})
+  useEffect(() => {
+    dataRef.current = { logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName }
+  }, [logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName])
 
-  // Auto-save after every upload
-  function autoSave(newData) {
-    saveLocal(newData)
+  function handleSave() {
+    const ok = saveLocal(dataRef.current)
+    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
   }
 
   async function handleUpload(file, key, setter, nameSetter) {
@@ -137,19 +138,13 @@ export default function StowicVideoBrief() {
     setter(url)
     if (nameSetter) nameSetter(file.name)
     setUploading(null)
-    // Auto save after upload
-    setTimeout(() => autoSave(getCurrentData()), 100)
   }
 
   async function handleSceneUpload(file, sceneKey) {
     if (!file) return
     setUploading(sceneKey)
     const url = await fileToDataUrl(file)
-    setSceneImages(prev => {
-      const next = { ...prev, [sceneKey]: url }
-      autoSave({ logo, avatarOld, avatarNew, sceneImages: next, voUrl, voName, musicUrl, musicName })
-      return next
-    })
+    setSceneImages(prev => ({ ...prev, [sceneKey]: url }))
     setUploading(null)
   }
 
