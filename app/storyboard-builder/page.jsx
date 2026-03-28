@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 function fileToDataUrl(f) {
   return new Promise((res, rej) => {
@@ -20,7 +20,8 @@ function downloadImage(url, filename) {
 
 export default function StoryboardBuilder() {
   const [aspectRatio, setAspectRatio] = useState('9:16')
-  const sessionId = useRef(`sb-${Date.now()}`)
+  const sessionId = useRef('sb-0')
+  useEffect(() => { sessionId.current = `sb-${Date.now()}` }, [])
 
   const [productImage, setProductImage] = useState(null)
   const [avatarPrompt, setAvatarPrompt] = useState('')
