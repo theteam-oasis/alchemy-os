@@ -91,11 +91,16 @@ export default function StowicVideoBrief() {
   const rAvatarNew = useRef(null)
   const rVo = useRef(null)
   const rMusic = useRef(null)
-  const rScenes = useRef({})
-  SCENES.forEach(s => {
-    if (!rScenes.current[`${s.id}l`]) rScenes.current[`${s.id}l`] = { current: null }
-    if (!rScenes.current[`${s.id}r`]) rScenes.current[`${s.id}r`] = { current: null }
-  })
+  const rS1l = useRef(null); const rS1r = useRef(null)
+  const rS2l = useRef(null); const rS2r = useRef(null)
+  const rS3l = useRef(null); const rS3r = useRef(null)
+  const rS4l = useRef(null); const rS4r = useRef(null)
+  const rS5l = useRef(null); const rS5r = useRef(null)
+  const sceneRefs = {
+    s1l: rS1l, s1r: rS1r, s2l: rS2l, s2r: rS2r,
+    s3l: rS3l, s3r: rS3r, s4l: rS4l, s4r: rS4r,
+    s5l: rS5l, s5r: rS5r
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -182,12 +187,16 @@ export default function StowicVideoBrief() {
       <input ref={rAvatarNew} type="file" accept="image/*" onChange={e=>handleUpload(e.target.files[0],'avatarNew',setAvatarNew)} />
       <input ref={rVo} type="file" accept="audio/*" onChange={e=>handleUpload(e.target.files[0],'vo',setVoUrl,setVoName)} />
       <input ref={rMusic} type="file" accept="audio/*" onChange={e=>handleUpload(e.target.files[0],'music',setMusicUrl,setMusicName)} />
-      {SCENES.filter(s=>s.left!==null).map(s=>(
-        <span key={s.id}>
-          <input ref={el=>{rScenes.current[`${s.id}l`]={current:el}}} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],`s${s.id}l`)} />
-          <input ref={el=>{rScenes.current[`${s.id}r`]={current:el}}} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],`s${s.id}r`)} />
-        </span>
-      ))}
+      <input ref={rS1l} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s1l')} />
+      <input ref={rS1r} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s1r')} />
+      <input ref={rS2l} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s2l')} />
+      <input ref={rS2r} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s2r')} />
+      <input ref={rS3l} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s3l')} />
+      <input ref={rS3r} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s3r')} />
+      <input ref={rS4l} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s4l')} />
+      <input ref={rS4r} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s4r')} />
+      <input ref={rS5l} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s5l')} />
+      <input ref={rS5r} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],'s5r')} />
     </div>
 
     {/* Admin bar */}
@@ -307,7 +316,6 @@ export default function StowicVideoBrief() {
                     <span style={{fontFamily:'Bebas Neue',fontSize:32,color:'#1e1e1e'}}>0{scene.id}</span>
                   </div>
                   <div style={{flex:1,padding:'16px 24px'}}>
-                    <p style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.1em',marginBottom:3}}>{scene.time}</p>
                     <p style={{fontSize:15,fontWeight:500}}>{scene.title}</p>
                   </div>
                 </div>
@@ -329,7 +337,7 @@ export default function StowicVideoBrief() {
                     {/* Left — Old Way */}
                     <div style={{borderRight:`1px solid ${BORDER}`}}>
                       <ImgSlot src={sceneImages[lk]} aspect="9/16" placeholder="Old Way"/>
-                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>rScenes.current[lk]?.current?.click()} color="#ef4444">{uploading===lk?'Uploading...':'↑ Old Way'}</Btn></div>}
+                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>sceneRefs[lk]?.current?.click()} color="#ef4444">{uploading===lk?'Uploading...':'↑ Old Way'}</Btn></div>}
                       <div style={{padding:'16px 20px'}}>
                         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                           <div style={{width:6,height:6,borderRadius:'50%',background:'#ef4444'}}/>
@@ -341,7 +349,7 @@ export default function StowicVideoBrief() {
                     {/* Right — Stowic Way */}
                     <div>
                       <ImgSlot src={sceneImages[rk]} aspect="9/16" placeholder="Stowic Way"/>
-                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>rScenes.current[rk]?.current?.click()}>{uploading===rk?'Uploading...':'↑ Stowic Way'}</Btn></div>}
+                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>sceneRefs[rk]?.current?.click()}>{uploading===rk?'Uploading...':'↑ Stowic Way'}</Btn></div>}
                       <div style={{padding:'16px 20px'}}>
                         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
                           <div style={{width:6,height:6,borderRadius:'50%',background:G}}/>
