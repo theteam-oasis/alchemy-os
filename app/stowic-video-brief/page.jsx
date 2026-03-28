@@ -7,50 +7,24 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
-const STORAGE_KEY = 'stowic-brief-v2'
+const STORAGE_KEY = 'stowic-brief-v3'
 const BUCKET = 'brand-assets'
 const ADMIN_PASSWORD = 'stowic2024'
 
 const SCENES = [
-  {
-    id: 1, time: '0:00–0:06', title: 'Night Before — Packing',
-    vo: '"Every trip starts the same way."',
-    left: 'Sitting on a suitcase trying to force it shut. Clothes everywhere. Stressed.',
-    right: 'Schedules a Stowic pickup on their phone. Bag packed and waiting. Pours a glass of wine.'
-  },
-  {
-    id: 2, time: '0:06–0:14', title: 'Morning — Leaving for the Airport',
-    vo: '"One person carries the weight of the journey. The other just... goes."',
-    left: 'Lugging two heavy bags into a taxi, sweating, knocking into things.',
-    right: 'Steps out the door with just a small bag over one shoulder. Unhurried. Composed.'
-  },
-  {
-    id: 3, time: '0:14–0:22', title: 'At the Airport',
-    vo: '"Check-in lines. Baggage fees. The scale that never works in your favor."',
-    left: 'Stressed at the check-in counter. Repacking in the middle of the airport floor.',
-    right: 'Walks straight through the terminal. Grabs a coffee. Breezes through security.'
-  },
-  {
-    id: 4, time: '0:22–0:30', title: 'On the Plane / Landing',
-    vo: '"And when you land — the wait isn\'t over."',
-    left: 'Standing at baggage claim. Watching. Waiting. Bag comes out last, zipper broken.',
-    right: 'Already in a cab. Phone shows: "Your Stowic delivery has arrived." Smiles.'
-  },
-  {
-    id: 5, time: '0:30–0:38', title: 'At the Destination',
-    vo: '"Your bag arrived before you did. Waiting at your door. Just like it should be."',
-    left: 'Finally arrives at hotel, exhausted, dragging the damaged bag.',
-    right: 'Opens hotel room door. Bag already inside. Steps onto the balcony. Takes it all in.'
-  },
+  { id: 1, time: '0:00–0:06', title: 'Night Before — Packing', vo: '"Every trip starts the same way."', left: 'Sitting on a suitcase trying to force it shut. Clothes everywhere. Stressed.', right: 'Schedules a Stowic pickup on their phone. Bag packed and waiting. Pours a glass of wine.' },
+  { id: 2, time: '0:06–0:14', title: 'Morning — Leaving for the Airport', vo: '"One person carries the weight of the journey. The other just... goes."', left: 'Lugging two heavy bags into a taxi, sweating, knocking into things.', right: 'Steps out the door with just a small bag over one shoulder. Unhurried. Composed.' },
+  { id: 3, time: '0:14–0:22', title: 'At the Airport', vo: '"Check-in lines. Baggage fees. The scale that never works in your favor."', left: 'Stressed at the check-in counter. Repacking in the middle of the airport floor.', right: 'Walks straight through the terminal. Grabs a coffee. Breezes through security.' },
+  { id: 4, time: '0:22–0:30', title: 'On the Plane / Landing', vo: '"And when you land — the wait isn\'t over."', left: 'Standing at baggage claim. Watching. Waiting. Bag comes out last, zipper broken.', right: 'Already in a cab. Phone shows: "Your Stowic delivery has arrived." Smiles.' },
+  { id: 5, time: '0:30–0:38', title: 'At the Destination', vo: '"Your bag arrived before you did. Waiting at your door. Just like it should be."', left: 'Finally arrives at hotel, exhausted, dragging the damaged bag.', right: 'Opens hotel room door. Bag already inside. Steps onto the balcony. Takes it all in.' },
 ]
 
-const LOGO_CARD = {
-  id: 6, time: '0:38–0:45', title: 'Logo Card',
-  vo: '"Stowic. Door to door luggage shipping. So the only thing you carry — is the moment."',
-  screen: 'stowic.com'
-}
+const G = '#c8a96e'
+const BG = '#09090b'
+const CARD = '#0f0f0f'
+const BORDER = '#1c1c1e'
 
-function fileToDataUrl(f) {
+async function fileToDataUrl(f) {
   return new Promise((res, rej) => {
     const r = new FileReader()
     r.onload = e => res(e.target.result)
@@ -64,8 +38,7 @@ async function uploadToStorage(dataUrl, path) {
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
     if (!match) return null
     const mimeType = match[1]
-    const isAudio = mimeType.includes('audio') || mimeType.includes('mpeg') || mimeType.includes('mp3')
-    const ext = isAudio ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
+    const ext = mimeType.includes('mpeg') || mimeType.includes('mp3') || mimeType.includes('audio') ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
     const fullPath = `stowic-brief/${path}.${ext}`
     const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
     const { error } = await supabase.storage.from(BUCKET).upload(fullPath, bytes, { contentType: mimeType, upsert: true })
@@ -76,12 +49,8 @@ async function uploadToStorage(dataUrl, path) {
 }
 
 async function saveData(data) {
-  try {
-    await supabase.from('stowic_brief').upsert({ id: 1, data: JSON.stringify(data) })
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-  } catch(e) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
-  }
+  try { await supabase.from('stowic_brief').upsert({ id: 1, data: JSON.stringify(data) }) } catch {}
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
 }
 
 async function loadData() {
@@ -89,65 +58,8 @@ async function loadData() {
     const { data } = await supabase.from('stowic_brief').select('data').eq('id', 1).single()
     if (data?.data) return JSON.parse(data.data)
   } catch {}
-  try {
-    const local = localStorage.getItem(STORAGE_KEY)
-    if (local) return JSON.parse(local)
-  } catch {}
+  try { const l = localStorage.getItem(STORAGE_KEY); if (l) return JSON.parse(l) } catch {}
   return null
-}
-
-function UploadBox({ label, value, onUpload, accept = 'image/*', aspect = '3/4', isAdmin }) {
-  function triggerUpload() {
-    if (!isAdmin) return
-    const inp = document.createElement('input')
-    inp.type = 'file'
-    inp.accept = accept
-    inp.onchange = e => { if (e.target.files[0]) onUpload(e.target.files[0]) }
-    inp.click()
-  }
-
-  return (
-    <div style={{ position:'relative', borderRadius:8, overflow:'hidden', background:'#111', cursor: isAdmin ? 'pointer' : 'default' }} onClick={triggerUpload}>
-      {value
-        ? <img src={value} alt={label} style={{ width:'100%', aspectRatio:aspect, objectFit:'cover', display:'block' }}/>
-        : <div style={{ width:'100%', aspectRatio:aspect, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, background:'#111', border:'1px dashed #2a2a2a', borderRadius:8 }}>
-            <span style={{ fontSize:24, opacity:0.2 }}>+</span>
-            <span style={{ fontSize:11, color:'#333', letterSpacing:'0.06em' }}>{label}</span>
-          </div>
-      }
-      {isAdmin && (
-        <div style={{ position:'absolute', inset:0, background: value ? 'rgba(0,0,0,0)' : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}
-          onMouseEnter={e => e.currentTarget.style.background='rgba(200,169,110,0.2)'}
-          onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-          <div style={{ background:'rgba(200,169,110,0.9)', color:'#000', padding:'6px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', opacity: value ? 0 : 1, transition:'opacity 0.2s' }}
-            onMouseEnter={e => { e.currentTarget.style.opacity=1 }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = value ? 0 : 1 }}>
-            {value ? 'Replace' : `Upload ${label}`}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AudioPlayer({ url, label, name, playing, onToggle }) {
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-      {url ? (
-        <button onClick={onToggle} style={{ width:40, height:40, borderRadius:'50%', background: playing ? '#c8a96e' : '#1a1a1a', border:`1px solid ${playing ? '#c8a96e' : '#333'}`, color: playing ? '#000' : '#fff', fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all 0.2s' }}>
-          {playing ? '⏸' : '▶'}
-        </button>
-      ) : (
-        <div style={{ width:40, height:40, borderRadius:'50%', background:'#111', border:'1px dashed #2a2a2a', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-          <span style={{ color:'#333', fontSize:16 }}>♪</span>
-        </div>
-      )}
-      <div>
-        <p style={{ fontSize:11, color:'#c8a96e', letterSpacing:'0.08em', textTransform:'uppercase', fontFamily:'monospace', marginBottom:2 }}>{label}</p>
-        <p style={{ fontSize:12, color:'#555', fontWeight:300 }}>{name || 'Not uploaded'}</p>
-      </div>
-    </div>
-  )
 }
 
 export default function StowicVideoBrief() {
@@ -157,14 +69,12 @@ export default function StowicVideoBrief() {
   const [adminPass, setAdminPass] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [uploadingKey, setUploadingKey] = useState(null)
+  const [uploading, setUploading] = useState(null)
 
-  // Assets
   const [logo, setLogo] = useState(null)
   const [avatarOld, setAvatarOld] = useState(null)
   const [avatarNew, setAvatarNew] = useState(null)
-  // 5 scenes × 2 sides = 10 images, plus logo card image
-  const [sceneImages, setSceneImages] = useState({}) // key: `${sceneId}-left` or `${sceneId}-right` or `logo-card`
+  const [sceneImages, setSceneImages] = useState({})
   const [voUrl, setVoUrl] = useState(null)
   const [voName, setVoName] = useState(null)
   const [musicUrl, setMusicUrl] = useState(null)
@@ -174,6 +84,22 @@ export default function StowicVideoBrief() {
 
   const voRef = useRef(null)
   const musicRef = useRef(null)
+
+  // One ref per upload slot
+  const refs = {
+    logo: useRef(null),
+    avatarOld: useRef(null),
+    avatarNew: useRef(null),
+    vo: useRef(null),
+    music: useRef(null),
+    ...Object.fromEntries(
+      SCENES.flatMap(s => [
+        [`s${s.id}l`, useRef(null)],
+        [`s${s.id}r`, useRef(null)],
+      ])
+    ),
+    logoCard: useRef(null),
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -190,24 +116,23 @@ export default function StowicVideoBrief() {
     })
   }, [])
 
-  async function upload(file, key, setter, nameKey) {
-    setUploadingKey(key)
+  async function handleFile(file, storageKey, setter, nameSetter) {
+    if (!file) return
+    setUploading(storageKey)
     const dataUrl = await fileToDataUrl(file)
-    const url = await uploadToStorage(dataUrl, key) || dataUrl
+    const url = await uploadToStorage(dataUrl, storageKey) || dataUrl
     setter(url)
-    if (nameKey) {
-      if (nameKey === 'voName') setVoName(file.name)
-      if (nameKey === 'musicName') setMusicName(file.name)
-    }
-    setUploadingKey(null)
+    if (nameSetter) nameSetter(file.name)
+    setUploading(null)
   }
 
-  async function uploadScene(file, key) {
-    setUploadingKey(key)
+  async function handleSceneFile(file, sceneKey) {
+    if (!file) return
+    setUploading(sceneKey)
     const dataUrl = await fileToDataUrl(file)
-    const url = await uploadToStorage(dataUrl, key) || dataUrl
-    setSceneImages(prev => ({ ...prev, [key]: url }))
-    setUploadingKey(null)
+    const url = await uploadToStorage(dataUrl, sceneKey) || dataUrl
+    setSceneImages(prev => ({ ...prev, [sceneKey]: url }))
+    setUploading(null)
   }
 
   async function handleSave() {
@@ -218,12 +143,34 @@ export default function StowicVideoBrief() {
     setTimeout(() => setSaved(false), 3000)
   }
 
+  function UploadBtn({ refKey, accept, label }) {
+    if (!isAdmin) return null
+    return (
+      <button
+        onClick={() => refs[refKey].current?.click()}
+        style={{ display:'block', width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginTop:8 }}>
+        {uploading === refKey ? 'Uploading...' : `Upload ${label}`}
+      </button>
+    )
+  }
+
   if (!mounted) return null
 
-  const G = '#c8a96e' // gold
-  const BG = '#09090b'
-  const CARD = '#0f0f0f'
-  const BORDER = '#1c1c1e'
+  // All file inputs rendered in DOM
+  const fileInputs = (
+    <div style={{ display:'none' }}>
+      <input ref={refs.logo} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'logo', setLogo)} />
+      <input ref={refs.avatarOld} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'avatarOld', setAvatarOld)} />
+      <input ref={refs.avatarNew} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'avatarNew', setAvatarNew)} />
+      <input ref={refs.vo} type="file" accept="audio/*" onChange={e => handleFile(e.target.files[0], 'voiceover', setVoUrl, setVoName)} />
+      <input ref={refs.music} type="file" accept="audio/*" onChange={e => handleFile(e.target.files[0], 'music', setMusicUrl, setMusicName)} />
+      {SCENES.map(s => (<>
+        <input key={`${s.id}l`} ref={refs[`s${s.id}l`]} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], `scene-${s.id}-left`)} />
+        <input key={`${s.id}r`} ref={refs[`s${s.id}r`]} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], `scene-${s.id}-right`)} />
+      </>))}
+      <input ref={refs.logoCard} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], 'scene-6-logo')} />
+    </div>
+  )
 
   return (<>
     <style>{`
@@ -231,17 +178,16 @@ export default function StowicVideoBrief() {
       *{box-sizing:border-box;margin:0;padding:0;}
       body,html{background:${BG};color:#fff;font-family:'DM Sans',sans-serif;-webkit-font-smoothing:antialiased;}
       ::selection{background:${G};color:#000;}
-      .upload-zone:hover .upload-label{opacity:1!important;}
-      .upload-zone:hover{border-color:${G}!important;}
     `}</style>
+
+    {fileInputs}
 
     {/* Admin bar */}
     {isAdmin && (
       <div style={{ position:'sticky', top:0, zIndex:100, background:G, padding:'10px 32px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'#000' }}>⚡ Admin Mode</span>
-          {uploadingKey && <span style={{ fontSize:10, color:'rgba(0,0,0,0.6)' }}>Uploading {uploadingKey}...</span>}
-        </div>
+        <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'#000' }}>
+          ⚡ Admin Mode {uploading ? `— Uploading ${uploading}...` : ''}
+        </span>
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={handleSave} style={{ background:'#000', color:G, border:'none', padding:'7px 20px', fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', borderRadius:6 }}>
             {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Everything'}
@@ -253,15 +199,15 @@ export default function StowicVideoBrief() {
 
     {/* Admin login */}
     {showLogin && (
-      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.9)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={() => setShowLogin(false)}>
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={() => setShowLogin(false)}>
         <div style={{ background:'#111', border:`1px solid ${BORDER}`, borderRadius:16, padding:40, width:340 }} onClick={e => e.stopPropagation()}>
           <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:20 }}>Admin Access</p>
           <input type="password" placeholder="Password" value={adminPass} onChange={e => setAdminPass(e.target.value)}
-            onKeyDown={e => { if(e.key==='Enter') { if(adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') } }}
+            onKeyDown={e => { if (e.key==='Enter') { if (adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') }}}
             style={{ width:'100%', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, padding:'12px 14px', color:'#fff', fontSize:14, outline:'none', marginBottom:14, fontFamily:'inherit' }}
-            autoFocus/>
+            autoFocus />
           <div style={{ display:'flex', gap:8 }}>
-            <button onClick={() => { if(adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') }}
+            <button onClick={() => { if (adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') }}
               style={{ flex:1, background:G, color:'#000', border:'none', borderRadius:8, padding:12, fontSize:12, fontWeight:700, cursor:'pointer' }}>Enter</button>
             <button onClick={() => setShowLogin(false)} style={{ padding:'12px 16px', background:'#1a1a1a', border:`1px solid ${BORDER}`, color:'#666', borderRadius:8, fontSize:12, cursor:'pointer' }}>Cancel</button>
           </div>
@@ -273,18 +219,12 @@ export default function StowicVideoBrief() {
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'100px 40px 80px', textAlign:'center', position:'relative', borderBottom:`1px solid ${BORDER}` }}>
       <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 50%, rgba(200,169,110,0.07) 0%, transparent 65%)`, pointerEvents:'none' }}/>
 
-      {/* Logo upload zone */}
       <div style={{ marginBottom:56 }}>
         {logo
-          ? <img src={logo} alt="Stowic" style={{ height:48, objectFit:'contain', filter:'brightness(0) invert(1)' }}/>
-          : <div style={{ fontFamily:'Bebas Neue', fontSize:40, letterSpacing:'0.1em', color:'#fff' }}>STOWIC</div>
+          ? <img src={logo} alt="Stowic" style={{ height:52, objectFit:'contain', filter:'brightness(0) invert(1)' }}/>
+          : <p style={{ fontFamily:'Bebas Neue', fontSize:42, letterSpacing:'0.1em' }}>STOWIC</p>
         }
-        {isAdmin && (
-          <button onClick={() => { const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>upload(e.target.files[0],'logo',setLogo);r.click() }}
-            style={{ display:'block', margin:'10px auto 0', background:'#1a1a1a', border:`1px solid ${BORDER}`, color:G, padding:'5px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', cursor:'pointer', fontFamily:'inherit', textTransform:'uppercase' }}>
-            Upload Logo
-          </button>
-        )}
+        {isAdmin && <button onClick={() => refs.logo.current?.click()} style={{ display:'block', margin:'10px auto 0', background:'#1a1a1a', border:`1px solid ${BORDER}`, color:G, padding:'5px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', cursor:'pointer', fontFamily:'inherit', textTransform:'uppercase' }}>Upload Logo</button>}
       </div>
 
       <p style={{ fontFamily:'DM Mono', fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:20 }}>Video Brief · 45-Second Ad</p>
@@ -295,7 +235,7 @@ export default function StowicVideoBrief() {
         A split-screen 45-second ad showing the contrast between the old way of traveling with luggage and the Stowic experience.
       </p>
       <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
-        {['45 Seconds', 'Split-Screen', '16:9', 'Door to Door'].map(t => (
+        {['45 Seconds', 'Split-Screen', '16:9 Landscape', 'Door to Door'].map(t => (
           <span key={t} style={{ padding:'6px 16px', border:`1px solid ${BORDER}`, borderRadius:100, fontSize:11, color:'#555', letterSpacing:'0.05em' }}>{t}</span>
         ))}
       </div>
@@ -309,29 +249,27 @@ export default function StowicVideoBrief() {
     <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
       <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Campaign Characters</p>
       <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:48 }}>The Two Travelers</h2>
-
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+
         {/* Old Way */}
         <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, overflow:'hidden' }}>
           <div style={{ padding:'18px 24px', borderBottom:`1px solid ${BORDER}`, display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444', flexShrink:0 }}/>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444' }}/>
             <span style={{ fontFamily:'DM Mono', fontSize:10, color:'#ef4444', letterSpacing:'0.1em', textTransform:'uppercase' }}>The Old Way</span>
           </div>
-          <div style={{ position:'relative', cursor: isAdmin ? 'pointer' : 'default' }}
-            onClick={() => { if(!isAdmin) return; const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>upload(e.target.files[0],'avatarOld',setAvatarOld);r.click() }}>
-            {avatarOld
-              ? <img src={avatarOld} alt="Old Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
-              : <div style={{ width:'100%', aspectRatio:'3/4', background:'#151515', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, border:`1px dashed #2a2a2a` }}>
-                  <span style={{ fontSize:32, opacity:0.15 }}>👤</span>
-                  <span style={{ fontSize:11, color:'#333' }}>{isAdmin ? 'Click to upload avatar' : 'Avatar reference'}</span>
-                </div>
-            }
-            {isAdmin && <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0)', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}
-              onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,0.2)';e.currentTarget.querySelector('span').style.opacity=1}}
-              onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.querySelector('span').style.opacity=0}}>
-              <span style={{ background:'#ef4444', color:'#fff', padding:'6px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0, transition:'opacity 0.2s' }}>Upload Avatar</span>
-            </div>}
-          </div>
+          {avatarOld
+            ? <img src={avatarOld} alt="Old Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
+            : <div style={{ width:'100%', aspectRatio:'3/4', background:'#151515', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <span style={{ fontSize:40, opacity:0.1 }}>👤</span>
+                <span style={{ fontSize:12, color:'#333' }}>Avatar reference</span>
+              </div>
+          }
+          {isAdmin && <div style={{ padding:'12px 16px', borderTop:`1px solid ${BORDER}` }}>
+            <button onClick={() => refs.avatarOld.current?.click()}
+              style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:7, color:'#ef4444', fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
+              {uploading==='avatarOld' ? 'Uploading...' : avatarOld ? 'Replace Avatar' : 'Upload Avatar'}
+            </button>
+          </div>}
           <div style={{ padding:'20px 24px' }}>
             <p style={{ fontSize:13, color:'#555', lineHeight:1.7, fontWeight:300 }}>Stressed. Overpacked. Always rushing. Pays baggage fees, waits at baggage claim, arrives exhausted.</p>
           </div>
@@ -340,24 +278,22 @@ export default function StowicVideoBrief() {
         {/* Stowic Way */}
         <div style={{ background:CARD, border:`1px solid #2a2518`, borderRadius:16, overflow:'hidden' }}>
           <div style={{ padding:'18px 24px', borderBottom:`1px solid #2a2518`, display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:G, flexShrink:0 }}/>
+            <div style={{ width:8, height:8, borderRadius:'50%', background:G }}/>
             <span style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', textTransform:'uppercase' }}>The Stowic Way</span>
           </div>
-          <div style={{ position:'relative', cursor: isAdmin ? 'pointer' : 'default' }}
-            onClick={() => { if(!isAdmin) return; const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>upload(e.target.files[0],'avatarNew',setAvatarNew);r.click() }}>
-            {avatarNew
-              ? <img src={avatarNew} alt="Stowic Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
-              : <div style={{ width:'100%', aspectRatio:'3/4', background:'#151510', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, border:`1px dashed #2a2518` }}>
-                  <span style={{ fontSize:32, opacity:0.15 }}>👤</span>
-                  <span style={{ fontSize:11, color:'#2a2518' }}>{isAdmin ? 'Click to upload avatar' : 'Avatar reference'}</span>
-                </div>
-            }
-            {isAdmin && <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0)', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}
-              onMouseEnter={e=>{e.currentTarget.style.background='rgba(200,169,110,0.2)';e.currentTarget.querySelector('span').style.opacity=1}}
-              onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.querySelector('span').style.opacity=0}}>
-              <span style={{ background:G, color:'#000', padding:'6px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0, transition:'opacity 0.2s' }}>Upload Avatar</span>
-            </div>}
-          </div>
+          {avatarNew
+            ? <img src={avatarNew} alt="Stowic Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
+            : <div style={{ width:'100%', aspectRatio:'3/4', background:'#111108', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <span style={{ fontSize:40, opacity:0.1 }}>👤</span>
+                <span style={{ fontSize:12, color:'#2a2518' }}>Avatar reference</span>
+              </div>
+          }
+          {isAdmin && <div style={{ padding:'12px 16px', borderTop:`1px solid #2a2518` }}>
+            <button onClick={() => refs.avatarNew.current?.click()}
+              style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid #2a2518`, borderRadius:7, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
+              {uploading==='avatarNew' ? 'Uploading...' : avatarNew ? 'Replace Avatar' : 'Upload Avatar'}
+            </button>
+          </div>}
           <div style={{ padding:'20px 24px' }}>
             <p style={{ fontSize:13, color:'#666', lineHeight:1.7, fontWeight:300 }}>Composed. Unhurried. Already won. Stowic ships the bag door to door — she just shows up.</p>
           </div>
@@ -365,28 +301,25 @@ export default function StowicVideoBrief() {
       </div>
     </div>
 
-    {/* SCRIPT + STORYBOARD */}
+    {/* STORYBOARD */}
     <div style={{ borderTop:`1px solid ${BORDER}` }}>
       <div style={{ maxWidth:1200, margin:'0 auto', padding:'80px 40px' }}>
         <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Scene by Scene</p>
         <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:12 }}>Script & Storyboard</h2>
-        <div style={{ display:'flex', alignItems:'center', gap:24, marginBottom:56 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:10, height:10, borderRadius:'50%', background:'#ef4444' }}/><span style={{ fontSize:12, color:'#555' }}>The Old Way</span></div>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:10, height:10, borderRadius:'50%', background:G }}/><span style={{ fontSize:12, color:'#555' }}>The Stowic Way</span></div>
+        <div style={{ display:'flex', gap:24, marginBottom:56 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444' }}/><span style={{ fontSize:12, color:'#555' }}>The Old Way</span></div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:8, height:8, borderRadius:'50%', background:G }}/><span style={{ fontSize:12, color:'#555' }}>The Stowic Way</span></div>
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
           {SCENES.map(scene => {
-            const leftKey = `scene-${scene.id}-left`
-            const rightKey = `scene-${scene.id}-right`
-            const leftImg = sceneImages[leftKey]
-            const rightImg = sceneImages[rightKey]
-
+            const lk = `scene-${scene.id}-left`
+            const rk = `scene-${scene.id}-right`
             return (
               <div key={scene.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:14, overflow:'hidden' }}>
                 {/* Header */}
-                <div style={{ display:'flex', alignItems:'center', gap:0, borderBottom:`1px solid ${BORDER}` }}>
-                  <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}`, alignSelf:'stretch' }}>
+                <div style={{ display:'flex', alignItems:'stretch', borderBottom:`1px solid ${BORDER}` }}>
+                  <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}` }}>
                     <span style={{ fontFamily:'Bebas Neue', fontSize:32, color:'#1e1e1e' }}>0{scene.id}</span>
                   </div>
                   <div style={{ flex:1, padding:'16px 24px' }}>
@@ -401,29 +334,24 @@ export default function StowicVideoBrief() {
                   <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>{scene.vo}</p>
                 </div>
 
-                {/* Split screen images + descriptions */}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:0 }}>
-                  {/* LEFT — Old Way */}
+                {/* Split images */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
+                  {/* Left */}
                   <div style={{ borderRight:`1px solid ${BORDER}` }}>
-                    {/* Image */}
-                    <div style={{ position:'relative', cursor: isAdmin ? 'pointer' : 'default', borderBottom:`1px solid ${BORDER}` }}
-                      onClick={() => { if(!isAdmin) return; const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>uploadScene(e.target.files[0],leftKey);r.click() }}>
-                      {leftImg
-                        ? <img src={leftImg} alt="Old Way" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-                        : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c0c', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
-                            <div style={{ width:32, height:32, borderRadius:'50%', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              <span style={{ color:'#ef4444', fontSize:14 }}>+</span>
-                            </div>
-                            <span style={{ fontSize:10, color:'#ef4444', opacity:0.5, letterSpacing:'0.06em' }}>{isAdmin ? 'Upload Old Way' : 'Storyboard'}</span>
-                          </div>
-                      }
-                      {isAdmin && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0)', transition:'background 0.2s' }}
-                        onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,0.15)';e.currentTarget.querySelector('span').style.opacity=1}}
-                        onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.querySelector('span').style.opacity=0}}>
-                        <span style={{ background:'#ef4444', color:'#fff', padding:'5px 12px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0, transition:'opacity 0.2s' }}>Upload</span>
-                      </div>}
-                    </div>
-                    {/* Description */}
+                    {sceneImages[lk]
+                      ? <img src={sceneImages[lk]} alt="" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
+                      : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c0c', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <span style={{ fontSize:11, color:'#333' }}>Storyboard</span>
+                        </div>
+                    }
+                    {isAdmin && (
+                      <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
+                        <button onClick={() => refs[`s${scene.id}l`].current?.click()}
+                          style={{ width:'100%', padding:'8px', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:6, color:'#ef4444', fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
+                          {uploading===lk ? 'Uploading...' : '↑ Old Way Image'}
+                        </button>
+                      </div>
+                    )}
                     <div style={{ padding:'16px 20px' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
                         <div style={{ width:6, height:6, borderRadius:'50%', background:'#ef4444' }}/>
@@ -433,27 +361,22 @@ export default function StowicVideoBrief() {
                     </div>
                   </div>
 
-                  {/* RIGHT — Stowic Way */}
+                  {/* Right */}
                   <div>
-                    {/* Image */}
-                    <div style={{ position:'relative', cursor: isAdmin ? 'pointer' : 'default', borderBottom:`1px solid ${BORDER}` }}
-                      onClick={() => { if(!isAdmin) return; const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>uploadScene(e.target.files[0],rightKey);r.click() }}>
-                      {rightImg
-                        ? <img src={rightImg} alt="Stowic Way" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-                        : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c08', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
-                            <div style={{ width:32, height:32, borderRadius:'50%', background:`rgba(200,169,110,0.1)`, border:`1px solid rgba(200,169,110,0.2)`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                              <span style={{ color:G, fontSize:14 }}>+</span>
-                            </div>
-                            <span style={{ fontSize:10, color:G, opacity:0.4, letterSpacing:'0.06em' }}>{isAdmin ? 'Upload Stowic Way' : 'Storyboard'}</span>
-                          </div>
-                      }
-                      {isAdmin && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0)', transition:'background 0.2s' }}
-                        onMouseEnter={e=>{e.currentTarget.style.background=`rgba(200,169,110,0.15)`;e.currentTarget.querySelector('span').style.opacity=1}}
-                        onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.querySelector('span').style.opacity=0}}>
-                        <span style={{ background:G, color:'#000', padding:'5px 12px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0, transition:'opacity 0.2s' }}>Upload</span>
-                      </div>}
-                    </div>
-                    {/* Description */}
+                    {sceneImages[rk]
+                      ? <img src={sceneImages[rk]} alt="" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
+                      : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c08', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <span style={{ fontSize:11, color:'#2a2a1a' }}>Storyboard</span>
+                        </div>
+                    }
+                    {isAdmin && (
+                      <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
+                        <button onClick={() => refs[`s${scene.id}r`].current?.click()}
+                          style={{ width:'100%', padding:'8px', background:'#1a1a1a', border:`1px solid #2a2518`, borderRadius:6, color:G, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
+                          {uploading===rk ? 'Uploading...' : '↑ Stowic Way Image'}
+                        </button>
+                      </div>
+                    )}
                     <div style={{ padding:'16px 20px' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
                         <div style={{ width:6, height:6, borderRadius:'50%', background:G }}/>
@@ -467,40 +390,38 @@ export default function StowicVideoBrief() {
             )
           })}
 
-          {/* Logo card scene */}
+          {/* Logo card */}
           <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:14, overflow:'hidden' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:0, borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}`, alignSelf:'stretch' }}>
+            <div style={{ display:'flex', alignItems:'stretch', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}` }}>
                 <span style={{ fontFamily:'Bebas Neue', fontSize:32, color:'#1e1e1e' }}>06</span>
               </div>
               <div style={{ flex:1, padding:'16px 24px' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', marginBottom:3 }}>{LOGO_CARD.time}</p>
-                <p style={{ fontSize:15, fontWeight:500 }}>{LOGO_CARD.title}</p>
+                <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', marginBottom:3 }}>0:38–0:45</p>
+                <p style={{ fontSize:15, fontWeight:500 }}>Logo Card</p>
               </div>
             </div>
             <div style={{ padding:'14px 24px', borderBottom:`1px solid ${BORDER}`, background:'#080808' }}>
               <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#333', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:5 }}>Voiceover</p>
-              <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>{LOGO_CARD.vo}</p>
+              <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>"Stowic. Door to door luggage shipping. So the only thing you carry — is the moment."</p>
             </div>
-            {/* Logo card image upload */}
-            <div style={{ position:'relative', cursor: isAdmin ? 'pointer' : 'default' }}
-              onClick={() => { if(!isAdmin) return; const r=document.createElement('input');r.type='file';r.accept='image/*';r.onchange=e=>uploadScene(e.target.files[0],'scene-6-logo');r.click() }}>
-              {sceneImages['scene-6-logo']
-                ? <img src={sceneImages['scene-6-logo']} alt="Logo card" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-                : <div style={{ width:'100%', aspectRatio:'16/9', background:'#111', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
-                    <span style={{ fontFamily:'Bebas Neue', fontSize:48, letterSpacing:'0.1em', color:'#1a1a1a' }}>STOWIC</span>
-                    <span style={{ fontSize:13, color:'#2a2a2a', fontFamily:'DM Mono' }}>stowic.com</span>
-                    {isAdmin && <span style={{ fontSize:10, color:'#333', marginTop:8 }}>Click to upload logo card</span>}
-                  </div>
-              }
-              {isAdmin && <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0)', transition:'background 0.2s' }}
-                onMouseEnter={e=>{e.currentTarget.style.background=`rgba(200,169,110,0.15)`;e.currentTarget.querySelector('span').style.opacity=1}}
-                onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.querySelector('span').style.opacity=0}}>
-                <span style={{ background:G, color:'#000', padding:'6px 16px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', opacity:0, transition:'opacity 0.2s' }}>Upload Logo Card</span>
-              </div>}
-            </div>
+            {sceneImages['scene-6-logo']
+              ? <img src={sceneImages['scene-6-logo']} alt="Logo card" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
+              : <div style={{ width:'100%', aspectRatio:'16/9', background:'#111', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10 }}>
+                  <p style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.1em', color:'#1a1a1a' }}>STOWIC</p>
+                  <p style={{ fontFamily:'DM Mono', fontSize:13, color:'#2a2a2a', letterSpacing:'0.08em' }}>stowic.com</p>
+                </div>
+            }
+            {isAdmin && (
+              <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
+                <button onClick={() => refs.logoCard.current?.click()}
+                  style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:7, color:G, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
+                  {uploading==='scene-6-logo' ? 'Uploading...' : '↑ Upload Logo Card Image'}
+                </button>
+              </div>
+            )}
             <div style={{ padding:'20px 24px', textAlign:'center' }}>
-              <p style={{ fontSize:13, color:'#444', fontFamily:'DM Mono', letterSpacing:'0.08em' }}>stowic.com</p>
+              <p style={{ fontFamily:'DM Mono', fontSize:13, color:'#333', letterSpacing:'0.1em' }}>stowic.com</p>
             </div>
           </div>
         </div>
@@ -510,24 +431,24 @@ export default function StowicVideoBrief() {
     {/* AUDIO */}
     <div style={{ borderTop:`1px solid ${BORDER}` }}>
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Audio Direction</p>
+        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Audio</p>
         <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:48 }}>Voiceover & Music</h2>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-          {/* Voiceover */}
+          {/* VO */}
           <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:28 }}>
-            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:4 }}>Voiceover Track</p>
-            <p style={{ fontSize:13, color:'#444', marginBottom:20, fontWeight:300 }}>{voName || 'No file uploaded'}</p>
+            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:6 }}>Voiceover Track</p>
+            <p style={{ fontSize:13, color:'#444', fontWeight:300, marginBottom:16 }}>{voName || 'No file uploaded yet'}</p>
             {isAdmin && (
-              <button onClick={() => { const r=document.createElement('input');r.type='file';r.accept='audio/*';r.onchange=async e=>{const f=e.target.files[0];if(!f)return;setUploadingKey('voiceover');const d=await fileToDataUrl(f);const u=await uploadToStorage(d,'voiceover')||d;setVoUrl(u);setVoName(f.name);setUploadingKey(null)};r.click() }}
+              <button onClick={() => refs.vo.current?.click()}
                 style={{ width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginBottom:12 }}>
-                Upload MP3
+                {uploading==='voiceover' ? 'Uploading...' : voUrl ? 'Replace MP3' : 'Upload MP3'}
               </button>
             )}
             {voUrl && (
               <>
                 <audio ref={voRef} src={voUrl} onEnded={() => setPlayingVo(false)}/>
-                <button onClick={() => { if(playingVo){voRef.current?.pause();setPlayingVo(false)}else{voRef.current?.play();setPlayingVo(true)} }}
+                <button onClick={() => { if (playingVo){voRef.current?.pause();setPlayingVo(false)}else{voRef.current?.play();setPlayingVo(true)} }}
                   style={{ width:'100%', padding:'12px', background: playingVo ? G : 'transparent', border:`1px solid ${playingVo ? G : '#333'}`, borderRadius:8, color: playingVo ? '#000' : '#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.2s' }}>
                   {playingVo ? '⏸ Pause' : '▶ Play Voiceover'}
                 </button>
@@ -537,18 +458,18 @@ export default function StowicVideoBrief() {
 
           {/* Music */}
           <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:28 }}>
-            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:4 }}>Background Music</p>
-            <p style={{ fontSize:13, color:'#444', marginBottom:20, fontWeight:300 }}>{musicName || 'No file uploaded'}</p>
+            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:6 }}>Background Music</p>
+            <p style={{ fontSize:13, color:'#444', fontWeight:300, marginBottom:16 }}>{musicName || 'No file uploaded yet'}</p>
             {isAdmin && (
-              <button onClick={() => { const r=document.createElement('input');r.type='file';r.accept='audio/*';r.onchange=async e=>{const f=e.target.files[0];if(!f)return;setUploadingKey('music');const d=await fileToDataUrl(f);const u=await uploadToStorage(d,'music')||d;setMusicUrl(u);setMusicName(f.name);setUploadingKey(null)};r.click() }}
+              <button onClick={() => refs.music.current?.click()}
                 style={{ width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginBottom:12 }}>
-                Upload MP3
+                {uploading==='music' ? 'Uploading...' : musicUrl ? 'Replace MP3' : 'Upload MP3'}
               </button>
             )}
             {musicUrl && (
               <>
                 <audio ref={musicRef} src={musicUrl} onEnded={() => setPlayingMusic(false)}/>
-                <button onClick={() => { if(playingMusic){musicRef.current?.pause();setPlayingMusic(false)}else{musicRef.current?.play();setPlayingMusic(true)} }}
+                <button onClick={() => { if (playingMusic){musicRef.current?.pause();setPlayingMusic(false)}else{musicRef.current?.play();setPlayingMusic(true)} }}
                   style={{ width:'100%', padding:'12px', background: playingMusic ? G : 'transparent', border:`1px solid ${playingMusic ? G : '#333'}`, borderRadius:8, color: playingMusic ? '#000' : '#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.2s' }}>
                   {playingMusic ? '⏸ Pause' : '▶ Play Music'}
                 </button>
@@ -560,14 +481,16 @@ export default function StowicVideoBrief() {
     </div>
 
     {/* FOOTER */}
-    <div style={{ borderTop:`1px solid ${BORDER}`, padding:'40px', display:'flex', alignItems:'center', justifyContent:'space-between', maxWidth:1100, margin:'0 auto' }}>
-      <div>
-        <p style={{ fontFamily:'Bebas Neue', fontSize:22, letterSpacing:'0.06em', marginBottom:2 }}>STOWIC</p>
-        <p style={{ fontSize:11, color:'#333', fontWeight:300 }}>Door to door luggage shipping</p>
-      </div>
-      <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-        <p style={{ fontSize:11, color:'#2a2a2a' }}>Prepared by Alchemy Agency</p>
-        <button onClick={() => setShowLogin(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'#1a1a1a', fontSize:18, lineHeight:1, padding:'4px 8px' }} title="Admin">···</button>
+    <div style={{ borderTop:`1px solid ${BORDER}` }}>
+      <div style={{ maxWidth:1100, margin:'0 auto', padding:'40px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div>
+          <p style={{ fontFamily:'Bebas Neue', fontSize:22, letterSpacing:'0.06em', marginBottom:2 }}>STOWIC</p>
+          <p style={{ fontSize:11, color:'#333', fontWeight:300 }}>Door to door luggage shipping</p>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:20 }}>
+          <p style={{ fontSize:11, color:'#2a2a2a' }}>Prepared by Alchemy Agency</p>
+          <button onClick={() => setShowLogin(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'#222', fontSize:20, padding:'4px 8px', lineHeight:1 }}>···</button>
+        </div>
       </div>
     </div>
   </>)
