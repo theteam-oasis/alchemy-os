@@ -18,6 +18,24 @@ function downloadImage(url, filename) {
   a.click()
 }
 
+// Compress a dataUrl to max ~200KB for API transmission
+async function compressImage(dataUrl, maxWidth = 512) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const scale = Math.min(1, maxWidth / img.width)
+      canvas.width = img.width * scale
+      canvas.height = img.height * scale
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.7))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
 export default function StoryboardBuilder() {
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const sessionId = useRef('sb-0')
@@ -106,6 +124,12 @@ export default function StoryboardBuilder() {
     if (!scene) return
     setSceneImages(prev => ({ ...prev, [idx]: { ...prev[idx], loading: true, options: redo ? [] : prev[idx]?.options || [] } }))
     try {
+      // Compress reference images before sending to stay under 4.5MB limit
+      const [compAvatar, compEnv, compProduct] = await Promise.all([
+        avatarLocked && avatarImage ? compressImage(avatarImage) : Promise.resolve(null),
+        envLocked && envImage ? compressImage(envImage) : Promise.resolve(null),
+        scene.usesProduct && productImage ? compressImage(productImage) : Promise.resolve(null),
+      ])
       const res = await fetch('/api/storyboard/generate-scene', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,10 +140,9 @@ export default function StoryboardBuilder() {
           sessionId: sessionId.current,
           avatarDescription: avatarPrompt,
           envDescription: envPrompt,
-          // Always pass avatar + env if locked, regardless of scene tags
-          productImage: scene.usesProduct && productImage ? productImage : null,
-          avatarImage: avatarLocked && avatarImage ? avatarImage : null,
-          envImage: envLocked && envImage ? envImage : null,
+          productImage: compProduct,
+          avatarImage: compAvatar,
+          envImage: compEnv,
         }),
       })
       const j = await res.json()
