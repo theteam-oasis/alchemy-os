@@ -55,23 +55,7 @@ async function fileToDataUrl(f) {
   })
 }
 
-// Compress image - keep quality high, just cap dimensions
-async function compressImage(dataUrl, maxW = 1200, quality = 0.92) {
-  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl
-  return new Promise(res => {
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, maxW / img.width)
-      const c = document.createElement('canvas')
-      c.width = img.width * scale
-      c.height = img.height * scale
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-      res(c.toDataURL('image/jpeg', quality))
-    }
-    img.onerror = () => res(dataUrl)
-    img.src = dataUrl
-  })
-}
+
 
 const REDIS_URL = 'https://vast-cockatoo-86777.upstash.io'
 const REDIS_TOKEN = 'gQAAAAAAAVL5AAIncDIyMTEyMWZkMWM5ZmY0ZmE5Yjg3ZGY1ZWZhMzFjNzcyZHAyODY3Nzc'
@@ -188,12 +172,8 @@ export default function StowicVideoBrief() {
     if (!file) return
     setUploading(key)
     const dataUrl = await fileToDataUrl(file)
-    setter(dataUrl) // show immediately
+    setter(dataUrl)
     if (nameSetter) nameSetter(file.name)
-    // Compress for storage (audio stays as-is)
-    const isAudio = file.type.includes('audio')
-    const compressed = isAudio ? dataUrl : await compressImage(dataUrl)
-    setter(compressed)
     setUploading(null)
   }
 
@@ -202,8 +182,6 @@ export default function StowicVideoBrief() {
     setUploading(sceneKey)
     const dataUrl = await fileToDataUrl(file)
     setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl }))
-    const compressed = await compressImage(dataUrl)
-    setSceneImages(prev => ({ ...prev, [sceneKey]: compressed }))
     setUploading(null)
   }
 
