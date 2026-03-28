@@ -57,6 +57,23 @@ async function fileToDataUrl(f) {
   })
 }
 
+async function uploadToCloudinary(file) {
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('upload_preset', 'Stowic')
+    fd.append('cloud_name', 'drjsh0cvh')
+    const res = await fetch('https://api.cloudinary.com/v1_1/drjsh0cvh/auto/upload', {
+      method: 'POST',
+      body: fd,
+    })
+    const j = await res.json()
+    if (j.secure_url) return j.secure_url
+    console.error('Cloudinary error:', j)
+    return null
+  } catch (e) { console.error('Cloudinary upload failed:', e.message); return null }
+}
+
 
 
 const REDIS_URL = 'https://vast-cockatoo-86777.upstash.io'
@@ -189,12 +206,13 @@ export default function StowicVideoBrief() {
   async function handleUpload(file, key, setter, nameSetter) {
     if (!file) return
     setUploading(key)
+    // Show preview immediately
     const dataUrl = await fileToDataUrl(file)
-    setter(dataUrl) // show immediately at full quality
+    setter(dataUrl)
     if (nameSetter) nameSetter(file.name)
-    // Upload to Supabase Storage to get a permanent URL
-    const url = await uploadToStorage(dataUrl, key)
-    if (url) setter(url) // replace with storage URL
+    // Upload to Cloudinary for permanent full-res URL
+    const url = await uploadToCloudinary(file)
+    if (url) setter(url)
     setUploading(null)
   }
 
@@ -202,9 +220,9 @@ export default function StowicVideoBrief() {
     if (!file) return
     setUploading(sceneKey)
     const dataUrl = await fileToDataUrl(file)
-    setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl })) // show immediately
-    const url = await uploadToStorage(dataUrl, sceneKey)
-    if (url) setSceneImages(prev => ({ ...prev, [sceneKey]: url })) // replace with URL
+    setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl }))
+    const url = await uploadToCloudinary(file)
+    if (url) setSceneImages(prev => ({ ...prev, [sceneKey]: url }))
     setUploading(null)
   }
 
