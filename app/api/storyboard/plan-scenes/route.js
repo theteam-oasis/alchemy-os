@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk'
-
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export const runtime = 'nodejs'
@@ -9,52 +8,52 @@ function safeParseJSON(text, fallback) {
   try {
     return JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())
   } catch {
-    try { return JSON.parse(text.match(/(\[[\s\S]*\])/)?.[1] || '') } catch { return fallback }
+    try { return JSON.parse(text.match(/(\[[\s\S]*\])/)?.[1] || '') }
+    catch { return fallback }
   }
 }
 
 export async function POST(request) {
   try {
-    const { script, hasProduct, hasAvatar, hasEnv, aspectRatio } = await request.json()
+    const { script, hasProduct, hasAvatar, hasEnv, aspectRatio, avatarDescription, envDescription } = await request.json()
 
-    // Count words to estimate duration (~2.5 words per second for voiceover)
     const wordCount = script.trim().split(/\s+/).length
     const estimatedSeconds = Math.round(wordCount / 2.5)
     const targetScenes = Math.min(15, Math.max(3, Math.ceil(estimatedSeconds / 3.5)))
 
-    const result = safeParseJSON(await (async () => {
-      const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: `You are a storyboard director. Divide this voiceover script into exactly ${targetScenes} scenes.
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: `You are a storyboard director. Divide this voiceover script into exactly ${targetScenes} scenes.
 
 SCRIPT: "${script}"
 
-AVAILABLE ASSETS:
-- Product image: ${hasProduct ? 'YES' : 'NO'}
-- Avatar/character: ${hasAvatar ? 'YES' : 'NO'}
-- Environment: ${hasEnv ? 'YES' : 'NO'}
+LOCKED ASSETS:
+- Product image: ${hasProduct ? 'YES — will be passed as reference' : 'NO'}
+- Character/Avatar: ${hasAvatar ? `YES — "${avatarDescription || 'the character'}" — always reference this person by name/description` : 'NO'}
+- Environment: ${hasEnv ? `YES — "${envDescription || 'the setting'}" — use this as the setting when relevant` : 'NO'}
 - Format: ${aspectRatio}
 
-Rules:
-1. Each scene = 3-4 seconds of speech, so divide the script accordingly
-2. scriptLine = the exact words spoken during that scene
-3. imagePrompt = a specific visual description for that scene (10-15 words, cinematic)
-4. usesProduct = true only if the product should naturally appear in this scene
-5. usesAvatar = true only if the character should appear in this scene
-6. usesEnv = true only if the environment should be used as the setting
-7. Make image prompts specific and visually interesting — not generic
-8. Scenes should tell a visual story that matches the spoken words
+RULES:
+1. Each scene = 3-4 seconds of speech. Divide script words proportionally.
+2. scriptLine = the exact words spoken in that scene
+3. imagePrompt = specific visual action for that scene (12-15 words). 
+   - CRITICAL: When the character appears, describe them doing the specific action — use their description, not "a figure" or "a person"
+   - CRITICAL: When the environment is used, reference its specific qualities — not "a room" or "a space"
+   - Make it cinematic and specific to the script moment
+4. usesAvatar = true for ANY scene where a person appears — default to true unless it's a pure product or abstract shot
+5. usesEnv = true for ANY scene where the setting is shown
+6. usesProduct = true only when product naturally appears
+7. Scenes must tell a cohesive visual story — the same character across all scenes
 
-ONLY return JSON array of exactly ${targetScenes} scenes:
+ONLY return JSON array of exactly ${targetScenes} scenes (no markdown):
 [{"scriptLine":"","imagePrompt":"","usesProduct":false,"usesAvatar":false,"usesEnv":false}]`
-        }]
-      })
-      return msg.content[0].text
-    })(), [])
+      }]
+    })
 
+    const result = safeParseJSON(msg.content[0].text, [])
     return Response.json({ scenes: result, sceneCount: result.length })
   } catch (e) {
     console.error('Plan scenes error:', e.message)
