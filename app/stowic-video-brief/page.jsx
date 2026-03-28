@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@supabase/supabase-js'
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
 
 const STORAGE_KEY = 'stowic-brief-v4'
 const ADMIN_PASSWORD = 'stowic2024'
@@ -60,6 +62,22 @@ async function fileToDataUrl(f) {
 const REDIS_URL = 'https://vast-cockatoo-86777.upstash.io'
 const REDIS_TOKEN = 'gQAAAAAAAVL5AAIncDIyMTEyMWZkMWM5ZmY0ZmE5Yjg3ZGY1ZWZhMzFjNzcyZHAyODY3Nzc'
 const REDIS_KEY = 'stowic-brief'
+
+async function uploadToStorage(dataUrl, path) {
+  try {
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+    if (!match) return null
+    const mimeType = match[1]
+    const isAudio = mimeType.includes('audio') || mimeType.includes('mpeg')
+    const ext = isAudio ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
+    const fullPath = `stowic/${path}.${ext}`
+    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
+    const { error } = await sb.storage.from('brand-assets').upload(fullPath, bytes, { contentType: mimeType, upsert: true })
+    if (error) throw error
+    const { data } = sb.storage.from('brand-assets').getPublicUrl(fullPath)
+    return data.publicUrl
+  } catch (e) { console.error('Storage upload failed:', e.message); return null }
+}
 
 async function saveToBin(data) {
   try {
@@ -172,8 +190,11 @@ export default function StowicVideoBrief() {
     if (!file) return
     setUploading(key)
     const dataUrl = await fileToDataUrl(file)
-    setter(dataUrl)
+    setter(dataUrl) // show immediately at full quality
     if (nameSetter) nameSetter(file.name)
+    // Upload to Supabase Storage to get a permanent URL
+    const url = await uploadToStorage(dataUrl, key)
+    if (url) setter(url) // replace with storage URL
     setUploading(null)
   }
 
@@ -181,7 +202,9 @@ export default function StowicVideoBrief() {
     if (!file) return
     setUploading(sceneKey)
     const dataUrl = await fileToDataUrl(file)
-    setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl }))
+    setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl })) // show immediately
+    const url = await uploadToStorage(dataUrl, sceneKey)
+    if (url) setSceneImages(prev => ({ ...prev, [sceneKey]: url })) // replace with URL
     setUploading(null)
   }
 
