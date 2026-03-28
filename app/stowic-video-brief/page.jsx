@@ -245,9 +245,146 @@ export default function StowicVideoBrief() {
       </div>
     </div>
 
-    {/* CHARACTERS */}
-    <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
-      <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Campaign Characters</p>
+    {/* BIG IDEA + SCRIPT */}
+    <div style={{ borderBottom:`1px solid ${BORDER}` }}>
+      <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
+        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>The Concept</p>
+        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:32 }}>Big Idea</h2>
+        <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:36, marginBottom:56 }}>
+          <p style={{ fontFamily:'Bebas Neue', fontSize:'clamp(28px,4vw,48px)', letterSpacing:'0.02em', lineHeight:1.1, color:'#fff', marginBottom:20 }}>
+            While Everyone Else Is Carrying Their Bag,<br/>
+            <span style={{ color:G }}>Stowic Customers Are Already Living Their Trip.</span>
+          </p>
+          <p style={{ fontSize:15, color:'#666', fontWeight:300, lineHeight:1.8, maxWidth:680 }}>
+            Side-by-side, we show two kinds of travelers. Same destination. Completely different experiences. One is defined by their luggage. The other is defined by the moment. The message is simple: Stowic doesn't just ship your bag — it ships your peace of mind.
+          </p>
+        </div>
+
+        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:24 }}>Full Script</p>
+        <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+
+          {/* Scene 1 */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:00–0:05</p>
+                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Getting Ready</p>
+              </div>
+              <div style={{ padding:'14px 20px' }}>
+                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Most people travel like this—"</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Struggling to zip an overstuffed suitcase, sweating.</span></div>
+                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Closes a small carry-on. Calm. Ready.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scene 2 */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:05–0:12</p>
+                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>The Airport</p>
+              </div>
+              <div style={{ padding:'14px 20px' }}>
+                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Dragging bags through terminals. Waiting in lines. Paying fees you didn't budget for."</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Wrestling luggage through a crowded airport, checking a bag, stress on face.</span></div>
+                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Walks through the airport effortlessly — hands free, coffee in hand, sunglasses on.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scene 3 */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:12–0:18</p>
+                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Arriving</p>
+              </div>
+              <div style={{ padding:'14px 20px' }}>
+                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Then waiting at baggage claim, hoping it made it."</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Standing anxiously at baggage carousel. Bag comes out dented.</span></div>
+                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Already at the hotel. Opens door, bag waiting inside.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scene 4 */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:18–0:24</p>
+                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Destination</p>
+              </div>
+              <div style={{ padding:'14px 20px' }}>
+                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Or — your bag goes ahead of you. Door to door. Tracked. On time. No stress."</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Still at carousel.</span></div>
+                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Steps out onto a balcony, drink in hand, completely unbothered.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Logo card */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr' }}>
+              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:24–0:30</p>
+                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Logo Card</p>
+              </div>
+              <div style={{ padding:'14px 20px' }}>
+                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:8 }}>"Stowic. Ship your luggage. Travel lighter."</p>
+                <p style={{ fontFamily:'DM Mono', fontSize:12, color:G, letterSpacing:'0.08em' }}>stowic.com</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {/* BIG IDEA + SCRIPT */}
+    <div style={{ borderBottom:`1px solid ${BORDER}` }}>
+      <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
+        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>The Concept</p>
+        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:32 }}>Big Idea</h2>
+        <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:36, marginBottom:64 }}>
+          <p style={{ fontFamily:'Bebas Neue', fontSize:'clamp(26px,3.5vw,44px)', letterSpacing:'0.02em', lineHeight:1.15, color:'#fff', marginBottom:20 }}>
+            While Everyone Else Is Carrying Their Bag,<br/>
+            <span style={{ color:G }}>Stowic Customers Are Already Living Their Trip.</span>
+          </p>
+          <p style={{ fontSize:15, color:'#666', fontWeight:300, lineHeight:1.8, maxWidth:680 }}>
+            Side-by-side, we show two kinds of travelers. Same destination. Completely different experiences. One is defined by their luggage. The other is defined by the moment. Stowic doesn't just ship your bag — it ships your peace of mind.
+          </p>
+        </div>
+
+        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:24 }}>Full Script</p>
+        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+          {[
+            { time:'0:00–0:05', label:'Getting Ready', vo:'"Most people travel like this—"', left:'Struggling to zip an overstuffed suitcase, sweating.', right:'Closes a small carry-on. Calm. Ready.' },
+            { time:'0:05–0:12', label:'The Airport', vo:'"Dragging bags through terminals. Waiting in lines. Paying fees you didn\'t budget for."', left:'Wrestling luggage through a crowded airport, checking a bag, stress on face.', right:'Walks through the airport effortlessly — hands free, coffee in hand, sunglasses on.' },
+            { time:'0:12–0:18', label:'Arriving', vo:'"Then waiting at baggage claim, hoping it made it."', left:'Standing anxiously at baggage carousel. Bag comes out dented.', right:'Already at the hotel. Opens door, bag waiting inside.' },
+            { time:'0:18–0:24', label:'Destination', vo:'"Or — your bag goes ahead of you. Door to door. Tracked. On time. No stress."', left:'Still at carousel.', right:'Steps out onto a balcony, drink in hand, completely unbothered.' },
+            { time:'0:24–0:30', label:'Logo Card', vo:'"Stowic. Ship your luggage. Travel lighter."', left:null, right:'stowic.com' },
+          ].map((s,i) => (
+            <div key={i} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'110px 1fr' }}>
+                <div style={{ padding:'16px 18px', borderRight:`1px solid ${BORDER}` }}>
+                  <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:3 }}>{s.time}</p>
+                  <p style={{ fontSize:11, color:'#555', fontWeight:300 }}>{s.label}</p>
+                </div>
+                <div style={{ padding:'16px 20px' }}>
+                  <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom: s.left ? 10 : 0, lineHeight:1.5 }}>{s.vo}</p>
+                  {s.left && (
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+                      <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>{s.left}</span></div>
+                      <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666
       <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:48 }}>The Two Travelers</h2>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
 
@@ -339,8 +476,8 @@ export default function StowicVideoBrief() {
                   {/* Left */}
                   <div style={{ borderRight:`1px solid ${BORDER}` }}>
                     {sceneImages[lk]
-                      ? <img src={sceneImages[lk]} alt="" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-                      : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c0c', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      ? <img src={sceneImages[lk]} alt="" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
+                      : <div style={{ width:'100%', aspectRatio:'9/16', background:'#0c0c0c', display:'flex', alignItems:'center', justifyContent:'center' }}>
                           <span style={{ fontSize:11, color:'#333' }}>Storyboard</span>
                         </div>
                     }
@@ -364,8 +501,8 @@ export default function StowicVideoBrief() {
                   {/* Right */}
                   <div>
                     {sceneImages[rk]
-                      ? <img src={sceneImages[rk]} alt="" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-                      : <div style={{ width:'100%', aspectRatio:'16/9', background:'#0c0c08', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      ? <img src={sceneImages[rk]} alt="" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
+                      : <div style={{ width:'100%', aspectRatio:'9/16', background:'#0c0c08', display:'flex', alignItems:'center', justifyContent:'center' }}>
                           <span style={{ fontSize:11, color:'#2a2a1a' }}>Storyboard</span>
                         </div>
                     }
@@ -403,11 +540,11 @@ export default function StowicVideoBrief() {
             </div>
             <div style={{ padding:'14px 24px', borderBottom:`1px solid ${BORDER}`, background:'#080808' }}>
               <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#333', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:5 }}>Voiceover</p>
-              <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>"Stowic. Door to door luggage shipping. So the only thing you carry — is the moment."</p>
+              <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>"Stowic. Ship your luggage. Travel lighter."</p>
             </div>
             {sceneImages['scene-6-logo']
-              ? <img src={sceneImages['scene-6-logo']} alt="Logo card" style={{ width:'100%', aspectRatio:'16/9', objectFit:'cover', display:'block' }}/>
-              : <div style={{ width:'100%', aspectRatio:'16/9', background:'#111', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10 }}>
+              ? <img src={sceneImages['scene-6-logo']} alt="Logo card" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
+              : <div style={{ width:'100%', aspectRatio:'9/16', background:'#111', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10 }}>
                   <p style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.1em', color:'#1a1a1a' }}>STOWIC</p>
                   <p style={{ fontFamily:'DM Mono', fontSize:13, color:'#2a2a2a', letterSpacing:'0.08em' }}>stowic.com</p>
                 </div>
@@ -488,7 +625,7 @@ export default function StowicVideoBrief() {
           <p style={{ fontSize:11, color:'#333', fontWeight:300 }}>Door to door luggage shipping</p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-          <p style={{ fontSize:11, color:'#2a2a2a' }}>Prepared by Alchemy Agency</p>
+          <p style={{ fontSize:11, color:'#2a2a2a' }}>Prepared for Stowic</p>
           <button onClick={() => setShowLogin(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'#222', fontSize:20, padding:'4px 8px', lineHeight:1 }}>···</button>
         </div>
       </div>
