@@ -95,25 +95,15 @@ export default function StoryboardBuilder() {
     else setEnvLoading(false)
   }
 
-  async function lockAsset(type) {
+  function lockAsset(type) {
     if (type === 'avatar') {
       if (!avatarImage) return
-      // Lock immediately — upload in background
       setAvatarLocked(true)
-      setAvatarUrl(avatarImage) // use dataUrl as fallback
-      setAvatarUploading(true)
-      uploadAsset(avatarImage, `${sessionId.current}/avatar`)
-        .then(url => { if (url) setAvatarUrl(url) })
-        .finally(() => setAvatarUploading(false))
+      setAvatarUrl(avatarImage)
     } else {
       if (!envImage) return
-      // Lock immediately — upload in background
       setEnvLocked(true)
-      setEnvUrl(envImage) // use dataUrl as fallback
-      setEnvUploading(true)
-      uploadAsset(envImage, `${sessionId.current}/env`)
-        .then(url => { if (url) setEnvUrl(url) })
-        .finally(() => setEnvUploading(false))
+      setEnvUrl(envImage)
     }
   }
 
@@ -346,14 +336,14 @@ export default function StoryboardBuilder() {
                       {avatarLoading ? <><div className="spinner"/>Generating...</> : '⚡ Generate'}
                     </button>
                     {avatarImage && (
-                      <button className="btn-lock" disabled={avatarUploading} onClick={()=>lockAsset('avatar')}>
-                        {avatarUploading ? <><div className="spinner-dark"/>...</> : 'Lock ✓'}
+                      <button className="btn-lock" onClick={()=>lockAsset('avatar')}>
+                        Lock ✓
                       </button>
                     )}
                   </div>
                 </>}
                 {avatarLocked && <>
-                  {avatarUrl && <p className="lock-status">✓ Locked and uploaded</p>}
+                  <p className="lock-status">✓ Locked</p>
                   <button className="btn-unlock" onClick={()=>{setAvatarLocked(false);setAvatarUrl(null)}}>Unlock to edit</button>
                 </>}
               </div>
@@ -377,14 +367,14 @@ export default function StoryboardBuilder() {
                       {envLoading ? <><div className="spinner"/>Generating...</> : '⚡ Generate'}
                     </button>
                     {envImage && (
-                      <button className="btn-lock" disabled={envUploading} onClick={()=>lockAsset('environment')}>
-                        {envUploading ? <><div className="spinner-dark"/>...</> : 'Lock ✓'}
+                      <button className="btn-lock" onClick={()=>lockAsset('environment')}>
+                        Lock ✓
                       </button>
                     )}
                   </div>
                 </>}
                 {envLocked && <>
-                  {envUrl && <p className="lock-status">✓ Locked and uploaded</p>}
+                  <p className="lock-status">✓ Locked</p>
                   <button className="btn-unlock" onClick={()=>{setEnvLocked(false);setEnvUrl(null)}}>Unlock to edit</button>
                 </>}
               </div>
