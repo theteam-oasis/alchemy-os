@@ -21,11 +21,13 @@ export default function BriefPage({ params }) {
   async function loadData(){
     setLoading(true)
     try{
-      const {data:all}=await supabase.from('clients').select('*')
+      const {data:all,error:clientsErr}=await supabase.from('clients').select('*')
+      if(clientsErr) throw clientsErr
       const m=all?.find(c=>slugify(c.name)===clientName)
       if(!m){setLoading(false);return}
       setClient(m)
-      const {data:camp}=await supabase.from('campaigns').select('*').eq('client_id',m.id).eq('storyboard_complete',true).order('created_at',{ascending:false}).limit(6)
+      const {data:camp,error:campErr}=await supabase.from('campaigns').select('*').eq('client_id',m.id).eq('storyboard_complete',true).order('created_at',{ascending:false}).limit(6)
+      if(campErr) throw campErr
       if(camp){
         setCampaigns(camp)
         const sa={};const sr={}
@@ -37,8 +39,8 @@ export default function BriefPage({ params }) {
         setSubmitted(Object.fromEntries(Object.keys(sa).map(k=>[k,true])))
         camp.forEach(c=>fetch('/api/brief/status',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({campaignId:c.id})}))
       }
-    }catch(e){console.error(e)}
-    setLoading(false)
+    }catch(e){console.error('Brief load error:',e)}
+    finally{setLoading(false)}
   }
 
   async function submit(id){
