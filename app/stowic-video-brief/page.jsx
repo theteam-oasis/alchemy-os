@@ -1,28 +1,50 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
-
-const STORAGE_KEY = 'stowic-brief-v3'
-const BUCKET = 'brand-assets'
+const STORAGE_KEY = 'stowic-brief-v4'
 const ADMIN_PASSWORD = 'stowic2024'
-
-const SCENES = [
-  { id: 1, time: '0:00–0:06', title: 'Night Before — Packing', vo: '"Every trip starts the same way."', left: 'Sitting on a suitcase trying to force it shut. Clothes everywhere. Stressed.', right: 'Schedules a Stowic pickup on their phone. Bag packed and waiting. Pours a glass of wine.' },
-  { id: 2, time: '0:06–0:14', title: 'Morning — Leaving for the Airport', vo: '"One person carries the weight of the journey. The other just... goes."', left: 'Lugging two heavy bags into a taxi, sweating, knocking into things.', right: 'Steps out the door with just a small bag over one shoulder. Unhurried. Composed.' },
-  { id: 3, time: '0:14–0:22', title: 'At the Airport', vo: '"Check-in lines. Baggage fees. The scale that never works in your favor."', left: 'Stressed at the check-in counter. Repacking in the middle of the airport floor.', right: 'Walks straight through the terminal. Grabs a coffee. Breezes through security.' },
-  { id: 4, time: '0:22–0:30', title: 'On the Plane / Landing', vo: '"And when you land — the wait isn\'t over."', left: 'Standing at baggage claim. Watching. Waiting. Bag comes out last, zipper broken.', right: 'Already in a cab. Phone shows: "Your Stowic delivery has arrived." Smiles.' },
-  { id: 5, time: '0:30–0:38', title: 'At the Destination', vo: '"Your bag arrived before you did. Waiting at your door. Just like it should be."', left: 'Finally arrives at hotel, exhausted, dragging the damaged bag.', right: 'Opens hotel room door. Bag already inside. Steps onto the balcony. Takes it all in.' },
-]
-
 const G = '#c8a96e'
 const BG = '#09090b'
 const CARD = '#0f0f0f'
 const BORDER = '#1c1c1e'
+
+const SCENES = [
+  {
+    id: 1, time: '0:00–0:06', title: 'Night Before — Packing',
+    vo: '"Every trip starts the same way."',
+    left: 'Sitting on a suitcase trying to force it shut. Clothes everywhere. Stressed.',
+    right: 'Schedules a Stowic pickup on their phone. Bag already packed and waiting by the door. Pours a glass of wine.'
+  },
+  {
+    id: 2, time: '0:06–0:14', title: 'Morning — Leaving for the Airport',
+    vo: '"One person carries the weight of the journey. The other just... goes."',
+    left: 'Lugging two heavy bags into a taxi, sweating, knocking into things.',
+    right: 'Steps out the door with just a small bag over one shoulder. Unhurried. Composed.'
+  },
+  {
+    id: 3, time: '0:14–0:22', title: 'At the Airport',
+    vo: '"Check-in lines. Baggage fees. The scale that never works in your favor."',
+    left: 'Stressed at the check-in counter. Repacking in the middle of the airport floor. People watching.',
+    right: 'Walks straight through the terminal. Grabs a coffee. Breezes through security.'
+  },
+  {
+    id: 4, time: '0:22–0:30', title: 'On the Plane / Landing',
+    vo: '"And when you land — the wait isn\'t over."',
+    left: 'Standing at baggage claim. Watching. Waiting. Bag comes out last, zipper broken.',
+    right: 'Already in a cab. Phone shows a notification: "Your Stowic delivery has arrived." Smiles.'
+  },
+  {
+    id: 5, time: '0:30–0:38', title: 'At the Destination',
+    vo: '"Your bag arrived before you did. Waiting at your door. Just like it should be."',
+    left: 'Finally arrives at hotel, exhausted, dragging the damaged bag.',
+    right: 'Opens hotel room door. Bag is already inside. Steps onto the balcony. Takes it all in.'
+  },
+  {
+    id: 6, time: '0:38–0:45', title: 'Logo Card',
+    vo: '"Stowic. Door to door luggage shipping. So the only thing you carry — is the moment."',
+    left: null, right: 'stowic.com'
+  },
+]
 
 async function fileToDataUrl(f) {
   return new Promise((res, rej) => {
@@ -33,33 +55,12 @@ async function fileToDataUrl(f) {
   })
 }
 
-async function uploadToStorage(dataUrl, path) {
-  try {
-    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-    if (!match) return null
-    const mimeType = match[1]
-    const ext = mimeType.includes('mpeg') || mimeType.includes('mp3') || mimeType.includes('audio') ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
-    const fullPath = `stowic-brief/${path}.${ext}`
-    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
-    const { error } = await supabase.storage.from(BUCKET).upload(fullPath, bytes, { contentType: mimeType, upsert: true })
-    if (error) throw error
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(fullPath)
-    return publicUrl
-  } catch (e) { console.error('Upload failed:', e.message); return null }
+function saveLocal(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); return true } catch { return false }
 }
 
-async function saveData(data) {
-  try { await supabase.from('stowic_brief').upsert({ id: 1, data: JSON.stringify(data) }) } catch {}
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch {}
-}
-
-async function loadData() {
-  try {
-    const { data } = await supabase.from('stowic_brief').select('data').eq('id', 1).single()
-    if (data?.data) return JSON.parse(data.data)
-  } catch {}
-  try { const l = localStorage.getItem(STORAGE_KEY); if (l) return JSON.parse(l) } catch {}
-  return null
+function loadLocal() {
+  try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null } catch { return null }
 }
 
 export default function StowicVideoBrief() {
@@ -67,7 +68,6 @@ export default function StowicVideoBrief() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
   const [adminPass, setAdminPass] = useState('')
-  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [uploading, setUploading] = useState(null)
 
@@ -85,92 +85,87 @@ export default function StowicVideoBrief() {
   const voRef = useRef(null)
   const musicRef = useRef(null)
 
-  // One ref per upload slot
-  const refs = {
-    logo: useRef(null),
-    avatarOld: useRef(null),
-    avatarNew: useRef(null),
-    vo: useRef(null),
-    music: useRef(null),
-    ...Object.fromEntries(
-      SCENES.flatMap(s => [
-        [`s${s.id}l`, useRef(null)],
-        [`s${s.id}r`, useRef(null)],
-      ])
-    ),
-    logoCard: useRef(null),
-  }
+  // File input refs
+  const rLogo = useRef(null)
+  const rAvatarOld = useRef(null)
+  const rAvatarNew = useRef(null)
+  const rVo = useRef(null)
+  const rMusic = useRef(null)
+  const rScenes = useRef({})
+  SCENES.forEach(s => {
+    if (!rScenes.current[`${s.id}l`]) rScenes.current[`${s.id}l`] = { current: null }
+    if (!rScenes.current[`${s.id}r`]) rScenes.current[`${s.id}r`] = { current: null }
+  })
 
   useEffect(() => {
     setMounted(true)
-    loadData().then(d => {
-      if (!d) return
-      if (d.logo) setLogo(d.logo)
-      if (d.avatarOld) setAvatarOld(d.avatarOld)
-      if (d.avatarNew) setAvatarNew(d.avatarNew)
-      if (d.sceneImages) setSceneImages(d.sceneImages)
-      if (d.voUrl) setVoUrl(d.voUrl)
-      if (d.voName) setVoName(d.voName)
-      if (d.musicUrl) setMusicUrl(d.musicUrl)
-      if (d.musicName) setMusicName(d.musicName)
-    })
+    const d = loadLocal()
+    if (!d) return
+    if (d.logo) setLogo(d.logo)
+    if (d.avatarOld) setAvatarOld(d.avatarOld)
+    if (d.avatarNew) setAvatarNew(d.avatarNew)
+    if (d.sceneImages) setSceneImages(d.sceneImages)
+    if (d.voUrl) setVoUrl(d.voUrl)
+    if (d.voName) setVoName(d.voName)
+    if (d.musicUrl) setMusicUrl(d.musicUrl)
+    if (d.musicName) setMusicName(d.musicName)
   }, [])
 
-  async function handleFile(file, storageKey, setter, nameSetter) {
+  function getCurrentData() {
+    return { logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName }
+  }
+
+  function handleSave() {
+    const ok = saveLocal(getCurrentData())
+    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
+  }
+
+  // Auto-save after every upload
+  function autoSave(newData) {
+    saveLocal(newData)
+  }
+
+  async function handleUpload(file, key, setter, nameSetter) {
     if (!file) return
-    setUploading(storageKey)
-    const dataUrl = await fileToDataUrl(file)
-    const url = await uploadToStorage(dataUrl, storageKey) || dataUrl
+    setUploading(key)
+    const url = await fileToDataUrl(file)
     setter(url)
     if (nameSetter) nameSetter(file.name)
     setUploading(null)
+    // Auto save after upload
+    setTimeout(() => autoSave(getCurrentData()), 100)
   }
 
-  async function handleSceneFile(file, sceneKey) {
+  async function handleSceneUpload(file, sceneKey) {
     if (!file) return
     setUploading(sceneKey)
-    const dataUrl = await fileToDataUrl(file)
-    const url = await uploadToStorage(dataUrl, sceneKey) || dataUrl
-    setSceneImages(prev => ({ ...prev, [sceneKey]: url }))
+    const url = await fileToDataUrl(file)
+    setSceneImages(prev => {
+      const next = { ...prev, [sceneKey]: url }
+      autoSave({ logo, avatarOld, avatarNew, sceneImages: next, voUrl, voName, musicUrl, musicName })
+      return next
+    })
     setUploading(null)
   }
 
-  async function handleSave() {
-    setSaving(true)
-    await saveData({ logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
-  }
+  function trigger(ref) { ref?.current?.click() }
 
-  function UploadBtn({ refKey, accept, label }) {
-    if (!isAdmin) return null
-    return (
-      <button
-        onClick={() => refs[refKey].current?.click()}
-        style={{ display:'block', width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginTop:8 }}>
-        {uploading === refKey ? 'Uploading...' : `Upload ${label}`}
-      </button>
-    )
-  }
+  const Btn = ({ onClick, children, color = G, disabled }) => (
+    <button onClick={onClick} disabled={disabled}
+      style={{ width:'100%', padding:'9px 0', background:'#1a1a1a', border:`1px solid ${color}33`, borderRadius:7, color, fontSize:10, fontWeight:700, letterSpacing:'0.1em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', opacity: disabled ? 0.4 : 1 }}>
+      {children}
+    </button>
+  )
+
+  const ImgSlot = ({ src, aspect = '9/16', placeholder }) => (
+    src
+      ? <img src={src} alt="" style={{ width:'100%', aspectRatio:aspect, objectFit:'cover', display:'block' }}/>
+      : <div style={{ width:'100%', aspectRatio:aspect, background:'#111', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <span style={{ fontSize:11, color:'#2a2a2a' }}>{placeholder}</span>
+        </div>
+  )
 
   if (!mounted) return null
-
-  // All file inputs rendered in DOM
-  const fileInputs = (
-    <div style={{ display:'none' }}>
-      <input ref={refs.logo} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'logo', setLogo)} />
-      <input ref={refs.avatarOld} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'avatarOld', setAvatarOld)} />
-      <input ref={refs.avatarNew} type="file" accept="image/*" onChange={e => handleFile(e.target.files[0], 'avatarNew', setAvatarNew)} />
-      <input ref={refs.vo} type="file" accept="audio/*" onChange={e => handleFile(e.target.files[0], 'voiceover', setVoUrl, setVoName)} />
-      <input ref={refs.music} type="file" accept="audio/*" onChange={e => handleFile(e.target.files[0], 'music', setMusicUrl, setMusicName)} />
-      {SCENES.map(s => (<>
-        <input key={`${s.id}l`} ref={refs[`s${s.id}l`]} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], `scene-${s.id}-left`)} />
-        <input key={`${s.id}r`} ref={refs[`s${s.id}r`]} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], `scene-${s.id}-right`)} />
-      </>))}
-      <input ref={refs.logoCard} type="file" accept="image/*" onChange={e => handleSceneFile(e.target.files[0], 'scene-6-logo')} />
-    </div>
-  )
 
   return (<>
     <style>{`
@@ -180,453 +175,236 @@ export default function StowicVideoBrief() {
       ::selection{background:${G};color:#000;}
     `}</style>
 
-    {fileInputs}
+    {/* Hidden file inputs */}
+    <div style={{display:'none'}}>
+      <input ref={rLogo} type="file" accept="image/*" onChange={e=>handleUpload(e.target.files[0],'logo',setLogo)} />
+      <input ref={rAvatarOld} type="file" accept="image/*" onChange={e=>handleUpload(e.target.files[0],'avatarOld',setAvatarOld)} />
+      <input ref={rAvatarNew} type="file" accept="image/*" onChange={e=>handleUpload(e.target.files[0],'avatarNew',setAvatarNew)} />
+      <input ref={rVo} type="file" accept="audio/*" onChange={e=>handleUpload(e.target.files[0],'vo',setVoUrl,setVoName)} />
+      <input ref={rMusic} type="file" accept="audio/*" onChange={e=>handleUpload(e.target.files[0],'music',setMusicUrl,setMusicName)} />
+      {SCENES.filter(s=>s.left!==null).map(s=>(
+        <span key={s.id}>
+          <input ref={el=>{rScenes.current[`${s.id}l`]={current:el}}} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],`s${s.id}l`)} />
+          <input ref={el=>{rScenes.current[`${s.id}r`]={current:el}}} type="file" accept="image/*" onChange={e=>handleSceneUpload(e.target.files[0],`s${s.id}r`)} />
+        </span>
+      ))}
+    </div>
 
     {/* Admin bar */}
     {isAdmin && (
-      <div style={{ position:'sticky', top:0, zIndex:100, background:G, padding:'10px 32px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'#000' }}>
-          ⚡ Admin Mode {uploading ? `— Uploading ${uploading}...` : ''}
+      <div style={{position:'sticky',top:0,zIndex:100,background:G,padding:'10px 32px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.12em',textTransform:'uppercase',color:'#000'}}>
+          ⚡ Admin Mode {uploading ? `— uploading...` : '— all uploads auto-save'}
         </span>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={handleSave} style={{ background:'#000', color:G, border:'none', padding:'7px 20px', fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', borderRadius:6 }}>
-            {saving ? 'Saving...' : saved ? '✓ Saved!' : 'Save Everything'}
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={handleSave} style={{background:'#000',color:G,border:'none',padding:'7px 20px',fontSize:11,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',borderRadius:6}}>
+            {saved ? '✓ Saved!' : 'Save'}
           </button>
-          <button onClick={() => setIsAdmin(false)} style={{ background:'rgba(0,0,0,0.2)', border:'none', color:'#000', padding:'7px 14px', fontSize:11, cursor:'pointer', borderRadius:6, fontWeight:600 }}>Exit</button>
+          <button onClick={()=>setIsAdmin(false)} style={{background:'rgba(0,0,0,0.2)',border:'none',color:'#000',padding:'7px 14px',fontSize:11,cursor:'pointer',borderRadius:6,fontWeight:600}}>Exit</button>
         </div>
       </div>
     )}
 
     {/* Admin login */}
     {showLogin && (
-      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={() => setShowLogin(false)}>
-        <div style={{ background:'#111', border:`1px solid ${BORDER}`, borderRadius:16, padding:40, width:340 }} onClick={e => e.stopPropagation()}>
-          <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:20 }}>Admin Access</p>
-          <input type="password" placeholder="Password" value={adminPass} onChange={e => setAdminPass(e.target.value)}
-            onKeyDown={e => { if (e.key==='Enter') { if (adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') }}}
-            style={{ width:'100%', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, padding:'12px 14px', color:'#fff', fontSize:14, outline:'none', marginBottom:14, fontFamily:'inherit' }}
-            autoFocus />
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={() => { if (adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')} else alert('Wrong password') }}
-              style={{ flex:1, background:G, color:'#000', border:'none', borderRadius:8, padding:12, fontSize:12, fontWeight:700, cursor:'pointer' }}>Enter</button>
-            <button onClick={() => setShowLogin(false)} style={{ padding:'12px 16px', background:'#1a1a1a', border:`1px solid ${BORDER}`, color:'#666', borderRadius:8, fontSize:12, cursor:'pointer' }}>Cancel</button>
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setShowLogin(false)}>
+        <div style={{background:'#111',border:`1px solid ${BORDER}`,borderRadius:16,padding:40,width:340}} onClick={e=>e.stopPropagation()}>
+          <p style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.12em',textTransform:'uppercase',marginBottom:20}}>Admin Access</p>
+          <input type="password" placeholder="Password" value={adminPass} onChange={e=>setAdminPass(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter'){if(adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')}else alert('Wrong password')}}}
+            style={{width:'100%',background:'#1a1a1a',border:`1px solid ${BORDER}`,borderRadius:8,padding:'12px 14px',color:'#fff',fontSize:14,outline:'none',marginBottom:14,fontFamily:'inherit'}}
+            autoFocus/>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>{if(adminPass===ADMIN_PASSWORD){setIsAdmin(true);setShowLogin(false);setAdminPass('')}else alert('Wrong password')}}
+              style={{flex:1,background:G,color:'#000',border:'none',borderRadius:8,padding:12,fontSize:12,fontWeight:700,cursor:'pointer'}}>Enter</button>
+            <button onClick={()=>setShowLogin(false)} style={{padding:'12px 16px',background:'#1a1a1a',border:`1px solid ${BORDER}`,color:'#666',borderRadius:8,fontSize:12,cursor:'pointer'}}>Cancel</button>
           </div>
         </div>
       </div>
     )}
 
     {/* HERO */}
-    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'100px 40px 80px', textAlign:'center', position:'relative', borderBottom:`1px solid ${BORDER}` }}>
-      <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 50%, rgba(200,169,110,0.07) 0%, transparent 65%)`, pointerEvents:'none' }}/>
-
-      <div style={{ marginBottom:56 }}>
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'100px 40px 80px',textAlign:'center',position:'relative',borderBottom:`1px solid ${BORDER}`}}>
+      <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 50%, rgba(200,169,110,0.07) 0%, transparent 65%)`,pointerEvents:'none'}}/>
+      {/* Logo */}
+      <div style={{marginBottom:56}}>
         {logo
-          ? <img src={logo} alt="Stowic" style={{ height:52, objectFit:'contain', filter:'brightness(0) invert(1)' }}/>
-          : <p style={{ fontFamily:'Bebas Neue', fontSize:42, letterSpacing:'0.1em' }}>STOWIC</p>
+          ? <img src={logo} alt="Stowic" style={{height:52,objectFit:'contain',filter:'brightness(0) invert(1)'}}/>
+          : <p style={{fontFamily:'Bebas Neue',fontSize:42,letterSpacing:'0.1em'}}>STOWIC</p>
         }
-        {isAdmin && <button onClick={() => refs.logo.current?.click()} style={{ display:'block', margin:'10px auto 0', background:'#1a1a1a', border:`1px solid ${BORDER}`, color:G, padding:'5px 14px', borderRadius:4, fontSize:10, fontWeight:700, letterSpacing:'0.08em', cursor:'pointer', fontFamily:'inherit', textTransform:'uppercase' }}>Upload Logo</button>}
+        {isAdmin && <Btn onClick={()=>trigger(rLogo)}>{uploading==='logo'?'Uploading...':'Upload Logo'}</Btn>}
       </div>
-
-      <p style={{ fontFamily:'DM Mono', fontSize:11, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:20 }}>Video Brief · 45-Second Ad</p>
-      <h1 style={{ fontFamily:'Bebas Neue', fontSize:'clamp(48px, 9vw, 110px)', letterSpacing:'0.02em', lineHeight:0.92, marginBottom:32 }}>
-        The Old Way<br/><span style={{ color:G }}>vs.</span><br/>The Stowic Way
+      <p style={{fontFamily:'DM Mono',fontSize:11,letterSpacing:'0.18em',textTransform:'uppercase',color:G,marginBottom:20}}>Video Brief · 45-Second Ad</p>
+      <h1 style={{fontFamily:'Bebas Neue',fontSize:'clamp(48px,9vw,110px)',letterSpacing:'0.02em',lineHeight:0.92,marginBottom:32}}>
+        The Old Way<br/><span style={{color:G}}>vs.</span><br/>The Stowic Way
       </h1>
-      <p style={{ fontSize:16, color:'#666', fontWeight:300, maxWidth:520, lineHeight:1.7, marginBottom:52 }}>
-        A split-screen 45-second ad showing the contrast between the old way of traveling with luggage and the Stowic experience.
+      <p style={{fontSize:16,color:'#666',fontWeight:300,maxWidth:520,lineHeight:1.7,marginBottom:52}}>
+        A split-screen 45-second ad showing the contrast between carrying your luggage the old way and the Stowic experience — door to door.
       </p>
-      <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
-        {['45 Seconds', 'Split-Screen', '16:9 Landscape', 'Door to Door'].map(t => (
-          <span key={t} style={{ padding:'6px 16px', border:`1px solid ${BORDER}`, borderRadius:100, fontSize:11, color:'#555', letterSpacing:'0.05em' }}>{t}</span>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
+        {['45 Seconds','Split-Screen','16:9 Landscape','Door to Door'].map(t=>(
+          <span key={t} style={{padding:'6px 16px',border:`1px solid ${BORDER}`,borderRadius:100,fontSize:11,color:'#555',letterSpacing:'0.05em'}}>{t}</span>
         ))}
       </div>
-      <div style={{ position:'absolute', bottom:32, left:'50%', transform:'translateX(-50%)', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-        <span style={{ fontSize:9, color:'#2a2a2a', letterSpacing:'0.14em', textTransform:'uppercase' }}>Scroll</span>
-        <div style={{ width:1, height:28, background:`linear-gradient(to bottom, #2a2a2a, transparent)` }}/>
+      <div style={{position:'absolute',bottom:32,left:'50%',transform:'translateX(-50%)',display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+        <span style={{fontSize:9,color:'#2a2a2a',letterSpacing:'0.14em',textTransform:'uppercase'}}>Scroll</span>
+        <div style={{width:1,height:28,background:`linear-gradient(to bottom, #2a2a2a, transparent)`}}/>
       </div>
     </div>
 
-    {/* BIG IDEA + SCRIPT */}
-    <div style={{ borderBottom:`1px solid ${BORDER}` }}>
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>The Concept</p>
-        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:32 }}>Big Idea</h2>
-        <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:36, marginBottom:56 }}>
-          <p style={{ fontFamily:'Bebas Neue', fontSize:'clamp(28px,4vw,48px)', letterSpacing:'0.02em', lineHeight:1.1, color:'#fff', marginBottom:20 }}>
-            While Everyone Else Is Carrying Their Bag,<br/>
-            <span style={{ color:G }}>Stowic Customers Are Already Living Their Trip.</span>
-          </p>
-          <p style={{ fontSize:15, color:'#666', fontWeight:300, lineHeight:1.8, maxWidth:680 }}>
-            Side-by-side, we show two kinds of travelers. Same destination. Completely different experiences. One is defined by their luggage. The other is defined by the moment. The message is simple: Stowic doesn't just ship your bag — it ships your peace of mind.
-          </p>
-        </div>
-
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:24 }}>Full Script</p>
-        <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-
-          {/* Scene 1 */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:00–0:05</p>
-                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Getting Ready</p>
-              </div>
-              <div style={{ padding:'14px 20px' }}>
-                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Most people travel like this—"</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Struggling to zip an overstuffed suitcase, sweating.</span></div>
-                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Closes a small carry-on. Calm. Ready.</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Scene 2 */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:05–0:12</p>
-                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>The Airport</p>
-              </div>
-              <div style={{ padding:'14px 20px' }}>
-                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Dragging bags through terminals. Waiting in lines. Paying fees you didn't budget for."</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Wrestling luggage through a crowded airport, checking a bag, stress on face.</span></div>
-                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Walks through the airport effortlessly — hands free, coffee in hand, sunglasses on.</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Scene 3 */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:12–0:18</p>
-                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Arriving</p>
-              </div>
-              <div style={{ padding:'14px 20px' }}>
-                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Then waiting at baggage claim, hoping it made it."</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Standing anxiously at baggage carousel. Bag comes out dented.</span></div>
-                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Already at the hotel. Opens door, bag waiting inside.</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Scene 4 */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:18–0:24</p>
-                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Destination</p>
-              </div>
-              <div style={{ padding:'14px 20px' }}>
-                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:10 }}>"Or — your bag goes ahead of you. Door to door. Tracked. On time. No stress."</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                  <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>Still at carousel.</span></div>
-                  <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666', fontWeight:300 }}>Steps out onto a balcony, drink in hand, completely unbothered.</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Logo card */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr' }}>
-              <div style={{ padding:'14px 20px', borderRight:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:2 }}>0:24–0:30</p>
-                <p style={{ fontSize:11, color:'#666', fontWeight:300 }}>Logo Card</p>
-              </div>
-              <div style={{ padding:'14px 20px' }}>
-                <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom:8 }}>"Stowic. Ship your luggage. Travel lighter."</p>
-                <p style={{ fontFamily:'DM Mono', fontSize:12, color:G, letterSpacing:'0.08em' }}>stowic.com</p>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    {/* BIG IDEA + SCRIPT */}
-    <div style={{ borderBottom:`1px solid ${BORDER}` }}>
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>The Concept</p>
-        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:32 }}>Big Idea</h2>
-        <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, padding:36, marginBottom:64 }}>
-          <p style={{ fontFamily:'Bebas Neue', fontSize:'clamp(26px,3.5vw,44px)', letterSpacing:'0.02em', lineHeight:1.15, color:'#fff', marginBottom:20 }}>
-            While Everyone Else Is Carrying Their Bag,<br/>
-            <span style={{ color:G }}>Stowic Customers Are Already Living Their Trip.</span>
-          </p>
-          <p style={{ fontSize:15, color:'#666', fontWeight:300, lineHeight:1.8, maxWidth:680 }}>
-            Side-by-side, we show two kinds of travelers. Same destination. Completely different experiences. One is defined by their luggage. The other is defined by the moment. Stowic doesn't just ship your bag — it ships your peace of mind.
-          </p>
-        </div>
-
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:24 }}>Full Script</p>
-        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-          {[
-            { time:'0:00–0:05', label:'Getting Ready', vo:'"Most people travel like this—"', left:'Struggling to zip an overstuffed suitcase, sweating.', right:'Closes a small carry-on. Calm. Ready.' },
-            { time:'0:05–0:12', label:'The Airport', vo:'"Dragging bags through terminals. Waiting in lines. Paying fees you didn\'t budget for."', left:'Wrestling luggage through a crowded airport, checking a bag, stress on face.', right:'Walks through the airport effortlessly — hands free, coffee in hand, sunglasses on.' },
-            { time:'0:12–0:18', label:'Arriving', vo:'"Then waiting at baggage claim, hoping it made it."', left:'Standing anxiously at baggage carousel. Bag comes out dented.', right:'Already at the hotel. Opens door, bag waiting inside.' },
-            { time:'0:18–0:24', label:'Destination', vo:'"Or — your bag goes ahead of you. Door to door. Tracked. On time. No stress."', left:'Still at carousel.', right:'Steps out onto a balcony, drink in hand, completely unbothered.' },
-            { time:'0:24–0:30', label:'Logo Card', vo:'"Stowic. Ship your luggage. Travel lighter."', left:null, right:'stowic.com' },
-          ].map((s,i) => (
-            <div key={i} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'110px 1fr' }}>
-                <div style={{ padding:'16px 18px', borderRight:`1px solid ${BORDER}` }}>
-                  <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#444', letterSpacing:'0.08em', marginBottom:3 }}>{s.time}</p>
-                  <p style={{ fontSize:11, color:'#555', fontWeight:300 }}>{s.label}</p>
-                </div>
-                <div style={{ padding:'16px 20px' }}>
-                  <p style={{ fontSize:14, color:'#bbb', fontStyle:'italic', marginBottom: s.left ? 10 : 0, lineHeight:1.5 }}>{s.vo}</p>
-                  {s.left && (
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-                      <div><span style={{ fontSize:9, color:'#ef4444', fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way · </span><span style={{ fontSize:12, color:'#555', fontWeight:300 }}>{s.left}</span></div>
-                      <div><span style={{ fontSize:9, color:G, fontFamily:'DM Mono', letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic · </span><span style={{ fontSize:12, color:'#666
-      <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:48 }}>The Two Travelers</h2>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
-
+    {/* CHARACTERS */}
+    <div style={{maxWidth:1100,margin:'0 auto',padding:'80px 40px'}}>
+      <p style={{fontFamily:'DM Mono',fontSize:10,letterSpacing:'0.18em',textTransform:'uppercase',color:G,marginBottom:8}}>Campaign Characters</p>
+      <h2 style={{fontFamily:'Bebas Neue',fontSize:52,letterSpacing:'0.02em',marginBottom:48}}>The Two Travelers</h2>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
         {/* Old Way */}
-        <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:16, overflow:'hidden' }}>
-          <div style={{ padding:'18px 24px', borderBottom:`1px solid ${BORDER}`, display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444' }}/>
-            <span style={{ fontFamily:'DM Mono', fontSize:10, color:'#ef4444', letterSpacing:'0.1em', textTransform:'uppercase' }}>The Old Way</span>
+        <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:16,overflow:'hidden'}}>
+          <div style={{padding:'18px 24px',borderBottom:`1px solid ${BORDER}`,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:'#ef4444'}}/>
+            <span style={{fontFamily:'DM Mono',fontSize:10,color:'#ef4444',letterSpacing:'0.1em',textTransform:'uppercase'}}>The Old Way</span>
           </div>
-          {avatarOld
-            ? <img src={avatarOld} alt="Old Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
-            : <div style={{ width:'100%', aspectRatio:'3/4', background:'#151515', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8 }}>
-                <span style={{ fontSize:40, opacity:0.1 }}>👤</span>
-                <span style={{ fontSize:12, color:'#333' }}>Avatar reference</span>
-              </div>
-          }
-          {isAdmin && <div style={{ padding:'12px 16px', borderTop:`1px solid ${BORDER}` }}>
-            <button onClick={() => refs.avatarOld.current?.click()}
-              style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:7, color:'#ef4444', fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
-              {uploading==='avatarOld' ? 'Uploading...' : avatarOld ? 'Replace Avatar' : 'Upload Avatar'}
-            </button>
-          </div>}
-          <div style={{ padding:'20px 24px' }}>
-            <p style={{ fontSize:13, color:'#555', lineHeight:1.7, fontWeight:300 }}>Stressed. Overpacked. Always rushing. Pays baggage fees, waits at baggage claim, arrives exhausted.</p>
+          <ImgSlot src={avatarOld} aspect="3/4" placeholder="Avatar — Old Way"/>
+          {isAdmin && <div style={{padding:'10px 14px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>trigger(rAvatarOld)} color="#ef4444">{uploading==='avatarOld'?'Uploading...':avatarOld?'Replace Avatar':'Upload Avatar'}</Btn></div>}
+          <div style={{padding:'20px 24px'}}>
+            <p style={{fontSize:13,color:'#555',lineHeight:1.7,fontWeight:300}}>Stressed. Overpacked. Always rushing. Pays baggage fees, waits at baggage claim, arrives exhausted.</p>
           </div>
         </div>
-
         {/* Stowic Way */}
-        <div style={{ background:CARD, border:`1px solid #2a2518`, borderRadius:16, overflow:'hidden' }}>
-          <div style={{ padding:'18px 24px', borderBottom:`1px solid #2a2518`, display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:8, height:8, borderRadius:'50%', background:G }}/>
-            <span style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', textTransform:'uppercase' }}>The Stowic Way</span>
+        <div style={{background:CARD,border:`1px solid #2a2518`,borderRadius:16,overflow:'hidden'}}>
+          <div style={{padding:'18px 24px',borderBottom:`1px solid #2a2518`,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:G}}/>
+            <span style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.1em',textTransform:'uppercase'}}>The Stowic Way</span>
           </div>
-          {avatarNew
-            ? <img src={avatarNew} alt="Stowic Way" style={{ width:'100%', aspectRatio:'3/4', objectFit:'cover', display:'block' }}/>
-            : <div style={{ width:'100%', aspectRatio:'3/4', background:'#111108', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8 }}>
-                <span style={{ fontSize:40, opacity:0.1 }}>👤</span>
-                <span style={{ fontSize:12, color:'#2a2518' }}>Avatar reference</span>
-              </div>
-          }
-          {isAdmin && <div style={{ padding:'12px 16px', borderTop:`1px solid #2a2518` }}>
-            <button onClick={() => refs.avatarNew.current?.click()}
-              style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid #2a2518`, borderRadius:7, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
-              {uploading==='avatarNew' ? 'Uploading...' : avatarNew ? 'Replace Avatar' : 'Upload Avatar'}
-            </button>
-          </div>}
-          <div style={{ padding:'20px 24px' }}>
-            <p style={{ fontSize:13, color:'#666', lineHeight:1.7, fontWeight:300 }}>Composed. Unhurried. Already won. Stowic ships the bag door to door — she just shows up.</p>
+          <ImgSlot src={avatarNew} aspect="3/4" placeholder="Avatar — Stowic Way"/>
+          {isAdmin && <div style={{padding:'10px 14px',borderTop:`1px solid #2a2518`}}><Btn onClick={()=>trigger(rAvatarNew)}>{uploading==='avatarNew'?'Uploading...':avatarNew?'Replace Avatar':'Upload Avatar'}</Btn></div>}
+          <div style={{padding:'20px 24px'}}>
+            <p style={{fontSize:13,color:'#666',lineHeight:1.7,fontWeight:300}}>Composed. Unhurried. Already won. Stowic ships the bag door to door — she just shows up.</p>
           </div>
         </div>
       </div>
     </div>
 
     {/* STORYBOARD */}
-    <div style={{ borderTop:`1px solid ${BORDER}` }}>
-      <div style={{ maxWidth:1200, margin:'0 auto', padding:'80px 40px' }}>
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Scene by Scene</p>
-        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:12 }}>Script & Storyboard</h2>
-        <div style={{ display:'flex', gap:24, marginBottom:56 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444' }}/><span style={{ fontSize:12, color:'#555' }}>The Old Way</span></div>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}><div style={{ width:8, height:8, borderRadius:'50%', background:G }}/><span style={{ fontSize:12, color:'#555' }}>The Stowic Way</span></div>
+    <div style={{borderTop:`1px solid ${BORDER}`}}>
+      <div style={{maxWidth:1200,margin:'0 auto',padding:'80px 40px'}}>
+        <p style={{fontFamily:'DM Mono',fontSize:10,letterSpacing:'0.18em',textTransform:'uppercase',color:G,marginBottom:8}}>Scene by Scene</p>
+        <h2 style={{fontFamily:'Bebas Neue',fontSize:52,letterSpacing:'0.02em',marginBottom:12}}>Script & Storyboard</h2>
+        <div style={{display:'flex',gap:24,marginBottom:56}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:8,height:8,borderRadius:'50%',background:'#ef4444'}}/><span style={{fontSize:12,color:'#555'}}>The Old Way</span></div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}><div style={{width:8,height:8,borderRadius:'50%',background:G}}/><span style={{fontSize:12,color:'#555'}}>The Stowic Way</span></div>
         </div>
 
-        <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+        <div style={{display:'flex',flexDirection:'column',gap:3}}>
           {SCENES.map(scene => {
-            const lk = `scene-${scene.id}-left`
-            const rk = `scene-${scene.id}-right`
+            const lk = `s${scene.id}l`
+            const rk = `s${scene.id}r`
+            const isLogoCard = scene.left === null
             return (
-              <div key={scene.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:14, overflow:'hidden' }}>
+              <div key={scene.id} style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:14,overflow:'hidden'}}>
                 {/* Header */}
-                <div style={{ display:'flex', alignItems:'stretch', borderBottom:`1px solid ${BORDER}` }}>
-                  <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}` }}>
-                    <span style={{ fontFamily:'Bebas Neue', fontSize:32, color:'#1e1e1e' }}>0{scene.id}</span>
+                <div style={{display:'flex',alignItems:'stretch',borderBottom:`1px solid ${BORDER}`}}>
+                  <div style={{width:64,display:'flex',alignItems:'center',justifyContent:'center',borderRight:`1px solid ${BORDER}`}}>
+                    <span style={{fontFamily:'Bebas Neue',fontSize:32,color:'#1e1e1e'}}>0{scene.id}</span>
                   </div>
-                  <div style={{ flex:1, padding:'16px 24px' }}>
-                    <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', marginBottom:3 }}>{scene.time}</p>
-                    <p style={{ fontSize:15, fontWeight:500 }}>{scene.title}</p>
+                  <div style={{flex:1,padding:'16px 24px'}}>
+                    <p style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.1em',marginBottom:3}}>{scene.time}</p>
+                    <p style={{fontSize:15,fontWeight:500}}>{scene.title}</p>
                   </div>
                 </div>
-
                 {/* VO */}
-                <div style={{ padding:'14px 24px', borderBottom:`1px solid ${BORDER}`, background:'#080808' }}>
-                  <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#333', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:5 }}>Voiceover</p>
-                  <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>{scene.vo}</p>
+                <div style={{padding:'14px 24px',borderBottom:`1px solid ${BORDER}`,background:'#080808'}}>
+                  <p style={{fontFamily:'DM Mono',fontSize:9,color:'#333',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:5}}>Voiceover</p>
+                  <p style={{fontSize:15,color:'#bbb',fontStyle:'italic',lineHeight:1.6}}>{scene.vo}</p>
                 </div>
 
-                {/* Split images */}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr' }}>
-                  {/* Left */}
-                  <div style={{ borderRight:`1px solid ${BORDER}` }}>
-                    {sceneImages[lk]
-                      ? <img src={sceneImages[lk]} alt="" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
-                      : <div style={{ width:'100%', aspectRatio:'9/16', background:'#0c0c0c', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ fontSize:11, color:'#333' }}>Storyboard</span>
+                {isLogoCard ? (
+                  /* Logo card — just text, no image upload */
+                  <div style={{padding:'32px 24px',textAlign:'center'}}>
+                    <p style={{fontFamily:'Bebas Neue',fontSize:48,letterSpacing:'0.08em',color:'#1a1a1a',marginBottom:8}}>STOWIC</p>
+                    <p style={{fontFamily:'DM Mono',fontSize:13,color:'#2a2a2a',letterSpacing:'0.1em'}}>stowic.com</p>
+                  </div>
+                ) : (
+                  /* Split screen */
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr'}}>
+                    {/* Left — Old Way */}
+                    <div style={{borderRight:`1px solid ${BORDER}`}}>
+                      <ImgSlot src={sceneImages[lk]} aspect="9/16" placeholder="Old Way"/>
+                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>rScenes.current[lk]?.current?.click()} color="#ef4444">{uploading===lk?'Uploading...':'↑ Old Way'}</Btn></div>}
+                      <div style={{padding:'16px 20px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                          <div style={{width:6,height:6,borderRadius:'50%',background:'#ef4444'}}/>
+                          <span style={{fontFamily:'DM Mono',fontSize:9,color:'#ef4444',letterSpacing:'0.08em',textTransform:'uppercase'}}>Old Way</span>
                         </div>
-                    }
-                    {isAdmin && (
-                      <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
-                        <button onClick={() => refs[`s${scene.id}l`].current?.click()}
-                          style={{ width:'100%', padding:'8px', background:'#1a1a1a', border:'1px solid #2a2a2a', borderRadius:6, color:'#ef4444', fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
-                          {uploading===lk ? 'Uploading...' : '↑ Old Way Image'}
-                        </button>
+                        <p style={{fontSize:13,color:'#555',lineHeight:1.65,fontWeight:300}}>{scene.left}</p>
                       </div>
-                    )}
-                    <div style={{ padding:'16px 20px' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-                        <div style={{ width:6, height:6, borderRadius:'50%', background:'#ef4444' }}/>
-                        <span style={{ fontFamily:'DM Mono', fontSize:9, color:'#ef4444', letterSpacing:'0.08em', textTransform:'uppercase' }}>Old Way</span>
+                    </div>
+                    {/* Right — Stowic Way */}
+                    <div>
+                      <ImgSlot src={sceneImages[rk]} aspect="9/16" placeholder="Stowic Way"/>
+                      {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>rScenes.current[rk]?.current?.click()}>{uploading===rk?'Uploading...':'↑ Stowic Way'}</Btn></div>}
+                      <div style={{padding:'16px 20px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                          <div style={{width:6,height:6,borderRadius:'50%',background:G}}/>
+                          <span style={{fontFamily:'DM Mono',fontSize:9,color:G,letterSpacing:'0.08em',textTransform:'uppercase'}}>Stowic Way</span>
+                        </div>
+                        <p style={{fontSize:13,color:'#666',lineHeight:1.65,fontWeight:300}}>{scene.right}</p>
                       </div>
-                      <p style={{ fontSize:13, color:'#555', lineHeight:1.65, fontWeight:300 }}>{scene.left}</p>
                     </div>
                   </div>
-
-                  {/* Right */}
-                  <div>
-                    {sceneImages[rk]
-                      ? <img src={sceneImages[rk]} alt="" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
-                      : <div style={{ width:'100%', aspectRatio:'9/16', background:'#0c0c08', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ fontSize:11, color:'#2a2a1a' }}>Storyboard</span>
-                        </div>
-                    }
-                    {isAdmin && (
-                      <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
-                        <button onClick={() => refs[`s${scene.id}r`].current?.click()}
-                          style={{ width:'100%', padding:'8px', background:'#1a1a1a', border:`1px solid #2a2518`, borderRadius:6, color:G, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
-                          {uploading===rk ? 'Uploading...' : '↑ Stowic Way Image'}
-                        </button>
-                      </div>
-                    )}
-                    <div style={{ padding:'16px 20px' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-                        <div style={{ width:6, height:6, borderRadius:'50%', background:G }}/>
-                        <span style={{ fontFamily:'DM Mono', fontSize:9, color:G, letterSpacing:'0.08em', textTransform:'uppercase' }}>Stowic Way</span>
-                      </div>
-                      <p style={{ fontSize:13, color:'#666', lineHeight:1.65, fontWeight:300 }}>{scene.right}</p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             )
           })}
-
-          {/* Logo card */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:14, overflow:'hidden' }}>
-            <div style={{ display:'flex', alignItems:'stretch', borderBottom:`1px solid ${BORDER}` }}>
-              <div style={{ width:64, display:'flex', alignItems:'center', justifyContent:'center', borderRight:`1px solid ${BORDER}` }}>
-                <span style={{ fontFamily:'Bebas Neue', fontSize:32, color:'#1e1e1e' }}>06</span>
-              </div>
-              <div style={{ flex:1, padding:'16px 24px' }}>
-                <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.1em', marginBottom:3 }}>0:38–0:45</p>
-                <p style={{ fontSize:15, fontWeight:500 }}>Logo Card</p>
-              </div>
-            </div>
-            <div style={{ padding:'14px 24px', borderBottom:`1px solid ${BORDER}`, background:'#080808' }}>
-              <p style={{ fontFamily:'DM Mono', fontSize:9, color:'#333', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:5 }}>Voiceover</p>
-              <p style={{ fontSize:15, color:'#bbb', fontStyle:'italic', lineHeight:1.6 }}>"Stowic. Ship your luggage. Travel lighter."</p>
-            </div>
-            {sceneImages['scene-6-logo']
-              ? <img src={sceneImages['scene-6-logo']} alt="Logo card" style={{ width:'100%', aspectRatio:'9/16', objectFit:'cover', display:'block' }}/>
-              : <div style={{ width:'100%', aspectRatio:'9/16', background:'#111', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10 }}>
-                  <p style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.1em', color:'#1a1a1a' }}>STOWIC</p>
-                  <p style={{ fontFamily:'DM Mono', fontSize:13, color:'#2a2a2a', letterSpacing:'0.08em' }}>stowic.com</p>
-                </div>
-            }
-            {isAdmin && (
-              <div style={{ padding:'8px 12px', borderTop:`1px solid ${BORDER}` }}>
-                <button onClick={() => refs.logoCard.current?.click()}
-                  style={{ width:'100%', padding:'9px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:7, color:G, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit' }}>
-                  {uploading==='scene-6-logo' ? 'Uploading...' : '↑ Upload Logo Card Image'}
-                </button>
-              </div>
-            )}
-            <div style={{ padding:'20px 24px', textAlign:'center' }}>
-              <p style={{ fontFamily:'DM Mono', fontSize:13, color:'#333', letterSpacing:'0.1em' }}>stowic.com</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
 
     {/* AUDIO */}
-    <div style={{ borderTop:`1px solid ${BORDER}` }}>
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'80px 40px' }}>
-        <p style={{ fontFamily:'DM Mono', fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:G, marginBottom:8 }}>Audio</p>
-        <h2 style={{ fontFamily:'Bebas Neue', fontSize:52, letterSpacing:'0.02em', marginBottom:48 }}>Voiceover & Music</h2>
-
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+    <div style={{borderTop:`1px solid ${BORDER}`}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'80px 40px'}}>
+        <p style={{fontFamily:'DM Mono',fontSize:10,letterSpacing:'0.18em',textTransform:'uppercase',color:G,marginBottom:8}}>Audio</p>
+        <h2 style={{fontFamily:'Bebas Neue',fontSize:52,letterSpacing:'0.02em',marginBottom:48}}>Voiceover & Music</h2>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
           {/* VO */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:28 }}>
-            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:6 }}>Voiceover Track</p>
-            <p style={{ fontSize:13, color:'#444', fontWeight:300, marginBottom:16 }}>{voName || 'No file uploaded yet'}</p>
-            {isAdmin && (
-              <button onClick={() => refs.vo.current?.click()}
-                style={{ width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginBottom:12 }}>
-                {uploading==='voiceover' ? 'Uploading...' : voUrl ? 'Replace MP3' : 'Upload MP3'}
+          <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:28}}>
+            <p style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.12em',textTransform:'uppercase',marginBottom:6}}>Voiceover Track</p>
+            <p style={{fontSize:13,color:'#444',fontWeight:300,marginBottom:16}}>{voName||'No file uploaded yet'}</p>
+            {isAdmin && <div style={{marginBottom:12}}><Btn onClick={()=>trigger(rVo)}>{uploading==='vo'?'Uploading...':voUrl?'Replace MP3':'Upload MP3'}</Btn></div>}
+            {voUrl && <>
+              <audio ref={voRef} src={voUrl} onEnded={()=>setPlayingVo(false)}/>
+              <button onClick={()=>{if(playingVo){voRef.current?.pause();setPlayingVo(false)}else{voRef.current?.play();setPlayingVo(true)}}}
+                style={{width:'100%',padding:'12px',background:playingVo?G:'transparent',border:`1px solid ${playingVo?G:'#333'}`,borderRadius:8,color:playingVo?'#000':'#fff',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'}}>
+                {playingVo?'⏸ Pause':'▶ Play Voiceover'}
               </button>
-            )}
-            {voUrl && (
-              <>
-                <audio ref={voRef} src={voUrl} onEnded={() => setPlayingVo(false)}/>
-                <button onClick={() => { if (playingVo){voRef.current?.pause();setPlayingVo(false)}else{voRef.current?.play();setPlayingVo(true)} }}
-                  style={{ width:'100%', padding:'12px', background: playingVo ? G : 'transparent', border:`1px solid ${playingVo ? G : '#333'}`, borderRadius:8, color: playingVo ? '#000' : '#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.2s' }}>
-                  {playingVo ? '⏸ Pause' : '▶ Play Voiceover'}
-                </button>
-              </>
-            )}
+            </>}
           </div>
-
           {/* Music */}
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:28 }}>
-            <p style={{ fontFamily:'DM Mono', fontSize:10, color:G, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:6 }}>Background Music</p>
-            <p style={{ fontSize:13, color:'#444', fontWeight:300, marginBottom:16 }}>{musicName || 'No file uploaded yet'}</p>
-            {isAdmin && (
-              <button onClick={() => refs.music.current?.click()}
-                style={{ width:'100%', padding:'10px', background:'#1a1a1a', border:`1px solid ${BORDER}`, borderRadius:8, color:G, fontSize:11, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', cursor:'pointer', fontFamily:'inherit', marginBottom:12 }}>
-                {uploading==='music' ? 'Uploading...' : musicUrl ? 'Replace MP3' : 'Upload MP3'}
+          <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:28}}>
+            <p style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.12em',textTransform:'uppercase',marginBottom:6}}>Background Music</p>
+            <p style={{fontSize:13,color:'#444',fontWeight:300,marginBottom:16}}>{musicName||'No file uploaded yet'}</p>
+            {isAdmin && <div style={{marginBottom:12}}><Btn onClick={()=>trigger(rMusic)}>{uploading==='music'?'Uploading...':musicUrl?'Replace MP3':'Upload MP3'}</Btn></div>}
+            {musicUrl && <>
+              <audio ref={musicRef} src={musicUrl} onEnded={()=>setPlayingMusic(false)}/>
+              <button onClick={()=>{if(playingMusic){musicRef.current?.pause();setPlayingMusic(false)}else{musicRef.current?.play();setPlayingMusic(true)}}}
+                style={{width:'100%',padding:'12px',background:playingMusic?G:'transparent',border:`1px solid ${playingMusic?G:'#333'}`,borderRadius:8,color:playingMusic?'#000':'#fff',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all 0.2s'}}>
+                {playingMusic?'⏸ Pause':'▶ Play Music'}
               </button>
-            )}
-            {musicUrl && (
-              <>
-                <audio ref={musicRef} src={musicUrl} onEnded={() => setPlayingMusic(false)}/>
-                <button onClick={() => { if (playingMusic){musicRef.current?.pause();setPlayingMusic(false)}else{musicRef.current?.play();setPlayingMusic(true)} }}
-                  style={{ width:'100%', padding:'12px', background: playingMusic ? G : 'transparent', border:`1px solid ${playingMusic ? G : '#333'}`, borderRadius:8, color: playingMusic ? '#000' : '#fff', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', transition:'all 0.2s' }}>
-                  {playingMusic ? '⏸ Pause' : '▶ Play Music'}
-                </button>
-              </>
-            )}
+            </>}
           </div>
         </div>
       </div>
     </div>
 
     {/* FOOTER */}
-    <div style={{ borderTop:`1px solid ${BORDER}` }}>
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'40px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+    <div style={{borderTop:`1px solid ${BORDER}`}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'40px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div>
-          <p style={{ fontFamily:'Bebas Neue', fontSize:22, letterSpacing:'0.06em', marginBottom:2 }}>STOWIC</p>
-          <p style={{ fontSize:11, color:'#333', fontWeight:300 }}>Door to door luggage shipping</p>
+          <p style={{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:'0.06em',marginBottom:2}}>STOWIC</p>
+          <p style={{fontSize:11,color:'#333',fontWeight:300}}>Door to door luggage shipping</p>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:20 }}>
-          <p style={{ fontSize:11, color:'#2a2a2a' }}>Prepared for Stowic</p>
-          <button onClick={() => setShowLogin(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'#222', fontSize:20, padding:'4px 8px', lineHeight:1 }}>···</button>
+        <div style={{display:'flex',alignItems:'center',gap:20}}>
+          <p style={{fontSize:11,color:'#2a2a2a'}}>Prepared for Stowic</p>
+          <button onClick={()=>setShowLogin(true)} style={{background:'none',border:'none',cursor:'pointer',color:'#1a1a1a',fontSize:20,padding:'4px 8px',lineHeight:1}}>···</button>
         </div>
       </div>
     </div>
