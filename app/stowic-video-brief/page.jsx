@@ -1,5 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 const STORAGE_KEY = 'stowic-brief-v4'
 const ADMIN_PASSWORD = 'stowic2024'
@@ -55,12 +61,39 @@ async function fileToDataUrl(f) {
   })
 }
 
-function saveLocal(data) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); return true } catch { return false }
+// Upload file to Supabase Storage, return public URL
+async function uploadFile(dataUrl, path) {
+  try {
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+    if (!match) return null
+    const mimeType = match[1]
+    const isAudio = mimeType.includes('audio') || mimeType.includes('mpeg')
+    const ext = isAudio ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
+    const fullPath = `stowic-brief/${path}.${ext}`
+    const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
+    const { error } = await supabase.storage.from('brand-assets').upload(fullPath, bytes, { contentType: mimeType, upsert: true })
+    if (error) throw error
+    const { data } = supabase.storage.from('brand-assets').getPublicUrl(fullPath)
+    return data.publicUrl
+  } catch (e) { console.error('Upload failed:', e.message); return null }
 }
 
-function loadLocal() {
-  try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : null } catch { return null }
+// Save metadata (URLs only) to Supabase table
+async function saveToSupabase(data) {
+  try {
+    const { error } = await supabase.from('stowic_brief').upsert({ id: 1, data: JSON.stringify(data), updated_at: new Date().toISOString() })
+    if (error) throw error
+    return true
+  } catch (e) { console.error('Supabase save failed:', e.message); return false }
+}
+
+// Load from Supabase
+async function loadFromSupabase() {
+  try {
+    const { data, error } = await supabase.from('stowic_brief').select('data').eq('id', 1).single()
+    if (error) throw error
+    return data?.data ? JSON.parse(data.data) : null
+  } catch { return null }
 }
 
 export default function StowicVideoBrief() {
@@ -104,16 +137,18 @@ export default function StowicVideoBrief() {
 
   useEffect(() => {
     setMounted(true)
-    const d = loadLocal()
-    if (!d) return
-    if (d.logo) setLogo(d.logo)
-    if (d.avatarOld) setAvatarOld(d.avatarOld)
-    if (d.avatarNew) setAvatarNew(d.avatarNew)
-    if (d.sceneImages) setSceneImages(d.sceneImages)
-    if (d.voUrl) setVoUrl(d.voUrl)
-    if (d.voName) setVoName(d.voName)
-    if (d.musicUrl) setMusicUrl(d.musicUrl)
-    if (d.musicName) setMusicName(d.musicName)
+    ;(async () => {
+      const d = await loadFromSupabase()
+      if (!d) return
+      if (d.logo) setLogo(d.logo)
+      if (d.avatarOld) setAvatarOld(d.avatarOld)
+      if (d.avatarNew) setAvatarNew(d.avatarNew)
+      if (d.sceneImages) setSceneImages(d.sceneImages)
+      if (d.voUrl) setVoUrl(d.voUrl)
+      if (d.voName) setVoName(d.voName)
+      if (d.musicUrl) setMusicUrl(d.musicUrl)
+      if (d.musicName) setMusicName(d.musicName)
+    })()
   }, [])
 
   function getCurrentData() {
@@ -126,25 +161,32 @@ export default function StowicVideoBrief() {
     dataRef.current = { logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName }
   }, [logo, avatarOld, avatarNew, sceneImages, voUrl, voName, musicUrl, musicName])
 
-  function handleSave() {
-    const ok = saveLocal(dataRef.current)
+  async function handleSave() {
+    setSaved(false)
+    const ok = await saveToSupabase(dataRef.current)
     if (ok) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
+    else alert('Save failed — Supabase may be unavailable. Try again.')
   }
 
   async function handleUpload(file, key, setter, nameSetter) {
     if (!file) return
     setUploading(key)
-    const url = await fileToDataUrl(file)
-    setter(url)
+    const dataUrl = await fileToDataUrl(file)
+    // Show immediately from dataUrl, then replace with storage URL
+    setter(dataUrl)
     if (nameSetter) nameSetter(file.name)
+    const storageUrl = await uploadFile(dataUrl, key)
+    if (storageUrl) setter(storageUrl)
     setUploading(null)
   }
 
   async function handleSceneUpload(file, sceneKey) {
     if (!file) return
     setUploading(sceneKey)
-    const url = await fileToDataUrl(file)
-    setSceneImages(prev => ({ ...prev, [sceneKey]: url }))
+    const dataUrl = await fileToDataUrl(file)
+    setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl }))
+    const storageUrl = await uploadFile(dataUrl, sceneKey)
+    if (storageUrl) setSceneImages(prev => ({ ...prev, [sceneKey]: storageUrl }))
     setUploading(null)
   }
 
