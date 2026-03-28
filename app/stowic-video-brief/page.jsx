@@ -138,7 +138,11 @@ export default function StowicVideoBrief() {
   useEffect(() => {
     setMounted(true)
     ;(async () => {
-      const d = await loadFromSupabase()
+      // Try Supabase first, fall back to localStorage
+      let d = await loadFromSupabase()
+      if (!d) {
+        try { const l = localStorage.getItem(STORAGE_KEY); if (l) d = JSON.parse(l) } catch {}
+      }
       if (!d) return
       if (d.logo) setLogo(d.logo)
       if (d.avatarOld) setAvatarOld(d.avatarOld)
@@ -163,9 +167,14 @@ export default function StowicVideoBrief() {
 
   async function handleSave() {
     setSaved(false)
-    const ok = await saveToSupabase(dataRef.current)
-    if (ok) { setSaved(true); setTimeout(() => setSaved(false), 3000) }
-    else alert('Save failed — Supabase may be unavailable. Try again.')
+    const data = dataRef.current
+    // Always save URLs to localStorage as backup (URLs are small, no size issue)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch(e) { console.error('localStorage failed:', e) }
+    // Save to Supabase for cross-device persistence
+    const ok = await saveToSupabase(data)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
+    if (!ok) console.warn('Supabase save failed — saved to localStorage only')
   }
 
   async function handleUpload(file, key, setter, nameSetter) {
