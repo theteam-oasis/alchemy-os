@@ -132,6 +132,8 @@ export default function StoryboardBuilder() {
           hasAvatar: avatarLocked && !!avatarUrl,
           hasEnv: envLocked && !!envUrl,
           aspectRatio,
+          avatarDescription: avatarPrompt || '',
+          envDescription: envPrompt || '',
         }),
       })
       const j = await res.json()
@@ -153,10 +155,11 @@ export default function StoryboardBuilder() {
           sceneIndex: idx,
           aspectRatio,
           sessionId: sessionId.current,
-          // Pass storage URLs, not base64
           productImage: scene.usesProduct && productUrl ? productUrl : null,
-          avatarImage: scene.usesAvatar && avatarLocked && avatarUrl ? avatarUrl : null,
-          envImage: scene.usesEnv && envLocked && envUrl ? envUrl : null,
+          avatarImage: avatarLocked && avatarUrl ? avatarUrl : null,
+          envImage: envLocked && envUrl ? envUrl : null,
+          avatarDescription: avatarPrompt || '',
+          envDescription: envPrompt || '',
         }),
       })
       const j = await res.json()
