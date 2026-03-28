@@ -11,7 +11,16 @@ export default function ClientProfilePage({ params }) {
   const [intake,setIntake]=useState(null)
   const [loading,setLoading]=useState(true)
   const [tab,setTab]=useState('briefs')
-  useEffect(()=>{Promise.all([supabase.from('clients').select('*').eq('id',clientId).single(),supabase.from('campaigns').select('*').eq('client_id',clientId).eq('storyboard_complete',true).order('created_at',{ascending:false}),supabase.from('brand_intake').select('*').eq('client_id',clientId).maybeSingle()]).then(([{data:c},{data:camp},{data:i}])=>{if(c)setClient(c);if(camp)setCampaigns(camp);if(i)setIntake(i);setLoading(false)})},[clientId])
+  useEffect(()=>{
+    Promise.all([
+      supabase.from('clients').select('*').eq('id',clientId).single(),
+      supabase.from('campaigns').select('*').eq('client_id',clientId).eq('storyboard_complete',true).order('created_at',{ascending:false}),
+      supabase.from('brand_intake').select('*').eq('client_id',clientId).maybeSingle()
+    ])
+    .then(([{data:c},{data:camp},{data:i}])=>{if(c)setClient(c);if(camp)setCampaigns(camp);if(i)setIntake(i)})
+    .catch(e=>console.error('Supabase error:',e))
+    .finally(()=>setLoading(false))
+  },[clientId])
   if(loading)return(<div style={{minHeight:'100vh',background:'white',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:32,height:32,border:'2px solid #eeeeee',borderTopColor:'#111111',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>)
 
   return(<>
