@@ -10,8 +10,13 @@ export default function ClientsPage() {
   const [search,setSearch]=useState('')
 
   useEffect(()=>{
-    Promise.all([supabase.from('clients').select('*').order('name'),supabase.from('campaigns').select('id,client_id,concept_title,client_status,storyboard_complete,created_at').eq('storyboard_complete',true).order('created_at',{ascending:false})])
-    .then(([{data:c},{data:camp}])=>{if(c)setClients(c);if(camp)setCampaigns(camp);setLoading(false)})
+    Promise.all([
+      supabase.from('clients').select('*').order('name'),
+      supabase.from('campaigns').select('id,client_id,concept_title,client_status,storyboard_complete,created_at').eq('storyboard_complete',true).order('created_at',{ascending:false})
+    ])
+    .then(([{data:c},{data:camp}])=>{if(c)setClients(c);if(camp)setCampaigns(camp)})
+    .catch(e=>console.error('Supabase error:',e))
+    .finally(()=>setLoading(false))
   },[])
 
   const cc=id=>campaigns.filter(c=>c.client_id===id)
