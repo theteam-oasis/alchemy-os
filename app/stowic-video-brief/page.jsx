@@ -61,7 +61,27 @@ async function fileToDataUrl(f) {
   })
 }
 
-// Upload file to Supabase Storage, return public URL
+// Compress image to ~50KB for storage
+async function compressImage(dataUrl, maxW = 400, quality = 0.6) {
+  if (!dataUrl || dataUrl.startsWith('http')) return dataUrl
+  return new Promise(res => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width)
+      const c = document.createElement('canvas')
+      c.width = img.width * scale
+      c.height = img.height * scale
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+      res(c.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = () => res(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+const JSONBIN_URL = 'https://api.jsonbin.io/v3/b/69c806675fdde574550b0af4'
+const JSONBIN_KEY = '$2a$10$a50fv0awIemOQ3fyz6ol6OR2h2YRwz9yahb7UXRcsL8Gu8ZE8NWRG'
+
 async function uploadFile(dataUrl, path) {
   try {
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
@@ -71,28 +91,36 @@ async function uploadFile(dataUrl, path) {
     const ext = isAudio ? 'mp3' : mimeType.includes('jpeg') ? 'jpg' : 'png'
     const fullPath = `stowic-brief/${path}.${ext}`
     const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0))
-    const { error } = await supabase.storage.from('brand-assets').upload(fullPath, bytes, { contentType: mimeType, upsert: true })
-    if (error) throw error
-    const { data } = supabase.storage.from('brand-assets').getPublicUrl(fullPath)
-    return data.publicUrl
-  } catch (e) { console.error('Upload failed:', e.message); return null }
+    const { error } = supabase.storage.from('brand-assets').upload
+      ? await supabase.storage.from('brand-assets').upload(fullPath, bytes, { contentType: mimeType, upsert: true }).catch(() => ({ error: true }))
+      : { error: true }
+    if (!error) {
+      const { data } = supabase.storage.from('brand-assets').getPublicUrl(fullPath)
+      if (data?.publicUrl) return data.publicUrl
+    }
+  } catch {}
+  return null
 }
 
-// Save metadata (URLs only) to Supabase table
-async function saveToSupabase(data) {
+async function saveToBin(data) {
   try {
-    const { error } = await supabase.from('stowic_brief').upsert({ id: 1, data: JSON.stringify(data), updated_at: new Date().toISOString() })
-    if (error) throw error
-    return true
-  } catch (e) { console.error('Supabase save failed:', e.message); return false }
+    const res = await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+      body: JSON.stringify(data),
+    })
+    return res.ok
+  } catch (e) { console.error('JSONBin save failed:', e.message); return false }
 }
 
-// Load from Supabase
-async function loadFromSupabase() {
+async function loadFromBin() {
   try {
-    const { data, error } = await supabase.from('stowic_brief').select('data').eq('id', 1).single()
-    if (error) throw error
-    return data?.data ? JSON.parse(data.data) : null
+    const res = await fetch(`${JSONBIN_URL}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    })
+    if (!res.ok) return null
+    const j = await res.json()
+    return j.record || null
   } catch { return null }
 }
 
@@ -139,7 +167,7 @@ export default function StowicVideoBrief() {
     setMounted(true)
     ;(async () => {
       // Try Supabase first, fall back to localStorage
-      let d = await loadFromSupabase()
+      let d = await loadFromBin()
       if (!d) {
         try { const l = localStorage.getItem(STORAGE_KEY); if (l) d = JSON.parse(l) } catch {}
       }
@@ -171,7 +199,7 @@ export default function StowicVideoBrief() {
     // Always save URLs to localStorage as backup (URLs are small, no size issue)
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch(e) { console.error('localStorage failed:', e) }
     // Save to Supabase for cross-device persistence
-    const ok = await saveToSupabase(data)
+    const ok = await saveToBin(data)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
     if (!ok) console.warn('Supabase save failed — saved to localStorage only')
@@ -181,11 +209,12 @@ export default function StowicVideoBrief() {
     if (!file) return
     setUploading(key)
     const dataUrl = await fileToDataUrl(file)
-    // Show immediately from dataUrl, then replace with storage URL
-    setter(dataUrl)
+    setter(dataUrl) // show immediately
     if (nameSetter) nameSetter(file.name)
-    const storageUrl = await uploadFile(dataUrl, key)
-    if (storageUrl) setter(storageUrl)
+    // Compress for storage (audio stays as-is)
+    const isAudio = file.type.includes('audio')
+    const compressed = isAudio ? dataUrl : await compressImage(dataUrl)
+    setter(compressed)
     setUploading(null)
   }
 
@@ -194,8 +223,8 @@ export default function StowicVideoBrief() {
     setUploading(sceneKey)
     const dataUrl = await fileToDataUrl(file)
     setSceneImages(prev => ({ ...prev, [sceneKey]: dataUrl }))
-    const storageUrl = await uploadFile(dataUrl, sceneKey)
-    if (storageUrl) setSceneImages(prev => ({ ...prev, [sceneKey]: storageUrl }))
+    const compressed = await compressImage(dataUrl)
+    setSceneImages(prev => ({ ...prev, [sceneKey]: compressed }))
     setUploading(null)
   }
 
