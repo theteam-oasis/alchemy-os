@@ -1,10 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="8" fill="#000000"/>
-  <g fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="translate(6,6)">
-    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
-    <path d="M20 3v4"/>
-    <path d="M22 5h-4"/>
-    <path d="M4 17v2"/>
-    <path d="M5 18H3"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Flask body -->
+    <path d="M13 6v7.5l-4.5 8.5a2 2 0 0 0 1.75 3h11.5a2 2 0 0 0 1.75-3L19 13.5V6"/>
+    <!-- Flask top rim -->
+    <line x1="11" y1="6" x2="21" y2="6"/>
+    <!-- Liquid line -->
+    <path d="M11.5 19h9"/>
+    <!-- Bubbles -->
+    <circle cx="14.5" cy="21.5" r="0.8" fill="#FFFFFF" stroke="none"/>
+    <circle cx="17.5" cy="20" r="0.6" fill="#FFFFFF" stroke="none"/>
+    <!-- Sparkles rising from flask -->
+    <path d="M15 9l0.5-1.5L16 9l-0.5 1.5z" fill="#FFFFFF" stroke="none"/>
+    <path d="M18 11l0.4-1L19 11l-0.4 1z" fill="#FFFFFF" stroke="none"/>
+    <!-- Top sparkle - 4 pointed star -->
+    <path d="M24 4l0.8-2.4L25.6 4l-0.8 2.4z" fill="#FFFFFF" stroke="none"/>
+    <path d="M23.2 4.8L24.8 4.8" stroke="#FFFFFF" stroke-width="0.8"/>
+    <path d="M24 4L24 5.6" stroke="#FFFFFF" stroke-width="0.8"/>
+    <!-- Small sparkle -->
+    <path d="M7 8l0.5-1.5L8 8l-0.5 1.5z" fill="#FFFFFF" stroke="none"/>
+    <path d="M6.5 8.5L8 8.5" stroke="#FFFFFF" stroke-width="0.6"/>
+    <!-- Tiny sparkle -->
+    <circle cx="22" cy="9" r="0.5" fill="#FFFFFF" stroke="none"/>
+    <path d="M21.3 9L22.7 9" stroke="#FFFFFF" stroke-width="0.5"/>
+    <path d="M22 8.3L22 9.7" stroke="#FFFFFF" stroke-width="0.5"/>
   </g>
 </svg>

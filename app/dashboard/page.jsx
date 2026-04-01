@@ -372,7 +372,7 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
       <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: isAdmin ? "pointer" : "default" }} onClick={isAdmin ? goHome : undefined}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Alchemy <span style={{ fontWeight: 400, color: C.textSec }}>OS</span></span>
+          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Studios</span></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {isAdmin && (view === "client" || view === "detail") && <button onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textSec, cursor: "pointer", fontSize: 14, fontFamily: "'Inter', sans-serif" }}><Home size={14} /> Dashboard</button>}

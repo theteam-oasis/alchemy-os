@@ -31,17 +31,26 @@ function Nav() {
   }, []);
   const links = [{ label: "Why Alchemy", href: "#why" }, { label: "How It Works", href: "#how" }, { label: "Case Studies", href: "#results" }, { label: "Creative Examples", href: "#creative" }];
   return (
-    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: scrolled ? "rgba(255,255,255,0.9)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? `1px solid ${G.border}` : "none", transition: "all 0.3s" }}>
+    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: scrolled ? "rgba(255,255,255,0.9)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? `1px solid ${G.border}` : "none", transition: "all 0.3s" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${G.gold}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Sparkles size={14} style={{ color: G.gold }} />
         </div>
         <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em" }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Studios</span></span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+      <div className="nav-links" style={{ display: "flex", alignItems: "center", gap: 32 }}>
         {links.map(l => <a key={l.href} href={l.href} style={{ color: G.textSec, fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s", ...mono }} onMouseEnter={e => e.target.style.color = G.text} onMouseLeave={e => e.target.style.color = G.textSec}>{l.label}</a>)}
         <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={14} /></a>
       </div>
+      <button className="nav-hamburger" onClick={() => setMobileOpen(!mobileOpen)} style={{ display: "none", background: "none", border: "none", cursor: "pointer", padding: 8 }}>
+        {mobileOpen ? <X size={24} color={G.text} /> : <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><span style={{ width: 22, height: 2, background: G.text, borderRadius: 2, display: "block" }} /><span style={{ width: 22, height: 2, background: G.text, borderRadius: 2, display: "block" }} /><span style={{ width: 22, height: 2, background: G.text, borderRadius: 2, display: "block" }} /></div>}
+      </button>
+      {mobileOpen && (
+        <div className="nav-mobile-menu" style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "rgba(255,255,255,0.98)", backdropFilter: "blur(20px)", borderBottom: `1px solid ${G.border}`, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {links.map(l => <a key={l.href} href={l.href} onClick={() => setMobileOpen(false)} style={{ color: G.textSec, fontSize: 16, textDecoration: "none", fontWeight: 500, ...mono }}>{l.label}</a>)}
+          <a href="#cta" onClick={() => setMobileOpen(false)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 24px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 15, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={14} /></a>
+        </div>
+      )}
     </nav>
   );
 }
@@ -58,11 +67,11 @@ function Hero() {
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>AI-Powered Creative Studio</span>
         </div>
 
-        <h1 style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8 }}>For brands scaling with<br /><span style={{ color: G.textSec }}>Paid Social</span></h1>
+        <h1 className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8 }}>For brands scaling with<br /><span style={{ color: G.textSec }}>Paid Social</span></h1>
 
         <div style={{ marginTop: 32, marginBottom: 16 }}>
-          <p style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3 }}>Your ads aren't failing.</p>
-          <p style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3 }}>Your creative pipeline is.</p>
+          <p className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3 }}>Your ads aren't failing.</p>
+          <p className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3 }}>Your creative pipeline is.</p>
         </div>
 
         <p style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</p>
@@ -92,7 +101,7 @@ function Stats() {
   ];
   return (
     <section style={{ padding: "0 24px 80px", maxWidth: 900, margin: "0 auto" }}>
-      <div style={{ display: "flex", gap: 24, justifyContent: "center" }}>
+      <div className="stats-grid" style={{ display: "flex", gap: 24, justifyContent: "center" }}>
         {stats.map((s, i) => (
           <div key={i} style={{ flex: 1, textAlign: "center", padding: 32, background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16 }}>
             <p style={{ fontSize: 48, fontWeight: 700, color: G.gold, marginBottom: 8, ...mono }}>{s.value}</p>
@@ -134,7 +143,7 @@ function WhyAlchemy() {
 }
 
 function CreativeExamples() {
-  const IMG = "https://alchemy-manifesto.lovable.app";
+  const IMG = "";
   const staticAds = [
     { tag: "Editorial", label: "NYT Wellness", img: `${IMG}/assets/wellness-nyt-BCtGP0C9.png` },
     { tag: "Product", label: "Tech Breakdown", img: `${IMG}/assets/sock-scientific-tech-CtYs3SdE.jpeg` },
@@ -179,11 +188,11 @@ function CreativeExamples() {
               <span style={{ color: G.gold }}>{cat.icon}</span>
               <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>{cat.label}</span>
             </div>
-            <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>{cat.title} <span style={{ color: G.gold }}>{cat.titleGold}</span></h2>
+            <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>{cat.title} <span style={{ color: G.gold }}>{cat.titleGold}</span></h2>
             <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 600, margin: "0 auto", ...mono }}>{cat.desc}</p>
           </div>
           {ci === 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {staticAds.slice(0, 12).map((ad, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
                   <img src={ad.img} alt={ad.label} style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />
@@ -219,7 +228,7 @@ function AboutUs() {
           <Users size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>About Us</span>
         </div>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 24 }}>Founders. Operators. <span style={{ color: G.gold }}>Creatives.</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 24 }}>Founders. Operators. <span style={{ color: G.gold }}>Creatives.</span></h2>
       </div>
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 40 }}>
         <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.9, marginBottom: 20, ...mono }}>We started over 11 years ago as founders, not marketers - building our own products and learning the hard way how to get them in front of the right people. What began as a necessity became a system.</p>
@@ -254,10 +263,10 @@ function HowItWorks() {
           <Zap size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Work with us</span>
         </div>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>How Alchemy <span style={{ color: G.gold }}>Works</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>How Alchemy <span style={{ color: G.gold }}>Works</span></h2>
         <p style={{ color: G.textSec, fontSize: 16, ...mono }}>A system that compounds. Not a one-time campaign.</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
+      <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
         {steps.map((s, i) => (
           <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 28, position: "relative" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
@@ -291,10 +300,10 @@ function SystemBehind() {
   return (
     <section style={{ padding: "80px 24px", maxWidth: 900, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 style={{ ...hd, fontSize: 38, color: G.text, marginBottom: 12 }}>The System Behind the <span style={{ color: G.gold }}>Results</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 38, color: G.text, marginBottom: 12 }}>The System Behind the <span style={{ color: G.gold }}>Results</span></h2>
         <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Media buying didn't break. <span style={{ color: G.gold }}>Creative supply did.</span></p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
         {points.map((p, i) => (
           <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, padding: 24 }}>
             <h4 style={{ color: G.text, fontSize: 15, fontWeight: 600, marginBottom: 6, ...mono }}>{p.title}</h4>
@@ -320,9 +329,9 @@ function ProvenResults() {
           <TrendingUp size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Proven Results</span>
         </div>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real numbers from brands <span style={{ color: G.gold }}>scaling with Alchemy</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real numbers from brands <span style={{ color: G.gold }}>scaling with Alchemy</span></h2>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+      <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
         {results.map((r, i) => (
           <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32, textAlign: "center" }}>
             <p style={{ color: G.gold, fontSize: 14, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, ...mono }}>{r.metric}</p>
@@ -349,10 +358,10 @@ function Testimonials() {
   return (
     <section style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>What Our Clients <span style={{ color: G.gold }}>Say</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>What Our Clients <span style={{ color: G.gold }}>Say</span></h2>
         <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Real experiences from founders who transformed their businesses with us.</p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
         {testimonials.map((t, i) => (
           <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
             <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>{[...Array(5)].map((_, j) => <Star key={j} size={14} style={{ color: G.gold, fill: G.gold }} />)}</div>
@@ -384,7 +393,7 @@ function CaseStudies() {
           <Check size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Verified Success Stories</span>
         </div>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real Results From <span style={{ color: G.gold }}>Real Clients</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real Results From <span style={{ color: G.gold }}>Real Clients</span></h2>
         <p style={{ color: G.textSec, fontSize: 16, maxWidth: 600, margin: "0 auto", ...mono }}>Founders just like you who trust us to help them scale in the fast moving, hyper-competitive social media landscape.</p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -397,7 +406,7 @@ function CaseStudies() {
                 <p style={{ color: G.textTer, fontSize: 14, ...mono }}>{c.type}</p>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+            <div className="case-inner-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
               <div style={{ padding: 20, background: G.bg, borderRadius: 12, border: `1px solid ${G.border}` }}>
                 <p style={{ color: G.danger, fontSize: 12, fontWeight: 600, textTransform: "uppercase", marginBottom: 8, ...mono }}>Challenge</p>
                 <p style={{ color: G.textSec, fontSize: 14, lineHeight: 1.6, ...mono }}>{c.challenge}</p>
@@ -440,10 +449,10 @@ function IsThisForYou() {
   return (
     <section style={{ padding: "80px 24px", maxWidth: 900, margin: "0 auto" }}>
       <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Is This <span style={{ color: G.gold }}>For You?</span></h2>
+        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Is This <span style={{ color: G.gold }}>For You?</span></h2>
         <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Alchemy is for brands that take <span style={{ color: G.text, fontWeight: 600 }}>paid media seriously.</span></p>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
           <h3 style={{ color: G.success, fontSize: 16, fontWeight: 600, marginBottom: 20, ...mono }}>This is for you if:</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -478,7 +487,7 @@ function IsThisForYou() {
 function CTA() {
   return (
     <section id="cta" style={{ padding: "80px 24px 60px", maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
-      <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Ready to fix your<br /><span style={{ color: G.gold }}>creative bottleneck?</span></h2>
+      <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Ready to fix your<br /><span style={{ color: G.gold }}>creative bottleneck?</span></h2>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 32, marginTop: 16 }}>
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Free creative audit</span>
         <span style={{ color: G.textTer }}>•</span>
@@ -494,7 +503,7 @@ function CTA() {
 
 function Footer() {
   return (
-    <footer style={{ borderTop: `1px solid ${G.border}`, padding: "40px 24px", maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <footer className="footer-wrap" style={{ borderTop: `1px solid ${G.border}`, padding: "40px 24px", maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div>
         <p style={{ color: G.textSec, fontSize: 13, ...mono }}>About Us</p>
         <a href="mailto:team@scalewithalchemy.com" style={{ color: G.textTer, fontSize: 13, textDecoration: "none", ...mono }}>team@scalewithalchemy.com</a>
@@ -521,6 +530,22 @@ export default function AlchemyLanding() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) {
+          .nav-links { display: none !important; }
+          .nav-hamburger { display: block !important; }
+          .stats-grid { flex-direction: column !important; }
+          .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+          .grid-3 { grid-template-columns: 1fr !important; }
+          .grid-2 { grid-template-columns: 1fr !important; }
+          .case-inner-grid { grid-template-columns: 1fr !important; }
+          .hero-title { font-size: 36px !important; }
+          .hero-subtitle { font-size: 22px !important; }
+          .section-title { font-size: 28px !important; }
+          .footer-wrap { flex-direction: column !important; gap: 16px !important; text-align: center !important; }
+        }
+        @media (max-width: 480px) {
+          .grid-4 { grid-template-columns: 1fr !important; }
+        }
       `}</style>
       <Nav />
       <Hero />

@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Alchemy OS',
+  title: 'Alchemy Studios',
   description: 'AI-powered creative ads agency platform',
   icons: {
     icon: '/icon.svg',

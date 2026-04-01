@@ -195,7 +195,7 @@ export default function BrandIntakePage() {
       <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Alchemy <span style={{ fontWeight: 400, color: C.textSec }}>OS</span></span>
+          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Studios</span></span>
         </div>
         {screen === "review" && <span style={{ fontSize: 13, color: C.textSec }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
       </div>
