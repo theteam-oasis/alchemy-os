@@ -1,9 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Check, Sparkles, ArrowRight, RefreshCw, Lock, X, Loader2, ChevronRight, MessageSquare, Plus, Home, Copy, ChevronLeft, Edit3, Send } from "lucide-react";
-import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, uploadProductImage, getBrandIntake, getBrandHub } from "../lib/supabase";
+import { Check, Sparkles, RefreshCw, Lock, X, Loader2, MessageSquare, Plus, Home, Send } from "lucide-react";
+import { supabase, createClient_db, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, uploadProductImage } from "../../lib/supabase";
 
-const A = "#000";
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');`;
 const C = {
   bg: "#FFFFFF", bgSoft: "#F5F5F7", bgHover: "#F0F0F2",
@@ -60,147 +59,6 @@ async function callClaude(prompt) {
   } catch (e) { console.error("Claude API error:", e); return null; }
 }
 
-// ─── Agency Dashboard ───
-function Dashboard({ clients, onNew, onSelect }) {
-  const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
-  return (
-    <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
-        <div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 4 }}>Dashboard</h1><p style={{ color: C.textSec, fontSize: 16 }}>Your agency command center</p></div>
-        <Btn primary onClick={onNew} icon={<Plus size={16} />}>New Client</Btn>
-      </div>
-      <div style={{ display: "flex", gap: 12, marginBottom: 36 }}>
-        {[{ l: "Total Clients", v: clients.length, c: C.text }, { l: "Active", v: clients.filter(c => c.status !== "delivered").length, c: C.info }, { l: "Delivered", v: clients.filter(c => c.status === "delivered").length, c: C.success }, { l: "This Month", v: clients.length, c: "#5856D6" }].map((s, i) => (
-          <div key={i} style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 20, textAlign: "center" }}>
-            <p style={{ color: C.textSec, fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{s.l}</p>
-            <p style={{ color: s.c, fontSize: 32, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>{s.v}</p>
-          </div>
-        ))}
-      </div>
-      <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.5 }}>Stage</span><span style={{ flex: 1 }}>Progress</span><span style={{ flex: 0.8 }}>Status</span><span style={{ flex: 0.5 }}>Date</span><span style={{ flex: 0.3 }}></span>
-        </div>
-        {clients.map((c, i) => (
-          <div key={c.id} onClick={() => onSelect(c)} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <div style={{ flex: 2, display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600 }}>{c.name[0]}</div>
-              <span style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{c.name}</span>
-            </div>
-            <span style={{ flex: 1.5, color: C.textSec, fontSize: 14 }}>{c.stage}</span>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, height: 4, borderRadius: 2, background: C.bgSoft, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 2, background: sc[c.status] || C.info, width: `${c.progress}%` }} /></div>
-              <span style={{ color: C.textTer, fontSize: 12, minWidth: 28 }}>{c.progress}%</span>
-            </div>
-            <div style={{ flex: 0.8 }}><span style={{ padding: "4px 12px", borderRadius: 980, fontSize: 12, fontWeight: 500, background: (sc[c.status] || C.info) + "12", color: sc[c.status] || C.info }}>{c.status}</span></div>
-            <span style={{ flex: 0.5, color: C.textTer, fontSize: 13 }}>{c.date}</span>
-            <div style={{ flex: 0.3, textAlign: "right" }}><ChevronRight size={16} style={{ color: C.textTer }} /></div>
-          </div>
-        ))}
-        {clients.length === 0 && <div style={{ padding: 48, textAlign: "center", color: C.textSec }}><p style={{ marginBottom: 16, fontSize: 15 }}>No clients yet.</p><Btn small primary onClick={onNew} icon={<Plus size={14} />}>Add Your First Client</Btn></div>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Client Detail View ───
-const ALL_STAGES = ["Intake Form", "Review Portal", "Brand Kit Locked", "Ad Production", "Delivered"];
-const STAGE_STATUS = { "Intake Form": "onboarding", "Review Portal": "reviewing", "Brand Kit Locked": "reviewing", "Ad Production": "production", "Delivered": "delivered" };
-const STAGE_PROGRESS = { "Intake Form": 15, "Review Portal": 40, "Brand Kit Locked": 65, "Ad Production": 80, "Delivered": 100 };
-
-function ClientDetail({ client, onBack, onUpdate }) {
-  const [note, setNote] = useState("");
-  const [notes, setNotes] = useState(client.notes || []);
-  const [stageOpen, setStageOpen] = useState(false);
-  const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
-
-  const handleAddNote = async () => {
-    if (!note.trim()) return;
-    const newNote = { text: note, date: new Date().toLocaleString(), id: Date.now() };
-    setNotes(prev => [newNote, ...prev]);
-    setNote("");
-    await addNote(client.id, note);
-  };
-
-  const changeStage = (stage) => {
-    onUpdate({ ...client, stage, status: STAGE_STATUS[stage] || "onboarding", progress: STAGE_PROGRESS[stage] || 15 });
-    setStageOpen(false);
-  };
-
-  return (
-    <div style={{ maxWidth: 860, margin: "0 auto" }}>
-      <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textSec, cursor: "pointer", fontSize: 14, fontFamily: "'Inter', sans-serif", marginBottom: 28 }}><ChevronLeft size={16} /> Back to Dashboard</button>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 36 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: (client.color || C.info) + "12", display: "flex", alignItems: "center", justifyContent: "center", color: client.color || C.info, fontSize: 22, fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>{client.name[0]}</div>
-          <div>
-            <h1 style={{ ...hd, fontSize: 32, color: C.text, marginBottom: 4 }}>{client.name}</h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ padding: "4px 12px", borderRadius: 980, fontSize: 12, fontWeight: 500, background: (sc[client.status] || C.info) + "12", color: sc[client.status] || C.info }}>{client.status}</span>
-              <span style={{ color: C.textTer, fontSize: 13 }}>Added {client.date}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Pipeline Stage</h3>
-          <div style={{ position: "relative" }}>
-            <Btn small onClick={() => setStageOpen(!stageOpen)} icon={<Edit3 size={12} />}>Change Stage</Btn>
-            {stageOpen && <div style={{ position: "absolute", top: "110%", right: 0, background: C.bg, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: 4, zIndex: 10, minWidth: 180, boxShadow: "0 8px 30px rgba(0,0,0,0.12)" }}>{ALL_STAGES.map(s => <button key={s} onClick={() => changeStage(s)} style={{ display: "block", width: "100%", padding: "10px 14px", background: client.stage === s ? C.bgSoft : "transparent", border: "none", color: client.stage === s ? C.accent : C.textSec, fontSize: 14, cursor: "pointer", textAlign: "left", borderRadius: 8, fontFamily: "'Inter', sans-serif", fontWeight: client.stage === s ? 600 : 400 }} onMouseEnter={e => { if (client.stage !== s) e.currentTarget.style.background = C.bgSoft; }} onMouseLeave={e => { if (client.stage !== s) e.currentTarget.style.background = "transparent"; }}>{s}{client.stage === s && " ✓"}</button>)}</div>}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>{ALL_STAGES.map((s, i) => { const stageIdx = ALL_STAGES.indexOf(client.stage); return <div key={s} style={{ flex: 1, height: 6, borderRadius: 3, background: i <= stageIdx ? (sc[client.status] || C.info) : C.bgSoft, transition: "background 0.3s" }} />; })}</div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>{ALL_STAGES.map((s, i) => { const stageIdx = ALL_STAGES.indexOf(client.stage); return <span key={s} style={{ fontSize: 11, color: i <= stageIdx ? C.textSec : C.textTer, fontWeight: i === stageIdx ? 600 : 400, textAlign: "center", flex: 1 }}>{s}</span>; })}</div>
-      </div>
-      {client.formData ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
-          <div style={{ display: "flex", gap: 16 }}>
-            <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}>
-              <h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14 }}>Brand Identity</h4>
-              <div style={{ fontSize: 14, lineHeight: 2 }}>
-                <p><span style={{ color: C.textTer }}>Brand:</span> <span style={{ color: C.text, fontWeight: 600 }}>{client.formData.brandName}</span></p>
-                {client.formData.tagline && <p><span style={{ color: C.textTer }}>Tagline:</span> <span style={{ color: C.text }}>{client.formData.tagline}</span></p>}
-                {client.formData.website && <p><span style={{ color: C.textTer }}>Website:</span> <span style={{ color: C.text }}>{client.formData.website}</span></p>}
-                <p><span style={{ color: C.textTer }}>Objective:</span> <span style={{ color: C.text }}>{client.formData.objective}</span></p>
-                <p><span style={{ color: C.textTer }}>Target:</span> <span style={{ color: C.text }}>{client.formData.ageRange}</span></p>
-                {client.formData.keyMessage && <p><span style={{ color: C.textTer }}>Key Message:</span> <span style={{ color: C.text }}>{client.formData.keyMessage}</span></p>}
-                {client.formData.competitors && <p><span style={{ color: C.textTer }}>Competitors:</span> <span style={{ color: C.text }}>{client.formData.competitors}</span></p>}
-                {client.formData.personality?.length > 0 && <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>{client.formData.personality.map((t, i) => <span key={i} style={{ padding: "4px 12px", borderRadius: 980, background: C.bgSoft, color: C.text, fontSize: 12, fontWeight: 500 }}>{t}</span>)}</div>}
-              </div>
-            </div>
-            <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}>
-              <h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14 }}>Assets & Colors</h4>
-              {client.formData.productImages?.length > 0 ? <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>{client.formData.productImages.map((img, i) => <div key={i} style={{ width: 60, height: 60, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.borderLight}` }}><img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div>)}</div> : <p style={{ color: C.textTer, fontSize: 14, marginBottom: 12 }}>No product images uploaded</p>}
-              {client.formData.colors && <div><p style={{ color: C.textTer, fontSize: 13, marginBottom: 6 }}>Brand Colors</p><div style={{ display: "flex", gap: 6 }}>{parseColors(client.formData.colors).map((c, i) => <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}><div style={{ width: 32, height: 32, borderRadius: 8, background: c, border: `1px solid ${C.borderLight}` }} /><span style={{ fontSize: 9, color: C.textTer, fontFamily: "monospace" }}>{c}</span></div>)}</div></div>}
-            </div>
-          </div>
-          {client.formData.story && <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Brand Story</h4><p style={{ color: C.text, fontSize: 14, lineHeight: 1.8 }}>{client.formData.story}</p></div>}
-          <div style={{ display: "flex", gap: 16 }}>
-            {(client.formData.audience || client.formData.deepestFears || client.formData.deepestDesires) && <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Target Audience</h4>{client.formData.audience && <p style={{ color: C.text, fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>{client.formData.audience}</p>}{client.formData.deepestFears && <div style={{ marginBottom: 12 }}><h5 style={{ color: C.danger, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Deepest Fears</h5><p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.6 }}>{client.formData.deepestFears}</p></div>}{client.formData.deepestDesires && <div><h5 style={{ color: C.success, fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Deepest Desires</h5><p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.6 }}>{client.formData.deepestDesires}</p></div>}</div>}
-            {(client.formData.influencerAge || client.formData.influencerGender) && <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>AI Influencer</h4><div style={{ fontSize: 14, lineHeight: 2 }}>{client.formData.influencerAge && <p><span style={{ color: C.textTer }}>Age:</span> <span style={{ color: C.text }}>{client.formData.influencerAge}</span></p>}{client.formData.influencerGender && <p><span style={{ color: C.textTer }}>Gender:</span> <span style={{ color: C.text }}>{client.formData.influencerGender}</span></p>}{client.formData.influencerEthnicity && <p><span style={{ color: C.textTer }}>Ethnicity:</span> <span style={{ color: C.text }}>{client.formData.influencerEthnicity}</span></p>}{client.formData.influencerBodyType && <p><span style={{ color: C.textTer }}>Body Type:</span> <span style={{ color: C.text }}>{client.formData.influencerBodyType}</span></p>}{client.formData.influencerHairColor && <p><span style={{ color: C.textTer }}>Hair:</span> <span style={{ color: C.text }}>{client.formData.influencerHairColor}</span></p>}{client.formData.influencerBeautyLevel && <p><span style={{ color: C.textTer }}>Beauty:</span> <span style={{ color: C.text }}>{client.formData.influencerBeautyLevel}</span></p>}</div>{client.formData.influencerStyle && <p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.5, marginTop: 8 }}>{client.formData.influencerStyle}</p>}{client.formData.influencerPersonality && <p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>{client.formData.influencerPersonality}</p>}{client.formData.influencerNotes && <p style={{ color: C.textTer, fontSize: 12, lineHeight: 1.5, marginTop: 6, fontStyle: "italic" }}>{client.formData.influencerNotes}</p>}</div>}
-          </div>
-          <div style={{ display: "flex", gap: 16 }}>
-            {client.formData.uniqueFeatures?.filter(Boolean).length > 0 && <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Unique Features</h4>{client.formData.uniqueFeatures.filter(Boolean).map((f, i) => <p key={i} style={{ color: C.text, fontSize: 14, marginBottom: 6, lineHeight: 1.6 }}>• {f}</p>)}</div>}
-            {client.formData.testimonials?.filter(Boolean).length > 0 && <div style={{ flex: 1, background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: "#5856D6", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>Testimonials</h4>{client.formData.testimonials.filter(Boolean).map((t, i) => <p key={i} style={{ color: C.textSec, fontSize: 13, marginBottom: 10, lineHeight: 1.6, fontStyle: "italic", borderLeft: "2px solid #5856D620", paddingLeft: 12 }}>"{t}"</p>)}</div>}
-          </div>
-          {client.guidelines && <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 24 }}><h4 style={{ fontSize: 13, color: C.text, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 14 }}>Generated Brand Guidelines</h4>{typeof client.guidelines.brandSummary === 'string' && <div style={{ marginBottom: 16 }}><h5 style={{ color: C.text, fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Brand Summary</h5><p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.7 }}>{client.guidelines.brandSummary}</p></div>}{client.guidelines.toneOfVoice?.description && <div style={{ marginBottom: 16 }}><h5 style={{ color: C.text, fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Tone of Voice</h5><p style={{ color: C.textSec, fontSize: 13, lineHeight: 1.7 }}>{client.guidelines.toneOfVoice.description}</p></div>}{client.guidelines.copyDirection?.taglineOptions && <div style={{ marginBottom: 16 }}><h5 style={{ color: C.text, fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Tagline Options</h5>{client.guidelines.copyDirection.taglineOptions.map((t, i) => <p key={i} style={{ color: C.text, fontSize: 16, fontWeight: 500, fontFamily: "'Instrument Serif', serif", marginBottom: 4 }}>"{t}"</p>)}</div>}</div>}
-        </div>
-      ) : <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 48, textAlign: "center", marginBottom: 20 }}><p style={{ color: C.textTer, fontSize: 15 }}>No intake data yet.</p></div>}
-      <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16 }}>Internal Notes</h3>
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add an internal note..." onKeyDown={e => { if (e.key === "Enter") handleAddNote(); }} style={{ flex: 1, background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 10, padding: "10px 14px", color: C.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none" }} onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.borderLight} />
-          <Btn small primary onClick={handleAddNote} disabled={!note.trim()} icon={<Send size={12} />}>Add</Btn>
-        </div>
-        {notes.length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{notes.map(n => <div key={n.id} style={{ padding: "14px 16px", background: C.bgSoft, borderRadius: 10 }}><p style={{ color: C.text, fontSize: 14, lineHeight: 1.5 }}>{n.text}</p><p style={{ color: C.textTer, fontSize: 12, marginTop: 6 }}>{n.date}</p></div>)}</div> : <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>No notes yet.</p>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Intake Form ───
 function IntakeForm({ onSubmit }) {
   const [f, setF] = useState({ brandName: "", tagline: "", story: "", personality: [], formality: 50, mood: 50, intensity: 50, audience: "", ageRange: "25-34", competitors: "", deepestFears: "", deepestDesires: "", objective: OBJECTIVES[0], keyMessage: "", colors: "", website: "", productImages: [], voiceStyle: [], voiceGender: "Female", voiceAge: "20s-30s", voiceNotes: "", musicMood: [], musicGenres: [], musicNotes: "", videoPace: 50, videoEnergy: 50, videoTransitions: "Smooth", videoCuts: "Medium", videoNotes: "", uniqueFeatures: [""], testimonials: [""], influencerAge: "", influencerEthnicity: "", influencerGender: "", influencerHairColor: "", influencerHairStyle: "", influencerBodyType: "", influencerBeautyLevel: "", influencerStyle: "", influencerPersonality: "", influencerNotes: "" });
   const u = (k, v) => setF(p => ({ ...p, [k]: v }));
@@ -240,7 +98,19 @@ function IntakeForm({ onSubmit }) {
   );
 }
 
-// ─── Review Section ───
+function Generating({ msgIndex }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", textAlign: "center" }}>
+      <div style={{ position: "relative", width: 100, height: 100, marginBottom: 40 }}>
+        <div style={{ position: "absolute", inset: -20, borderRadius: "50%", background: C.accent + "08", animation: "pulse-ring 2s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={32} style={{ color: C.text }} /></div>
+      </div>
+      <h2 style={{ ...hd, fontSize: 28, color: C.text, marginBottom: 12 }}>Building Your Brand</h2>
+      <p style={{ color: C.textSec, fontSize: 16, fontWeight: 500 }}>{LOADING_MSGS[msgIndex % LOADING_MSGS.length]}</p>
+    </div>
+  );
+}
+
 function Section({ sectionKey, data, status, onApprove, onRequestChanges, onSubmitFeedback, feedback, onFeedbackChange, isRegen, formData }) {
   const label = SECTION_LABELS[sectionKey];
   const approved = status === "approved";
@@ -270,10 +140,8 @@ function Section({ sectionKey, data, status, onApprove, onRequestChanges, onSubm
   );
 }
 
-// ─── Main ───
-export default function AlchemyOS() {
+export default function BrandIntakePage() {
   const [mounted, setMounted] = useState(false);
-  const [view, setView] = useState("client");
   const [screen, setScreen] = useState("intake");
   const [formData, setFormData] = useState(null);
   const [guidelines, setGuidelines] = useState({});
@@ -282,29 +150,9 @@ export default function AlchemyOS() {
   const [loadingMsg, setLoadingMsg] = useState(0);
   const [regen, setRegen] = useState({});
   const [error, setError] = useState(null);
-  const [clients, setClients] = useState([]);
-  const [selectedClient, setSelectedClient] = useState(null);
   const [currentClientId, setCurrentClientId] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Hydration-safe mount
-  useEffect(() => {
-    setMounted(true);
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('admin')) { setIsAdmin(true); setView("dashboard"); }
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    async function load() {
-      const dbClients = await getClients();
-      if (dbClients && dbClients.length > 0) {
-        setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' })));
-      }
-    }
-    load();
-  }, [mounted]);
-
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (screen !== "generating") return; const iv = setInterval(() => setLoadingMsg(p => p + 1), 2500); return () => clearInterval(iv); }, [screen]);
 
   const allApproved = SECTIONS.every(s => statuses[s] === "approved");
@@ -328,15 +176,7 @@ export default function AlchemyOS() {
   const handleRegen = async (key) => {
     setRegen(p => ({ ...p, [key]: true }));
     const currentData = guidelines[key];
-    const r = await callClaude(`Regenerate ONLY the "${SECTION_LABELS[key]}" section based on client feedback.
-
-BRAND INTAKE: ${JSON.stringify(formData, null, 2)}
-
-CURRENT ${SECTION_LABELS[key].toUpperCase()}: ${JSON.stringify(currentData, null, 2)}
-
-CLIENT FEEDBACK: "${feedbacks[key]}"
-
-CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
+    const r = await callClaude(`Regenerate ONLY the "${SECTION_LABELS[key]}" section based on client feedback.\n\nBRAND INTAKE: ${JSON.stringify(formData, null, 2)}\n\nCURRENT ${SECTION_LABELS[key].toUpperCase()}: ${JSON.stringify(currentData, null, 2)}\n\nCLIENT FEEDBACK: "${feedbacks[key]}"\n\nCRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
     if (r) {
       const unwrapped = (r && typeof r === 'object' && r[key] !== undefined) ? r[key] : r;
       setGuidelines(p => ({ ...p, [key]: unwrapped }));
@@ -346,71 +186,33 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
     setRegen(p => ({ ...p, [key]: false }));
   };
 
-  const goHome = async () => {
-    const dbClients = await getClients();
-    if (dbClients && dbClients.length > 0) { setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' }))); }
-    setView("dashboard"); setSelectedClient(null); setCurrentClientId(null);
-  };
-
-  const updateClient = async (updated) => { setClients(p => p.map(c => c.id === updated.id ? updated : c)); setSelectedClient(updated); await updateClient_db(updated.id, { status: updated.status, stage: updated.stage, progress: updated.progress }); };
-
-  const selectClient = async (c) => {
-    const intake = await getBrandIntake(c.id);
-    const hub = await getBrandHub(c.id);
-    const clientNotes = await getNotes(c.id);
-    setSelectedClient({ ...c, formData: intake || null, guidelines: hub?.guidelines || null, notes: (clientNotes || []).map(n => ({ id: n.id, text: n.note_text, date: new Date(n.created_at).toLocaleString() })) });
-    setView("detail");
-  };
-
-  const newClient = () => { window.location.href = "/brand-intake"; };
-
   if (!mounted) return null;
 
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", background: C.bg, color: C.text, minHeight: "100vh" }}>
-      <style>{fonts}{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.15; } 100% { transform: scale(0.8); opacity: 0.5; } } @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } * { box-sizing: border-box; margin: 0; padding: 0; } select option { background: #fff; color: #1D1D1F; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #D2D2D7; border-radius: 3px; } input:focus, textarea:focus, select:focus { border-color: #000 !important; outline: none; } ::placeholder { color: #AEAEB2; }`}</style>
+      <style>{fonts}{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.15; } 100% { transform: scale(0.8); opacity: 0.5; } } @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: isAdmin ? "pointer" : "default" }} onClick={isAdmin ? goHome : undefined}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
           <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Alchemy <span style={{ fontWeight: 400, color: C.textSec }}>OS</span></span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {isAdmin && (view === "client" || view === "detail") && <button onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textSec, cursor: "pointer", fontSize: 14, fontFamily: "'Inter', sans-serif" }}><Home size={14} /> Dashboard</button>}
-          {view === "client" && screen === "review" && <span style={{ fontSize: 13, color: C.textSec }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
-        </div>
+        {screen === "review" && <span style={{ fontSize: 13, color: C.textSec }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
       </div>
 
-      <div style={{ maxWidth: view === "dashboard" || view === "detail" ? 960 : 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
-        {view === "dashboard" && <Dashboard clients={clients} onNew={newClient} onSelect={selectClient} />}
-        {view === "detail" && selectedClient && <ClientDetail client={selectedClient} onBack={() => { setView("dashboard"); setSelectedClient(null); }} onUpdate={updateClient} />}
-        {view === "client" && <>
-          {error && <div style={{ background: "#FFF2F2", border: `1px solid ${C.danger}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, color: C.danger, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><X size={16} /> {error}</div>}
-          {screen === "intake" && <IntakeForm onSubmit={handleSubmit} />}
-          {screen === "generating" && <Generating msgIndex={loadingMsg} />}
-          {screen === "review" && <div>
-            <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Review & Approve</h1>
-            <p style={{ color: C.textSec, marginBottom: 36, fontSize: 16, lineHeight: 1.6 }}>Review each section. Approve what works, request changes on what doesn't.</p>
-            {SECTIONS.map(sec => <Section key={sec} sectionKey={sec} data={guidelines[sec]} status={statuses[sec]} feedback={feedbacks[sec] || ""} onFeedbackChange={v => setFeedbacks(p => ({ ...p, [sec]: v }))} onApprove={() => setStatuses(p => ({ ...p, [sec]: "approved" }))} onRequestChanges={() => setStatuses(p => ({ ...p, [sec]: statuses[sec] === "feedback" ? "pending" : "feedback" }))} onSubmitFeedback={() => handleRegen(sec)} isRegen={regen[sec]} formData={formData} />)}
-            {allApproved && <div style={{ textAlign: "center", marginTop: 36, padding: 36, background: C.bgSoft, borderRadius: 16 }}><h3 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: C.text }}>All Sections Approved</h3><p style={{ color: C.textSec, fontSize: 15, marginBottom: 20 }}>Lock your brand kit to begin ad production.</p><Btn primary onClick={async () => { setScreen("locked"); if (currentClientId) { await lockBrandHub(currentClientId); await updateClient_db(currentClientId, { status: 'reviewing', stage: 'Brand Kit Locked', progress: 65 }); } }} icon={<Lock size={16} />}>Lock Brand Kit</Btn></div>}
-          </div>}
-          {screen === "locked" && <div style={{ textAlign: "center", paddingTop: 80 }}><div style={{ width: 80, height: 80, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Lock size={32} style={{ color: C.text }} /></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>Brand Kit Locked</h1><p style={{ color: C.textSec, fontSize: 17, lineHeight: 1.6, maxWidth: 480, margin: "0 auto 32px" }}>Your brand guidelines are finalized.</p><div style={{ display: "flex", gap: 12, justifyContent: "center" }}><Btn primary onClick={async () => { setScreen("submitted"); if (currentClientId) { await updateClient_db(currentClientId, { status: 'production', stage: 'In Production', progress: 80 }); } }} icon={<Send size={16} />}>Submit for Ad Production</Btn><Btn onClick={() => { setScreen("review"); setStatuses(p => { const n = {...p}; SECTIONS.forEach(s => n[s] = "approved"); return n; }); }}>Review Brand Kit</Btn></div></div>}
-          {screen === "submitted" && <div style={{ textAlign: "center", paddingTop: 60 }}><div style={{ position: "relative", width: 100, height: 100, margin: "0 auto 32px" }}><div style={{ position: "absolute", inset: -16, borderRadius: "50%", background: C.success + "10", animation: "pulse-ring 3s ease-in-out infinite" }} /><div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Check size={40} style={{ color: C.success }} /></div></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>We've Got Everything</h1><p style={{ color: C.text, fontSize: 18, lineHeight: 1.6, maxWidth: 520, margin: "0 auto 16px", fontWeight: 500 }}>Our team has received your brand kit and will now begin producing your ads.</p><p style={{ color: C.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 36px" }}>We'll craft your AI influencer, generate ad creative across all formats, and build your full campaign.</p><div style={{ maxWidth: 480, margin: "0 auto 36px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, textAlign: "left" }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>What happens next</h3><div style={{ display: "flex", flexDirection: "column", gap: 20 }}>{[{ step: "1", title: "AI Influencer Creation", desc: "Custom digital avatar based on your specs", time: "24-48 hours" }, { step: "2", title: "Ad Creative Production", desc: "100+ ads across all formats", time: "3-5 days" }, { step: "3", title: "Internal QA Review", desc: "Quality and brand consistency check", time: "1-2 days" }, { step: "4", title: "Delivery", desc: "Complete ad library via Google Drive", time: "Same day" }].map(item => <div key={item.step} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}><div style={{ width: 28, height: 28, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{item.step}</div><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}><p style={{ color: C.text, fontSize: 15, fontWeight: 600 }}>{item.title}</p><span style={{ color: C.textTer, fontSize: 12 }}>{item.time}</span></div><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.4 }}>{item.desc}</p></div></div>)}</div></div><div style={{ maxWidth: 480, margin: "0 auto 36px", padding: 16, background: C.bgSoft, borderRadius: 12 }}><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.5 }}>Questions? Reach out anytime. We're building something great for <span style={{ color: C.text, fontWeight: 600 }}>{formData?.brandName || "your brand"}</span>.</p></div>{isAdmin && <Btn onClick={goHome} icon={<Home size={16} />}>Back to Dashboard</Btn>}</div>}
-        </>}
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
+        {error && <div style={{ background: "#FFF2F2", border: `1px solid ${C.danger}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, color: C.danger, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><X size={16} /> {error}</div>}
+        {screen === "intake" && <IntakeForm onSubmit={handleSubmit} />}
+        {screen === "generating" && <Generating msgIndex={loadingMsg} />}
+        {screen === "review" && <div>
+          <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Review & Approve</h1>
+          <p style={{ color: C.textSec, marginBottom: 36, fontSize: 16, lineHeight: 1.6 }}>Review each section. Approve what works, request changes on what doesn't.</p>
+          {SECTIONS.map(sec => <Section key={sec} sectionKey={sec} data={guidelines[sec]} status={statuses[sec]} feedback={feedbacks[sec] || ""} onFeedbackChange={v => setFeedbacks(p => ({ ...p, [sec]: v }))} onApprove={() => setStatuses(p => ({ ...p, [sec]: "approved" }))} onRequestChanges={() => setStatuses(p => ({ ...p, [sec]: statuses[sec] === "feedback" ? "pending" : "feedback" }))} onSubmitFeedback={() => handleRegen(sec)} isRegen={regen[sec]} formData={formData} />)}
+          {allApproved && <div style={{ textAlign: "center", marginTop: 36, padding: 36, background: C.bgSoft, borderRadius: 16 }}><h3 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: C.text }}>All Sections Approved</h3><p style={{ color: C.textSec, fontSize: 15, marginBottom: 20 }}>Lock your brand kit to begin ad production.</p><Btn primary onClick={async () => { setScreen("locked"); if (currentClientId) { await lockBrandHub(currentClientId); await updateClient_db(currentClientId, { status: 'reviewing', stage: 'Brand Kit Locked', progress: 65 }); } }} icon={<Lock size={16} />}>Lock Brand Kit</Btn></div>}
+        </div>}
+        {screen === "locked" && <div style={{ textAlign: "center", paddingTop: 80 }}><div style={{ width: 80, height: 80, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Lock size={32} style={{ color: C.text }} /></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>Brand Kit Locked</h1><p style={{ color: C.textSec, fontSize: 17, lineHeight: 1.6, maxWidth: 480, margin: "0 auto 32px" }}>Your brand guidelines are finalized.</p><div style={{ display: "flex", gap: 12, justifyContent: "center" }}><Btn primary onClick={async () => { setScreen("submitted"); if (currentClientId) { await updateClient_db(currentClientId, { status: 'production', stage: 'In Production', progress: 80 }); } }} icon={<Send size={16} />}>Submit for Ad Production</Btn><Btn onClick={() => { setScreen("review"); setStatuses(p => { const n = {...p}; SECTIONS.forEach(s => n[s] = "approved"); return n; }); }}>Review Brand Kit</Btn></div></div>}
+        {screen === "submitted" && <div style={{ textAlign: "center", paddingTop: 60 }}><div style={{ position: "relative", width: 100, height: 100, margin: "0 auto 32px" }}><div style={{ position: "absolute", inset: -16, borderRadius: "50%", background: C.success + "10", animation: "pulse-ring 3s ease-in-out infinite" }} /><div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Check size={40} style={{ color: C.success }} /></div></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>We've Got Everything</h1><p style={{ color: C.text, fontSize: 18, lineHeight: 1.6, maxWidth: 520, margin: "0 auto 16px", fontWeight: 500 }}>Our team has received your brand kit and will now begin producing your ads.</p><p style={{ color: C.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 36px" }}>We'll craft your AI influencer, generate ad creative across all formats, and build your full campaign.</p><div style={{ maxWidth: 480, margin: "0 auto 36px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, textAlign: "left" }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>What happens next</h3><div style={{ display: "flex", flexDirection: "column", gap: 20 }}>{[{ step: "1", title: "AI Influencer Creation", desc: "Custom digital avatar based on your specs", time: "24-48 hours" }, { step: "2", title: "Ad Creative Production", desc: "100+ ads across all formats", time: "3-5 days" }, { step: "3", title: "Internal QA Review", desc: "Quality and brand consistency check", time: "1-2 days" }, { step: "4", title: "Delivery", desc: "Complete ad library via Google Drive", time: "Same day" }].map(item => <div key={item.step} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}><div style={{ width: 28, height: 28, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{item.step}</div><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}><p style={{ color: C.text, fontSize: 15, fontWeight: 600 }}>{item.title}</p><span style={{ color: C.textTer, fontSize: 12 }}>{item.time}</span></div><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.4 }}>{item.desc}</p></div></div>)}</div></div><div style={{ maxWidth: 480, margin: "0 auto 36px", padding: 16, background: C.bgSoft, borderRadius: 12 }}><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.5 }}>Questions? Reach out anytime. We're building something great for <span style={{ color: C.text, fontWeight: 600 }}>{formData?.brandName || "your brand"}</span>.</p></div></div>}
       </div>
-    </div>
-  );
-}
-
-function Generating({ msgIndex }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", textAlign: "center" }}>
-      <div style={{ position: "relative", width: 100, height: 100, marginBottom: 40 }}>
-        <div style={{ position: "absolute", inset: -20, borderRadius: "50%", background: C.accent + "08", animation: "pulse-ring 2s ease-in-out infinite" }} />
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={32} style={{ color: C.text }} /></div>
-      </div>
-      <h2 style={{ ...hd, fontSize: 28, color: C.text, marginBottom: 12 }}>Building Your Brand</h2>
-      <p style={{ color: C.textSec, fontSize: 16, fontWeight: 500 }}>{LOADING_MSGS[msgIndex % LOADING_MSGS.length]}</p>
     </div>
   );
 }
