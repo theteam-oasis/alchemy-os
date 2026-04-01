@@ -355,8 +355,11 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
   const updateClient = async (updated) => { setClients(p => p.map(c => c.id === updated.id ? updated : c)); setSelectedClient(updated); await updateClient_db(updated.id, { status: updated.status, stage: updated.stage, progress: updated.progress }); };
 
   const selectClient = async (c) => {
-    if (c.id.startsWith && c.id.startsWith("d")) { newClient(); }
-    else { const intake = await getBrandIntake(c.id); const hub = await getBrandHub(c.id); const clientNotes = await getNotes(c.id); setSelectedClient({ ...c, formData: intake || null, guidelines: hub?.guidelines || null, notes: (clientNotes || []).map(n => ({ id: n.id, text: n.note_text, date: new Date(n.created_at).toLocaleString() })) }); setView("detail"); }
+    const intake = await getBrandIntake(c.id);
+    const hub = await getBrandHub(c.id);
+    const clientNotes = await getNotes(c.id);
+    setSelectedClient({ ...c, formData: intake || null, guidelines: hub?.guidelines || null, notes: (clientNotes || []).map(n => ({ id: n.id, text: n.note_text, date: new Date(n.created_at).toLocaleString() })) });
+    setView("detail");
   };
 
   const newClient = () => { setView("client"); setScreen("intake"); setFormData(null); setGuidelines({}); setStatuses({}); setFeedbacks({}); setError(null); setSelectedClient(null); setCurrentClientId(null); };
