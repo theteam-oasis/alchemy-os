@@ -3,16 +3,17 @@ import { useState, useEffect, useRef } from "react";
 import { ArrowRight, Sparkles, Check, X, ChevronRight, Play, Star, TrendingUp, Zap, Brain, Users, Image, Video, Mic } from "lucide-react";
 
 const G = {
-  bg: "#0A0A0A",
-  card: "#111111",
-  cardBorder: "#1A1A1A",
-  gold: "#C9A84C",
-  goldSoft: "#C9A84C15",
-  goldBorder: "#C9A84C30",
-  text: "#FFFFFF",
-  textSec: "#999999",
-  textTer: "#666666",
-  border: "#1A1A1A",
+  bg: "#FFFFFF",
+  card: "#FFFFFF",
+  cardBorder: "#E8E8ED",
+  cardShadow: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
+  gold: "#000000",
+  goldSoft: "#00000008",
+  goldBorder: "#D2D2D7",
+  text: "#1D1D1F",
+  textSec: "#86868B",
+  textTer: "#AEAEB2",
+  border: "#E8E8ED",
   success: "#34C759",
   danger: "#FF3B30",
 };
@@ -30,7 +31,7 @@ function Nav() {
   }, []);
   const links = [{ label: "Why Alchemy", href: "#why" }, { label: "How It Works", href: "#how" }, { label: "Case Studies", href: "#results" }, { label: "Creative Examples", href: "#creative" }];
   return (
-    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: scrolled ? "rgba(10,10,10,0.9)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? `1px solid ${G.border}` : "none", transition: "all 0.3s" }}>
+    <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: scrolled ? "rgba(255,255,255,0.9)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? `1px solid ${G.border}` : "none", transition: "all 0.3s" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${G.gold}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Sparkles size={14} style={{ color: G.gold }} />
@@ -39,7 +40,7 @@ function Nav() {
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
         {links.map(l => <a key={l.href} href={l.href} style={{ color: G.textSec, fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s", ...mono }} onMouseEnter={e => e.target.style.color = G.text} onMouseLeave={e => e.target.style.color = G.textSec}>{l.label}</a>)}
-        <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 980, background: G.gold, color: "#000", fontSize: 14, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={14} /></a>
+        <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={14} /></a>
       </div>
     </nav>
   );
@@ -49,7 +50,7 @@ function Hero() {
   return (
     <section style={{ position: "relative", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "120px 24px 80px", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, borderRadius: "50%", border: `1px solid ${G.goldBorder}`, opacity: 0.3 }} />
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)" }} />
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)" }} />
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 800 }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 32 }}>
@@ -74,7 +75,7 @@ function Hero() {
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Andromeda Optimized</span>
         </div>
 
-        <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 980, background: G.gold, color: "#000", fontSize: 16, fontWeight: 600, textDecoration: "none", marginTop: 20, ...mono }}>Book a Creative Strategy Call <ArrowRight size={16} /></a>
+        <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 16, fontWeight: 600, textDecoration: "none", marginTop: 20, ...mono }}>Book a Creative Strategy Call <ArrowRight size={16} /></a>
         <div style={{ marginTop: 12 }}>
           <a href="#creative" style={{ color: G.textSec, fontSize: 14, textDecoration: "none", ...mono }}>See Example Ads</a>
         </div>
@@ -187,7 +188,7 @@ function CreativeExamples() {
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
                   <img src={ad.img} alt={ad.label} style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />
                   <div style={{ position: "absolute", top: 10, left: 10 }}>
-                    <span style={{ padding: "4px 12px", borderRadius: 980, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", color: G.gold, fontSize: 11, fontWeight: 600, ...mono }}>{ad.tag}</span>
+                    <span style={{ padding: "4px 12px", borderRadius: 980, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", color: G.text, fontSize: 11, fontWeight: 600, ...mono }}>{ad.tag}</span>
                   </div>
                   <div style={{ padding: "12px 14px", borderTop: `1px solid ${G.cardBorder}` }}>
                     <p style={{ color: G.textSec, fontSize: 12, ...mono }}>{ad.label}</p>
@@ -203,7 +204,7 @@ function CreativeExamples() {
       <div style={{ marginTop: 40, marginBottom: 40 }}>
         <p style={{ textAlign: "center", color: G.textTer, fontSize: 13, marginBottom: 20, ...mono }}>Trusted by brands we partner with</p>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 20, alignItems: "center", opacity: 0.6 }}>
-          {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(2)" }} />)}
+          {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(0.5)" }} />)}
         </div>
       </div>
     </section>
@@ -486,7 +487,7 @@ function CTA() {
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Friendly team</span>
       </div>
       <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 32px", ...mono }}>We'll review your current creative, diagnose the bottleneck, and show you exactly how we'd fix it.</p>
-      <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "16px 40px", borderRadius: 980, background: G.gold, color: "#000", fontSize: 17, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={16} /></a>
+      <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "16px 40px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 17, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={16} /></a>
     </section>
   );
 }
@@ -518,7 +519,7 @@ export default function AlchemyLanding() {
         ::selection { background: ${G.gold}30; color: ${G.text}; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
       <Nav />
