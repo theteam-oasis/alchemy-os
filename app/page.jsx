@@ -56,9 +56,9 @@ async function callClaude(prompt) {
   try {
     const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
     const data = await res.json();
-    if (data.error) { console.error("Claude error:", data.error); return null; }
+    if (data.error) { console.error("Claude API error:", data.error, data.details || "", data.raw || ""); alert("Generation error: " + data.error); return null; }
     return data.result;
-  } catch (e) { console.error("Claude API error:", e); return null; }
+  } catch (e) { console.error("Network error:", e); alert("Network error: " + e.message); return null; }
 }
 
 // ─── Agency Dashboard ───
@@ -581,8 +581,18 @@ export default function AlchemyOS() {
 
   const handleRegen = async (key) => {
     setRegen(p => ({ ...p, [key]: true }));
-    const r = await callClaude(`Regenerate "${SECTION_LABELS[key]}" section. INTAKE: ${JSON.stringify(formData, null, 2)}. CURRENT: ${JSON.stringify(guidelines[key], null, 2)}. FEEDBACK: "${feedbacks[key]}". Return ONLY valid JSON with same structure.`);
-    if (r) { setGuidelines(p => ({ ...p, [key]: r })); setStatuses(p => ({ ...p, [key]: "pending" })); setFeedbacks(p => ({ ...p, [key]: "" })); }
+    const r = await callClaude(`Regenerate ONLY the "${SECTION_LABELS[key]}" section. INTAKE: ${JSON.stringify(formData, null, 2)}. CURRENT: ${JSON.stringify(guidelines[key], null, 2)}. FEEDBACK: "${feedbacks[key]}". 
+
+IMPORTANT: Return ONLY the value for this section — NOT wrapped in an outer object. For example if regenerating Brand Summary, return just the string. If regenerating Tone of Voice, return just the object with description, doList, dontList. Do NOT wrap it in {"toneOfVoice": ...} or any other key.
+
+Return ONLY valid JSON matching the exact structure of the CURRENT data shown above.`);
+    if (r) {
+      // Handle case where Claude wraps the response in the section key
+      const unwrapped = r[key] !== undefined ? r[key] : r;
+      setGuidelines(p => ({ ...p, [key]: unwrapped }));
+      setStatuses(p => ({ ...p, [key]: "pending" }));
+      setFeedbacks(p => ({ ...p, [key]: "" }));
+    }
     setRegen(p => ({ ...p, [key]: false }));
   };
 
