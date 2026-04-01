@@ -195,7 +195,7 @@ function CreativeExamples() {
             <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {staticAds.slice(0, 12).map((ad, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
-                  <img src={ad.img} alt={ad.label} style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />
+                  <img src={ad.img} alt={ad.label} style={{ width: "100%", height: "auto", objectFit: "contain", display: "block" }} />
                   <div style={{ position: "absolute", top: 10, left: 10 }}>
                     <span style={{ padding: "4px 12px", borderRadius: 980, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", color: G.text, fontSize: 11, fontWeight: 600, ...mono }}>{ad.tag}</span>
                   </div>
