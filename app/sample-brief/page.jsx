@@ -79,14 +79,11 @@ export default function SampleBriefPage() {
       @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
       @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
       .shell{min-height:100vh;}
-      .nav{display:flex;align-items:center;justify-content:space-between;padding:16px 40px;background:white;border-bottom:1px solid #eeeeee;position:sticky;top:0;z-index:100;}
+      .nav{display:flex;align-items:center;justify-content:center;padding:16px 40px;background:white;border-bottom:1px solid #eeeeee;position:sticky;top:0;z-index:100;}
       .nav-logo{display:flex;align-items:center;gap:9px;text-decoration:none;}
       .logo-mark{width:26px;height:26px;background:#111111;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;}
       .logo-text{font-size:13px;font-weight:500;color:#111111;letter-spacing:-0.01em;}
       .logo-text em{color:#aaaaaa;font-style:normal;font-weight:300;}
-      .nav-links{display:flex;gap:2px;}
-      .nav-link{font-size:12px;font-weight:500;color:#aaaaaa;text-decoration:none;padding:6px 12px;border-radius:6px;transition:all 0.15s;}
-      .nav-link:hover{color:#111111;background:#f5f5f5;}
       .container{max-width:560px;margin:0 auto;padding:52px 24px 80px;animation:fadeUp 0.3s ease;}
       .eyebrow{font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#aaaaaa;margin-bottom:12px;}
       .title{font-size:34px;font-weight:300;letter-spacing:-0.02em;line-height:1.1;color:#111111;margin-bottom:10px;}
@@ -172,12 +169,10 @@ export default function SampleBriefPage() {
     `}</style>
     <div className="shell">
       <nav className="nav">
-        <a href="/" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
-        <div className="nav-links">
-          <a href="/clients" className="nav-link">CRM</a>
-          <a href="/campaign-builder" className="nav-link">Builder</a>
-          <a href="/auto-brief" className="nav-link">Full Brief</a>
-        </div>
+        <a href="/" className="nav-logo">
+          <div className="logo-mark">A</div>
+          <span className="logo-text">Alchemy <em>OS</em></span>
+        </a>
       </nav>
 
       {(phase==='input'||phase==='error')&&(
