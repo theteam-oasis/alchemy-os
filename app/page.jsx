@@ -6,11 +6,11 @@ import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake
 const A = "#000";
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');`;
 const C = {
-  bg: "#000000", bgSoft: "#1A1A1A", bgHover: "#2A2A2A",
-  border: "#333333", borderLight: "#2A2A2A",
-  text: "#FFFFFF", textSec: "#999999", textTer: "#666666",
-  card: "#111111", cardShadow: "0 1px 4px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)",
-  accent: "#FFFFFF", accentSoft: "#FFFFFF10",
+  bg: "#FFFFFF", bgSoft: "#F5F5F7", bgHover: "#F0F0F2",
+  border: "#D2D2D7", borderLight: "#E8E8ED",
+  text: "#1D1D1F", textSec: "#86868B", textTer: "#AEAEB2",
+  card: "#FFFFFF", cardShadow: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
+  accent: "#000000", accentSoft: "#00000010",
   success: "#34C759", warning: "#FF9500", danger: "#FF3B30", info: "#007AFF",
 };
 
