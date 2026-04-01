@@ -1,52 +1,41 @@
-export async function POST(request) {
+export async function POST(req) {
+  const { prompt } = await req.json()
+  
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return Response.json({ error: 'API key not configured' }, { status: 500 })
+  }
+
   try {
-    const { prompt } = await request.json()
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
 
-    if (!prompt) {
-      return Response.json({ success: false, error: 'No prompt provided' }, { status: 400 })
+    const data = await res.json()
+    
+    if (data.error) {
+      return Response.json({ error: data.error.message }, { status: 400 })
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY
-    if (!apiKey) {
-      return Response.json({ success: false, error: 'GOOGLE_API_KEY not set' }, { status: 500 })
+    const text = data.content.map(c => c.text || '').join('\n')
+    
+    try {
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+      return Response.json({ result: parsed })
+    } catch {
+      return Response.json({ error: 'Failed to parse AI response', raw: text }, { status: 500 })
     }
-
-    // Use REST API directly — more reliable than SDK for experimental models
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-        }),
-      }
-    )
-
-    if (!response.ok) {
-      const errText = await response.text()
-      console.error('Google API error:', errText)
-      return Response.json({ success: false, error: `Google API error: ${response.status} — ${errText}` }, { status: 500 })
-    }
-
-    const data = await response.json()
-
-    // Find image part in response
-    const parts = data?.candidates?.[0]?.content?.parts || []
-    const imagePart = parts.find(p => p.inlineData)
-
-    if (!imagePart) {
-      console.error('No image in response:', JSON.stringify(data))
-      return Response.json({ success: false, error: 'No image returned — model may not be available on your API key' }, { status: 500 })
-    }
-
-    const { data: imageBase64, mimeType } = imagePart.inlineData
-    const dataUrl = `data:${mimeType || 'image/png'};base64,${imageBase64}`
-
-    return Response.json({ success: true, imageUrl: dataUrl })
-  } catch (error) {
-    console.error('Image generation error:', error)
-    return Response.json({ success: false, error: error.message }, { status: 500 })
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
 }
