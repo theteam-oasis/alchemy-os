@@ -290,8 +290,7 @@ export default function AlchemyOS() {
   // Hydration-safe mount
   useEffect(() => {
     setMounted(true);
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('admin')) { setIsAdmin(true); setView("dashboard"); }
+    setIsAdmin(true); setView("dashboard");
   }, []);
 
   useEffect(() => {

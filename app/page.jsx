@@ -133,32 +133,65 @@ function WhyAlchemy() {
 }
 
 function CreativeExamples() {
-  const categories = [
-    { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms.", items: ["Editorial", "Product", "Fitness", "Skincare", "Lifestyle", "Before/After", "Problem/Solution", "Feature Bullets"] },
-    { label: "Video Creation", icon: <Video size={16} />, title: "Cinematic Storytelling", desc: "High production creations that tell your story at a fraction of the cost of a traditional production.", items: [] },
-    { label: "UGC", icon: <Mic size={16} />, title: "A.I. Powered UGC", desc: "Lifelike A.I. UGC to give your products an authentic feel, without the typical headache of dealing with creators.", items: [] },
+  const IMG = "https://alchemy-manifesto.lovable.app";
+  const staticAds = [
+    { tag: "Editorial", label: "NYT Wellness", img: `${IMG}/assets/wellness-nyt-BCtGP0C9.png` },
+    { tag: "Product", label: "Tech Breakdown", img: `${IMG}/assets/sock-scientific-tech-CtYs3SdE.jpeg` },
+    { tag: "Fitness", label: "Influencer UGC", img: `${IMG}/assets/fitness-booty-genie-D4FVfD5c.jpeg` },
+    { tag: "Skincare", label: "Product Benefits", img: `${IMG}/assets/tallow-balm-ad-j98A_I8X.jpeg` },
+    { tag: "Lifestyle", label: "Sports Focus", img: `${IMG}/assets/golf-ad-BF4ytyZB.jpeg` },
+    { tag: "Skincare", label: "Natural Skincare", img: `${IMG}/assets/wonderfat-tallow-DC069gsu.png` },
+    { tag: "Product", label: "Before/After", img: `${IMG}/assets/sock-pain-relief-D4Ovgxos.jpeg` },
+    { tag: "Lifestyle", label: "Social UGC", img: `${IMG}/assets/ugc-socks-Dvn42rza.jpeg` },
+    { tag: "Publishing", label: "Family Product", img: `${IMG}/assets/kids-book-principles--iHkIR3m.jpeg` },
+    { tag: "Product", label: "Problem/Solution", img: `${IMG}/assets/archtek-solution-DFwSO3H5.jpeg` },
+    { tag: "Product", label: "Feature Bullets", img: `${IMG}/assets/sock-bullets-DD4J3Cjn.jpeg` },
+    { tag: "Sports", label: "Focus Training", img: `${IMG}/assets/golf-focus-training-DgZbFf-q.jpeg` },
+    { tag: "Home", label: "Luxury Still Life", img: `${IMG}/assets/scent-diffuser-studio-8F9hzFSi.png` },
+    { tag: "Skincare", label: "Closeup Product", img: `${IMG}/assets/skincare-closeup-CKKAxIIz.png` },
+  ];
+  const logos = [
+    `${IMG}/assets/bootygenie-official-BrxgbrDk.png`,
+    `${IMG}/assets/icebeanie-official-F3fCEkWV.png`,
+    `${IMG}/assets/iron-rock-ventures-official-FV2ucI1R.png`,
+    `${IMG}/assets/goliath-labs-official-D3iP2L4G.png`,
+    `${IMG}/assets/b2b-rocket-official-R758QTZD.png`,
+    `${IMG}/assets/freedom-official-D-OAEA_z.png`,
+    `${IMG}/assets/alpha-refinery-official-CQAPHvfp.png`,
+    `${IMG}/assets/extra-coffee-official-C9bq3K8d.png`,
+    `${IMG}/assets/supermouth-official-CCo4819A.png`,
+    `${IMG}/assets/titan-scrubs-official-C4lCkVZ-.png`,
+    `${IMG}/assets/viapromeds-official-DmO6JvCU.png`,
+    `${IMG}/assets/consumer-law-group-official-q61IUExE.png`,
+  ];
+  const sections = [
+    { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping", titleGold: "Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms." },
+    { label: "Video Creation", icon: <Video size={16} />, title: "Cinematic", titleGold: "Storytelling", desc: "High production creations that tell your story at a fraction of the cost of a traditional production." },
+    { label: "UGC", icon: <Mic size={16} />, title: "A.I. Powered", titleGold: "UGC", desc: "Lifelike A.I. UGC to give your products an authentic feel, without the typical headache of dealing with creators." },
   ];
   return (
     <section id="creative" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
-      {categories.map((cat, ci) => (
+      {sections.map((cat, ci) => (
         <div key={ci} style={{ marginBottom: 80 }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
-              {cat.icon}
+              <span style={{ color: G.gold }}>{cat.icon}</span>
               <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>{cat.label}</span>
             </div>
-            <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>{cat.title.split(' ').slice(0, -2).join(' ')} <span style={{ color: G.gold }}>{cat.title.split(' ').slice(-2).join(' ')}</span></h2>
+            <h2 style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>{cat.title} <span style={{ color: G.gold }}>{cat.titleGold}</span></h2>
             <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 600, margin: "0 auto", ...mono }}>{cat.desc}</p>
           </div>
-          {cat.items.length > 0 && (
+          {ci === 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-              {cat.items.map((item, i) => (
-                <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", aspectRatio: "3/4" }}>
-                  <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 16 }}>
-                    <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 980, background: G.goldSoft, border: `1px solid ${G.goldBorder}`, color: G.gold, fontSize: 11, fontWeight: 600, alignSelf: "flex-start", ...mono }}>{item}</span>
-                    <div>
-                      <p style={{ color: G.textSec, fontSize: 12, ...mono }}>Static Ad Creative</p>
-                    </div>
+              {staticAds.slice(0, 12).map((ad, i) => (
+                <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
+                  <img src={ad.img} alt={ad.label} style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />
+                  <div style={{ position: "absolute", top: 10, left: 10 }}>
+                    <span style={{ padding: "4px 12px", borderRadius: 980, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", color: G.gold, fontSize: 11, fontWeight: 600, ...mono }}>{ad.tag}</span>
+                  </div>
+                  <div style={{ padding: "12px 14px", borderTop: `1px solid ${G.cardBorder}` }}>
+                    <p style={{ color: G.textSec, fontSize: 12, ...mono }}>{ad.label}</p>
+                    <p style={{ color: G.textTer, fontSize: 11, ...mono }}>Static Ad Creative</p>
                   </div>
                 </div>
               ))}
@@ -166,6 +199,13 @@ function CreativeExamples() {
           )}
         </div>
       ))}
+
+      <div style={{ marginTop: 40, marginBottom: 40 }}>
+        <p style={{ textAlign: "center", color: G.textTer, fontSize: 13, marginBottom: 20, ...mono }}>Trusted by brands we partner with</p>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 20, alignItems: "center", opacity: 0.6 }}>
+          {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(2)" }} />)}
+        </div>
+      </div>
     </section>
   );
 }
