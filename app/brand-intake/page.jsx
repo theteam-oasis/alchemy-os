@@ -182,6 +182,9 @@ export default function BrandIntakePage() {
       setGuidelines(p => ({ ...p, [key]: unwrapped }));
       setStatuses(p => ({ ...p, [key]: "pending" }));
       setFeedbacks(p => ({ ...p, [key]: "" }));
+    } else {
+      setStatuses(p => ({ ...p, [key]: "pending" }));
+      setError("Regeneration failed. Please try again.");
     }
     setRegen(p => ({ ...p, [key]: false }));
   };
@@ -207,7 +210,7 @@ export default function BrandIntakePage() {
         {screen === "review" && <div>
           <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Review & Approve</h1>
           <p style={{ color: C.textSec, marginBottom: 36, fontSize: 16, lineHeight: 1.6 }}>Review each section. Approve what works, request changes on what doesn't.</p>
-          {SECTIONS.map(sec => <Section key={sec} sectionKey={sec} data={guidelines[sec]} status={statuses[sec]} feedback={feedbacks[sec] || ""} onFeedbackChange={v => setFeedbacks(p => ({ ...p, [sec]: v }))} onApprove={() => setStatuses(p => ({ ...p, [sec]: "approved" }))} onRequestChanges={() => setStatuses(p => ({ ...p, [sec]: statuses[sec] === "feedback" ? "pending" : "feedback" }))} onSubmitFeedback={() => handleRegen(sec)} isRegen={regen[sec]} formData={formData} />)}
+          {SECTIONS.map(sec => <Section key={sec} sectionKey={sec} data={guidelines[sec]} status={statuses[sec]} feedback={feedbacks[sec] || ""} onFeedbackChange={v => setFeedbacks(p => ({ ...p, [sec]: v }))} onApprove={() => setStatuses(p => ({ ...p, [sec]: "approved" }))} onRequestChanges={() => setStatuses(p => ({ ...p, [sec]: p[sec] === "feedback" ? "pending" : "feedback" }))} onSubmitFeedback={() => handleRegen(sec)} isRegen={regen[sec]} formData={formData} />)}
           {allApproved && <div style={{ textAlign: "center", marginTop: 36, padding: 36, background: C.bgSoft, borderRadius: 16 }}><h3 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: C.text }}>All Sections Approved</h3><p style={{ color: C.textSec, fontSize: 15, marginBottom: 20 }}>Lock your brand kit to begin ad production.</p><Btn primary onClick={async () => { setScreen("locked"); if (currentClientId) { await lockBrandHub(currentClientId); await updateClient_db(currentClientId, { status: 'reviewing', stage: 'Brand Kit Locked', progress: 65 }); } }} icon={<Lock size={16} />}>Lock Brand Kit</Btn></div>}
         </div>}
         {screen === "locked" && <div style={{ textAlign: "center", paddingTop: 80 }}><div style={{ width: 80, height: 80, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Lock size={32} style={{ color: C.text }} /></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>Brand Kit Locked</h1><p style={{ color: C.textSec, fontSize: 17, lineHeight: 1.6, maxWidth: 480, margin: "0 auto 32px" }}>Your brand guidelines are finalized.</p><div style={{ display: "flex", gap: 12, justifyContent: "center" }}><Btn primary onClick={async () => { setScreen("submitted"); if (currentClientId) { await updateClient_db(currentClientId, { status: 'production', stage: 'In Production', progress: 80 }); } }} icon={<Send size={16} />}>Submit for Ad Production</Btn><Btn onClick={() => { setScreen("review"); setStatuses(p => { const n = {...p}; SECTIONS.forEach(s => n[s] = "approved"); return n; }); }}>Review Brand Kit</Btn></div></div>}

@@ -28,12 +28,22 @@ export async function POST(req) {
     }
 
     const text = data.content.map(c => c.text || '').join('\n')
-    
+
     try {
-      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+      // Strip markdown fences first
+      let cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+      // If there's extra text around the JSON, extract the outermost { ... }
+      const firstBrace = cleaned.indexOf('{')
+      const lastBrace = cleaned.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.slice(firstBrace, lastBrace + 1)
+      }
+      const parsed = JSON.parse(cleaned)
       return Response.json({ result: parsed })
     } catch {
-      return Response.json({ error: 'Failed to parse AI response', raw: text }, { status: 500 })
+      // If JSON parsing fails, return the raw text as the result
+      // This handles cases like brandSummary which is a plain string
+      return Response.json({ result: text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim() })
     }
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
