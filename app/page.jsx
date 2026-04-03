@@ -513,7 +513,7 @@ function IsThisForYou() {
 
 function CTA() {
   return (
-    <section id="cta" className="section-wrap" style={{ padding: "80px 24px 60px", maxWidth: 700, margin: "0 auto", textAlign: "center" }}>
+    <section id="cta" className="section-wrap" style={{ padding: "80px 24px 60px", maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
       <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Ready to fix your<br /><span style={{ color: G.gold }}>creative bottleneck?</span></h2>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 32, marginTop: 16 }}>
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Free creative audit</span>
@@ -523,7 +523,9 @@ function CTA() {
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Friendly team</span>
       </div>
       <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 32px", ...mono }}>We'll review your current creative, diagnose the bottleneck, and show you exactly how we'd fix it.</p>
-      <a href="https://calendly.com" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "16px 40px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 17, fontWeight: 600, textDecoration: "none", ...mono }}>Book a Call <ArrowRight size={16} /></a>
+      <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, overflow: "hidden", maxWidth: 700, margin: "0 auto" }}>
+        <iframe src="https://calendly.com/d/cs9w-cwg-b5q/alchemy-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000" style={{ width: "100%", height: 700, border: "none" }} title="Book a Call" />
+      </div>
     </section>
   );
 }
