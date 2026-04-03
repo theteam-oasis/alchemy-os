@@ -178,8 +178,8 @@ function CreativeExamples() {
   const videoIds = ["nnszwpczzp", "5sl3l0l2f5", "43ri1z6u1s", "i19k51tf69", "y87uppwmi8", "7wpl1yvees", "whod3vghce", "ulzz6x8ei4"];
   const ugcIds = ["dyyqvvub9a", "0lt2c05769", "0t4n1rr87z", "3an8fm00wb", "hlfzjjqx3s", "bfta6bfhmv"];
   const sections = [
-    { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping", titleGold: "Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms." },
     { label: "Video Creation", icon: <Video size={16} />, title: "Cinematic", titleGold: "Storytelling", desc: "High production creations that tell your story at a fraction of the cost of a traditional production." },
+    { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping", titleGold: "Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms." },
     { label: "UGC", icon: <Mic size={16} />, title: "A.I. Powered", titleGold: "UGC", desc: "Lifelike A.I. UGC to give your products an authentic feel, without the typical headache of dealing with creators." },
   ];
   return (
@@ -196,9 +196,20 @@ function CreativeExamples() {
           </div>
           {ci === 0 && (
             <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+              {videoIds.map((vid, i) => (
+                <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
+                    <iframe src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`} title="Video Ad" allow="autoplay; fullscreen" frameBorder="0" scrolling="no" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {ci === 1 && (
+            <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {staticAds.slice(0, 12).map((ad, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
-                  <div style={{ position: "relative", paddingBottom: "125%", overflow: "hidden" }}>
+                  <div style={{ position: "relative", paddingBottom: "177.78%", overflow: "hidden" }}>
                     <img src={ad.img} alt={ad.label} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                   <div style={{ position: "absolute", top: 10, left: 10 }}>
@@ -207,17 +218,6 @@ function CreativeExamples() {
                   <div style={{ padding: "12px 14px", borderTop: `1px solid ${G.cardBorder}` }}>
                     <p style={{ color: G.textSec, fontSize: 12, ...mono }}>{ad.label}</p>
                     <p style={{ color: G.textTer, fontSize: 11, ...mono }}>Static Ad Creative</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {ci === 1 && (
-            <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-              {videoIds.map((vid, i) => (
-                <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
-                    <iframe src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`} title="Video Ad" allow="autoplay; fullscreen" frameBorder="0" scrolling="no" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
                   </div>
                 </div>
               ))}
