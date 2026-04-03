@@ -176,7 +176,7 @@ function CreativeExamples() {
     `${IMG}/assets/consumer-law-group-official-q61IUExE.png`,
   ];
   const videoIds = ["nnszwpczzp", "5sl3l0l2f5", "43ri1z6u1s", "i19k51tf69", "y87uppwmi8", "7wpl1yvees", "whod3vghce", "ulzz6x8ei4"];
-  const ugcIds = ["dyyqvvub9a", "0lt2c05769", "0t4n1rr87z", "3an8fm00wb", "hlfzjjqx3s", "bfta6bfhmv", "wtx9f943dn"];
+  const ugcIds = ["dyyqvvub9a", "0lt2c05769", "0t4n1rr87z", "3an8fm00wb", "hlfzjjqx3s", "bfta6bfhmv"];
   const sections = [
     { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping", titleGold: "Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms." },
     { label: "Video Creation", icon: <Video size={16} />, title: "Cinematic", titleGold: "Storytelling", desc: "High production creations that tell your story at a fraction of the cost of a traditional production." },
