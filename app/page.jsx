@@ -120,6 +120,7 @@ function WhyAlchemy() {
     { icon: <Zap size={20} />, title: "Hydra Testing System", desc: "A proprietary testing system designed to surface and scale winners without creative bottlenecks." },
     { icon: <Brain size={20} />, title: "Oracle Brain", desc: "A centralized intelligence layer combining brand DNA, market data, and category insights to guide execution." },
     { icon: <Users size={20} />, title: "Human Creative Direction", desc: "Elite marketers guiding A.I. systems to turn creative into consistent, profitable scale." },
+    { icon: <Play size={20} />, title: "Andromeda-Ready Formats", desc: "Every asset optimized for Meta's Andromeda algorithm — the right formats, ratios, and hooks to maximize delivery." },
   ];
   return (
     <section id="why" className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
