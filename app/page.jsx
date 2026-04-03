@@ -2,20 +2,66 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowRight, Sparkles, Check, X, ChevronRight, Play, Star, TrendingUp, Zap, Brain, Users, Image, Video, Mic } from "lucide-react";
 
+/* ── Smooth easing helper ── */
+function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+/* ── Mount fade-in for hero (not scroll-linked) ── */
+function HeroReveal({ children, as: Tag = "div", style = {}, className = "", delay = 0 }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setShow(true), delay); return () => clearTimeout(t); }, [delay]);
+  return (
+    <Tag className={className} style={{
+      ...style,
+      filter: show ? "blur(0px)" : "blur(12px)",
+      opacity: show ? 1 : 0,
+      transform: show ? "translateY(0px)" : "translateY(18px)",
+      transition: "filter 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 1.2s cubic-bezier(0.25, 0.1, 0.25, 1), transform 1.2s cubic-bezier(0.25, 0.1, 0.25, 1)",
+    }}>{children}</Tag>
+  );
+}
+
+/* ── Hero headline: words stagger in on mount ── */
+function HeroBlurText({ children, as: Tag = "span", style = {}, className = "", staggerMs = 60 }) {
+  const text = typeof children === "string" ? children : "";
+  const words = text.split(" ");
+  const [show, setShow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setShow(true), 100); return () => clearTimeout(t); }, []);
+  return (
+    <Tag className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em" }}>
+      {words.map((w, i) => (
+        <span key={i} style={{
+          display: "inline-block",
+          filter: show ? "blur(0px)" : "blur(14px)",
+          opacity: show ? 1 : 0,
+          transform: show ? "translateY(0px)" : "translateY(16px)",
+          transition: `filter 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, opacity 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, transform 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms`,
+        }}>{w}</span>
+      ))}
+    </Tag>
+  );
+}
+
 /* ── Scroll-linked blur reveal (Framer-style) ── */
-function ScrollBlurText({ children, blurMax = 10, stagger = true, as: Tag = "span", style = {}, className = "" }) {
+function ScrollBlurText({ children, blurMax = 8, stagger = true, as: Tag = "span", style = {}, className = "" }) {
   const text = typeof children === "string" ? children : null;
   const ref = useRef(null);
-  const [progress, setProgress] = useState(0);
+  const progressRef = useRef(0);
+  const smoothRef = useRef(0);
+  const [smooth, setSmooth] = useState(0);
   const raf = useRef(null);
 
   const tick = useCallback(() => {
     const el = ref.current;
     if (el) {
       const rect = el.getBoundingClientRect();
-      const raw = (window.innerHeight * 0.92 - rect.top) / (window.innerHeight * 0.45);
-      setProgress(Math.min(1, Math.max(0, raw)));
+      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.5);
+      progressRef.current = Math.min(1, Math.max(0, raw));
     }
+    // Lerp: 0.08 = smooth glide without being sluggish
+    smoothRef.current += (progressRef.current - smoothRef.current) * 0.08;
+    // Snap to target when very close to avoid lingering near-invisible state
+    if (Math.abs(progressRef.current - smoothRef.current) < 0.005) smoothRef.current = progressRef.current;
+    setSmooth(smoothRef.current);
     raf.current = requestAnimationFrame(tick);
   }, []);
 
@@ -24,20 +70,21 @@ function ScrollBlurText({ children, blurMax = 10, stagger = true, as: Tag = "spa
     return () => cancelAnimationFrame(raf.current);
   }, [tick]);
 
-  // If children is plain text, split into words and stagger
   if (text && stagger) {
     const words = text.split(" ");
     return (
       <Tag ref={ref} className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em" }}>
         {words.map((w, i) => {
-          const s = i / words.length, e = (i + 1) / words.length;
-          const wp = Math.min(1, Math.max(0, (progress - s) / (e - s)));
+          // Wider overlap between words for smoother cascade
+          const s = (i / words.length) * 0.7;
+          const e = s + 0.45;
+          const wp = ease(Math.min(1, Math.max(0, (smooth - s) / (e - s))));
           return (
             <span key={i} style={{
               display: "inline-block",
               filter: `blur(${blurMax * (1 - wp)}px)`,
-              opacity: 0.05 + 0.95 * wp,
-              transform: `translateY(${12 * (1 - wp)}px)`,
+              opacity: wp,
+              transform: `translateY(${10 * (1 - wp)}px)`,
               willChange: "filter, opacity, transform",
             }}>{w}</span>
           );
@@ -46,34 +93,36 @@ function ScrollBlurText({ children, blurMax = 10, stagger = true, as: Tag = "spa
     );
   }
 
-  // For non-text children (JSX), animate the whole block
-  const blur = blurMax * (1 - progress);
-  const opacity = 0.05 + 0.95 * progress;
-  const translateY = 20 * (1 - progress);
+  const p = ease(smooth);
   return (
     <Tag ref={ref} className={className} style={{
       ...style,
-      filter: `blur(${blur}px)`,
-      opacity,
-      transform: `translateY(${translateY}px)`,
+      filter: `blur(${blurMax * (1 - p)}px)`,
+      opacity: p,
+      transform: `translateY(${16 * (1 - p)}px)`,
       willChange: "filter, opacity, transform",
     }}>{children}</Tag>
   );
 }
 
 /* Convenience: reveal a whole block (card, grid, section chunk) */
-function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blurMax = 8 }) {
+function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blurMax = 6 }) {
   const ref = useRef(null);
-  const [progress, setProgress] = useState(0);
+  const progressRef = useRef(0);
+  const smoothRef = useRef(0);
+  const [smooth, setSmooth] = useState(0);
   const raf = useRef(null);
 
   const tick = useCallback(() => {
     const el = ref.current;
     if (el) {
       const rect = el.getBoundingClientRect();
-      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.35);
-      setProgress(Math.min(1, Math.max(0, raw)));
+      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.45);
+      progressRef.current = Math.min(1, Math.max(0, raw));
     }
+    smoothRef.current += (progressRef.current - smoothRef.current) * 0.08;
+    if (Math.abs(progressRef.current - smoothRef.current) < 0.005) smoothRef.current = progressRef.current;
+    setSmooth(smoothRef.current);
     raf.current = requestAnimationFrame(tick);
   }, []);
 
@@ -82,15 +131,13 @@ function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blu
     return () => cancelAnimationFrame(raf.current);
   }, [tick]);
 
-  const blur = blurMax * (1 - progress);
-  const opacity = 0.05 + 0.95 * progress;
-  const translateY = 24 * (1 - progress);
+  const p = ease(smooth);
   return (
     <Tag ref={ref} className={className} style={{
       ...style,
-      filter: `blur(${blur}px)`,
-      opacity,
-      transform: `translateY(${translateY}px)`,
+      filter: `blur(${blurMax * (1 - p)}px)`,
+      opacity: p,
+      transform: `translateY(${18 * (1 - p)}px)`,
       willChange: "filter, opacity, transform",
     }}>{children}</Tag>
   );
@@ -156,34 +203,34 @@ function Hero() {
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)" }} />
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 800 }}>
-        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 32 }}>
+        <HeroReveal delay={100} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 32 }}>
           <Sparkles size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>AI-Powered Creative Studio</span>
-        </BlurReveal>
+        </HeroReveal>
 
-        <ScrollBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center" }} blurMax={12}>{"For brands scaling with Paid Social"}</ScrollBlurText>
+        <HeroBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center" }} staggerMs={70}>{"For brands scaling with Paid Social"}</HeroBlurText>
 
         <div style={{ marginTop: 32, marginBottom: 16 }}>
-          <ScrollBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center" }}>{"Your ads aren't failing."}</ScrollBlurText>
-          <ScrollBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3, justifyContent: "center" }}>{"Your creative pipeline is."}</ScrollBlurText>
+          <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center" }} staggerMs={50}>{"Your ads aren't failing."}</HeroBlurText>
+          <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3, justifyContent: "center" }} staggerMs={50}>{"Your creative pipeline is."}</HeroBlurText>
         </div>
 
-        <BlurReveal as="p" className="hero-body" style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</BlurReveal>
+        <HeroReveal delay={600} as="p" className="hero-body" style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</HeroReveal>
 
-        <BlurReveal style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <HeroReveal delay={750} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>AI-powered</span>
           <span style={{ color: G.goldBorder }}>•</span>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Performance-tested</span>
           <span style={{ color: G.goldBorder }}>•</span>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Andromeda Optimized</span>
-        </BlurReveal>
+        </HeroReveal>
 
-        <BlurReveal>
+        <HeroReveal delay={900}>
           <a className="hero-cta" href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 16, fontWeight: 600, textDecoration: "none", marginTop: 20, ...mono }}>Book a Creative Strategy Call <ArrowRight size={16} /></a>
           <div style={{ marginTop: 12 }}>
             <a href="#creative" style={{ color: G.textSec, fontSize: 14, textDecoration: "none", ...mono }}>See Example Ads</a>
           </div>
-        </BlurReveal>
+        </HeroReveal>
       </div>
     </section>
   );
