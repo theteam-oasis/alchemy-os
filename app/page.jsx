@@ -127,7 +127,7 @@ function WhyAlchemy() {
       <div className="section-header" style={{ textAlign: "center", marginBottom: 64 }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <Sparkles size={14} style={{ color: G.gold }} />
-          <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Our Portfolio</span>
+          <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Why Alchemy</span>
         </div>
       </div>
       <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
@@ -176,7 +176,7 @@ function CreativeExamples() {
     `${IMG}/assets/consumer-law-group-official-q61IUExE.png`,
   ];
   const videoIds = ["nnszwpczzp", "5sl3l0l2f5", "43ri1z6u1s", "i19k51tf69", "y87uppwmi8", "7wpl1yvees", "whod3vghce", "ulzz6x8ei4"];
-  const ugcIds = ["dyyqvvub9a", "0lt2c05769", "0t4n1rr87z", "3an8fm00wb", "hlfzjjqx3s", "bfta6bfhmv"];
+  const ugcIds = ["dyyqvvub9a", "0lt2c05769", "0t4n1rr87z", "3an8fm00wb", "hlfzjjqx3s", "bfta6bfhmv", "wtx9f943dn"];
   const sections = [
     { label: "Static Creative", icon: <Image size={16} />, title: "Scroll-Stopping", titleGold: "Static Ads", desc: "High-converting static creatives designed to capture attention and drive action across all paid social platforms." },
     { label: "Video Creation", icon: <Video size={16} />, title: "Cinematic", titleGold: "Storytelling", desc: "High production creations that tell your story at a fraction of the cost of a traditional production." },
