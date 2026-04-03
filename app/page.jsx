@@ -29,7 +29,7 @@ function Nav() {
     const h = () => setScrolled(window.scrollY > 50);
     window.addEventListener("scroll", h); return () => window.removeEventListener("scroll", h);
   }, []);
-  const links = [{ label: "Why Alchemy", href: "#why" }, { label: "How It Works", href: "#how" }, { label: "Case Studies", href: "#results" }, { label: "Creative Examples", href: "#creative" }];
+  const links = [{ label: "Why Alchemy", href: "#why" }, { label: "Portfolio", href: "#creative" }, { label: "How It Works", href: "#how" }, { label: "Case Studies", href: "#results" }];
   return (
     <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", background: scrolled ? "rgba(255,255,255,0.9)" : "transparent", backdropFilter: scrolled ? "blur(20px)" : "none", borderBottom: scrolled ? `1px solid ${G.border}` : "none", transition: "all 0.3s" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
