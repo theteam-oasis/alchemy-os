@@ -1,6 +1,100 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowRight, Sparkles, Check, X, ChevronRight, Play, Star, TrendingUp, Zap, Brain, Users, Image, Video, Mic } from "lucide-react";
+
+/* ── Scroll-linked blur reveal (Framer-style) ── */
+function ScrollBlurText({ children, blurMax = 10, stagger = true, as: Tag = "span", style = {}, className = "" }) {
+  const text = typeof children === "string" ? children : null;
+  const ref = useRef(null);
+  const [progress, setProgress] = useState(0);
+  const raf = useRef(null);
+
+  const tick = useCallback(() => {
+    const el = ref.current;
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const raw = (window.innerHeight * 0.92 - rect.top) / (window.innerHeight * 0.45);
+      setProgress(Math.min(1, Math.max(0, raw)));
+    }
+    raf.current = requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => {
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [tick]);
+
+  // If children is plain text, split into words and stagger
+  if (text && stagger) {
+    const words = text.split(" ");
+    return (
+      <Tag ref={ref} className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em" }}>
+        {words.map((w, i) => {
+          const s = i / words.length, e = (i + 1) / words.length;
+          const wp = Math.min(1, Math.max(0, (progress - s) / (e - s)));
+          return (
+            <span key={i} style={{
+              display: "inline-block",
+              filter: `blur(${blurMax * (1 - wp)}px)`,
+              opacity: 0.05 + 0.95 * wp,
+              transform: `translateY(${12 * (1 - wp)}px)`,
+              willChange: "filter, opacity, transform",
+            }}>{w}</span>
+          );
+        })}
+      </Tag>
+    );
+  }
+
+  // For non-text children (JSX), animate the whole block
+  const blur = blurMax * (1 - progress);
+  const opacity = 0.05 + 0.95 * progress;
+  const translateY = 20 * (1 - progress);
+  return (
+    <Tag ref={ref} className={className} style={{
+      ...style,
+      filter: `blur(${blur}px)`,
+      opacity,
+      transform: `translateY(${translateY}px)`,
+      willChange: "filter, opacity, transform",
+    }}>{children}</Tag>
+  );
+}
+
+/* Convenience: reveal a whole block (card, grid, section chunk) */
+function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blurMax = 8 }) {
+  const ref = useRef(null);
+  const [progress, setProgress] = useState(0);
+  const raf = useRef(null);
+
+  const tick = useCallback(() => {
+    const el = ref.current;
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.35);
+      setProgress(Math.min(1, Math.max(0, raw)));
+    }
+    raf.current = requestAnimationFrame(tick);
+  }, []);
+
+  useEffect(() => {
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [tick]);
+
+  const blur = blurMax * (1 - progress);
+  const opacity = 0.05 + 0.95 * progress;
+  const translateY = 24 * (1 - progress);
+  return (
+    <Tag ref={ref} className={className} style={{
+      ...style,
+      filter: `blur(${blur}px)`,
+      opacity,
+      transform: `translateY(${translateY}px)`,
+      willChange: "filter, opacity, transform",
+    }}>{children}</Tag>
+  );
+}
 
 const G = {
   bg: "#FFFFFF",
@@ -62,32 +156,34 @@ function Hero() {
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)" }} />
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 800 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 32 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 32 }}>
           <Sparkles size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>AI-Powered Creative Studio</span>
-        </div>
+        </BlurReveal>
 
-        <h1 className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8 }}>For brands scaling with<br /><span style={{ color: G.textSec }}>Paid Social</span></h1>
+        <ScrollBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center" }} blurMax={12}>{"For brands scaling with Paid Social"}</ScrollBlurText>
 
         <div style={{ marginTop: 32, marginBottom: 16 }}>
-          <p className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3 }}>Your ads aren't failing.</p>
-          <p className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3 }}>Your creative pipeline is.</p>
+          <ScrollBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center" }}>{"Your ads aren't failing."}</ScrollBlurText>
+          <ScrollBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3, justifyContent: "center" }}>{"Your creative pipeline is."}</ScrollBlurText>
         </div>
 
-        <p className="hero-body" style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</p>
+        <BlurReveal as="p" className="hero-body" style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</BlurReveal>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <BlurReveal style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>AI-powered</span>
           <span style={{ color: G.goldBorder }}>•</span>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Performance-tested</span>
           <span style={{ color: G.goldBorder }}>•</span>
           <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Andromeda Optimized</span>
-        </div>
+        </BlurReveal>
 
-        <a className="hero-cta" href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 16, fontWeight: 600, textDecoration: "none", marginTop: 20, ...mono }}>Book a Creative Strategy Call <ArrowRight size={16} /></a>
-        <div style={{ marginTop: 12 }}>
-          <a href="#creative" style={{ color: G.textSec, fontSize: 14, textDecoration: "none", ...mono }}>See Example Ads</a>
-        </div>
+        <BlurReveal>
+          <a className="hero-cta" href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", borderRadius: 980, background: G.gold, color: "#fff", fontSize: 16, fontWeight: 600, textDecoration: "none", marginTop: 20, ...mono }}>Book a Creative Strategy Call <ArrowRight size={16} /></a>
+          <div style={{ marginTop: 12 }}>
+            <a href="#creative" style={{ color: G.textSec, fontSize: 14, textDecoration: "none", ...mono }}>See Example Ads</a>
+          </div>
+        </BlurReveal>
       </div>
     </section>
   );
@@ -103,10 +199,10 @@ function Stats() {
     <section style={{ padding: "0 24px 80px", maxWidth: 900, margin: "0 auto" }}>
       <div className="stats-grid" style={{ display: "flex", gap: 24, justifyContent: "center" }}>
         {stats.map((s, i) => (
-          <div key={i} style={{ flex: 1, textAlign: "center", padding: 32, background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16 }}>
+          <BlurReveal key={i} style={{ flex: 1, textAlign: "center", padding: 32, background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16 }}>
             <p className="stat-value" style={{ fontSize: 48, fontWeight: 700, color: G.gold, marginBottom: 8, ...mono }}>{s.value}</p>
             <p style={{ color: G.textSec, fontSize: 14, ...mono }}>{s.label}</p>
-          </div>
+          </BlurReveal>
         ))}
       </div>
     </section>
@@ -125,18 +221,18 @@ function WhyAlchemy() {
   return (
     <section id="why" className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 64 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <Sparkles size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Why Alchemy</span>
-        </div>
+        </BlurReveal>
       </div>
       <div className="features-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
         {features.map((f, i) => (
-          <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 28, transition: "border-color 0.3s" }} onMouseEnter={e => e.currentTarget.style.borderColor = G.goldBorder} onMouseLeave={e => e.currentTarget.style.borderColor = G.cardBorder}>
+          <BlurReveal key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 28, transition: "border-color 0.3s" }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: G.goldSoft, display: "flex", alignItems: "center", justifyContent: "center", color: G.gold, marginBottom: 16 }}>{f.icon}</div>
             <h3 style={{ color: G.text, fontSize: 18, fontWeight: 600, marginBottom: 10, ...mono }}>{f.title}</h3>
             <p style={{ color: G.textSec, fontSize: 14, lineHeight: 1.7, ...mono }}>{f.desc}</p>
-          </div>
+          </BlurReveal>
         ))}
       </div>
     </section>
@@ -187,15 +283,15 @@ function CreativeExamples() {
       {sections.map((cat, ci) => (
         <div key={ci} style={{ marginBottom: 80 }}>
           <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
               <span style={{ color: G.gold }}>{cat.icon}</span>
               <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>{cat.label}</span>
-            </div>
-            <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>{cat.title} <span style={{ color: G.gold }}>{cat.titleGold}</span></h2>
-            <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 600, margin: "0 auto", ...mono }}>{cat.desc}</p>
+            </BlurReveal>
+            <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{`${cat.title} ${cat.titleGold}`}</ScrollBlurText>
+            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 600, margin: "0 auto", ...mono }}>{cat.desc}</BlurReveal>
           </div>
           {ci === 0 && (
-            <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            <BlurReveal className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {videoIds.map((vid, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
                   <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
@@ -203,10 +299,10 @@ function CreativeExamples() {
                   </div>
                 </div>
               ))}
-            </div>
+            </BlurReveal>
           )}
           {ci === 1 && (
-            <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+            <BlurReveal className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {staticAds.slice(0, 12).map((ad, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
                   <div style={{ position: "relative", paddingBottom: "177.78%", overflow: "hidden" }}>
@@ -221,10 +317,10 @@ function CreativeExamples() {
                   </div>
                 </div>
               ))}
-            </div>
+            </BlurReveal>
           )}
           {ci === 2 && (
-            <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <BlurReveal className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {ugcIds.map((vid, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
                   <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
@@ -232,17 +328,17 @@ function CreativeExamples() {
                   </div>
                 </div>
               ))}
-            </div>
+            </BlurReveal>
           )}
         </div>
       ))}
 
-      <div style={{ marginTop: 40, marginBottom: 40 }}>
+      <BlurReveal style={{ marginTop: 40, marginBottom: 40 }}>
         <p style={{ textAlign: "center", color: G.textTer, fontSize: 13, marginBottom: 20, ...mono }}>Trusted by brands we partner with</p>
         <div className="logo-bar" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 20, alignItems: "center", opacity: 0.6 }}>
           {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(0.5)" }} />)}
         </div>
-      </div>
+      </BlurReveal>
     </section>
   );
 }
@@ -251,13 +347,13 @@ function AboutUs() {
   return (
     <section className="section-wrap" style={{ padding: "80px 24px", maxWidth: 800, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <Users size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>About Us</span>
-        </div>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 24 }}>Founders. Operators. <span style={{ color: G.gold }}>Creatives.</span></h2>
+        </BlurReveal>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 24, justifyContent: "center" }}>{"Founders. Operators. Creatives."}</ScrollBlurText>
       </div>
-      <div className="card-padded-lg" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 40 }}>
+      <BlurReveal className="card-padded-lg" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 40 }}>
         <p className="desc-text" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.9, marginBottom: 20, ...mono }}>We started over 11 years ago as founders, not marketers - building our own products and learning the hard way how to get them in front of the right people. What began as a necessity became a system.</p>
         <p className="desc-text" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.9, marginBottom: 20, ...mono }}>Through years of testing and scaling our own businesses, we generated eight figures in revenue and developed repeatable creative principles that work across industries.</p>
         <p className="desc-text" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.9, marginBottom: 32, ...mono }}>Today, Alchemy is an AI-first performance creative agency. We blend machine intelligence with human strategy to produce high-volume, high-performing video ads - engineered to scale without losing the human element. We don't chase trends. We build creative systems that convert.</p>
@@ -271,7 +367,7 @@ function AboutUs() {
             </div>
           ))}
         </div>
-      </div>
+      </BlurReveal>
     </section>
   );
 }
@@ -286,16 +382,16 @@ function HowItWorks() {
   return (
     <section id="how" className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 64 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <Zap size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Work with us</span>
-        </div>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>How Alchemy <span style={{ color: G.gold }}>Works</span></h2>
-        <p style={{ color: G.textSec, fontSize: 16, ...mono }}>A system that compounds. Not a one-time campaign.</p>
+        </BlurReveal>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"How Alchemy Works"}</ScrollBlurText>
+        <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, ...mono }}>A system that compounds. Not a one-time campaign.</BlurReveal>
       </div>
       <div className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }}>
         {steps.map((s, i) => (
-          <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 28, position: "relative" }}>
+          <BlurReveal key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 28, position: "relative" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: G.goldSoft, border: `1px solid ${G.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center", color: G.gold, fontSize: 14, fontWeight: 700, ...mono }}>{i + 1}</div>
               {i < 3 && <ArrowRight className="step-arrow" size={14} style={{ color: G.textTer, position: "absolute", right: -14, top: 36, zIndex: 2 }} />}
@@ -309,10 +405,10 @@ function HowItWorks() {
                 </div>
               ))}
             </div>
-          </div>
+          </BlurReveal>
         ))}
       </div>
-      <p style={{ textAlign: "center", color: G.gold, fontSize: 16, marginTop: 32, fontWeight: 500, ...mono }}>Your creative learns faster → Meta learns faster.</p>
+      <BlurReveal as="p" style={{ textAlign: "center", color: G.gold, fontSize: 16, marginTop: 32, fontWeight: 500, ...mono }}>Your creative learns faster → Meta learns faster.</BlurReveal>
     </section>
   );
 }
@@ -327,18 +423,18 @@ function SystemBehind() {
   return (
     <section className="section-wrap" style={{ padding: "80px 24px", maxWidth: 900, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 className="section-title" style={{ ...hd, fontSize: 38, color: G.text, marginBottom: 12 }}>The System Behind the <span style={{ color: G.gold }}>Results</span></h2>
-        <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Media buying didn't break. <span style={{ color: G.gold }}>Creative supply did.</span></p>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 38, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"The System Behind the Results"}</ScrollBlurText>
+        <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, ...mono }}>Media buying didn't break. <span style={{ color: G.gold }}>Creative supply did.</span></BlurReveal>
       </div>
       <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
         {points.map((p, i) => (
-          <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, padding: 24 }}>
+          <BlurReveal key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, padding: 24 }}>
             <h4 style={{ color: G.text, fontSize: 15, fontWeight: 600, marginBottom: 6, ...mono }}>{p.title}</h4>
             <p style={{ color: G.textSec, fontSize: 14, ...mono }}>{p.desc}</p>
-          </div>
+          </BlurReveal>
         ))}
       </div>
-      <p style={{ textAlign: "center", color: G.gold, fontSize: 15, marginTop: 24, fontWeight: 500, fontStyle: "italic", ...mono }}>Alchemy produces creative diversity that counts - not fake volume.</p>
+      <BlurReveal as="p" style={{ textAlign: "center", color: G.gold, fontSize: 15, marginTop: 24, fontWeight: 500, fontStyle: "italic", ...mono }}>Alchemy produces creative diversity that counts - not fake volume.</BlurReveal>
     </section>
   );
 }
@@ -352,25 +448,25 @@ function ProvenResults() {
   return (
     <section id="results" className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 48 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <TrendingUp size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Proven Results</span>
-        </div>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real numbers from brands <span style={{ color: G.gold }}>scaling with Alchemy</span></h2>
+        </BlurReveal>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"Real numbers from brands scaling with Alchemy"}</ScrollBlurText>
       </div>
       <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
         {results.map((r, i) => (
-          <div key={i} className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32, textAlign: "center" }}>
+          <BlurReveal key={i} className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32, textAlign: "center" }}>
             <p style={{ color: G.gold, fontSize: 14, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, ...mono }}>{r.metric}</p>
             <p style={{ color: G.textSec, fontSize: 13, marginBottom: 16, ...mono }}>{r.category}</p>
             <p style={{ color: G.text, fontSize: 24, fontWeight: 700, marginBottom: 8, ...mono }}>{r.detail}</p>
             <p style={{ color: G.textTer, fontSize: 13, ...mono }}>{r.timeline}</p>
-          </div>
+          </BlurReveal>
         ))}
       </div>
-      <div style={{ textAlign: "center", marginTop: 32 }}>
+      <BlurReveal style={{ textAlign: "center", marginTop: 32 }}>
         <a href="#cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, color: G.gold, fontSize: 14, fontWeight: 600, textDecoration: "none", ...mono }}>Get Results Like These <ArrowRight size={14} /></a>
-      </div>
+      </BlurReveal>
     </section>
   );
 }
@@ -385,12 +481,12 @@ function Testimonials() {
   return (
     <section className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>What Our Clients <span style={{ color: G.gold }}>Say</span></h2>
-        <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Real experiences from founders who transformed their businesses with us.</p>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"What Our Clients Say"}</ScrollBlurText>
+        <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, ...mono }}>Real experiences from founders who transformed their businesses with us.</BlurReveal>
       </div>
       <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
         {testimonials.map((t, i) => (
-          <div key={i} className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
+          <BlurReveal key={i} className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
             <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>{[...Array(5)].map((_, j) => <Star key={j} size={14} style={{ color: G.gold, fill: G.gold }} />)}</div>
             <p className="testimonial-quote" style={{ color: G.textSec, fontSize: 14, lineHeight: 1.8, marginBottom: 20, fontStyle: "italic", ...mono }}>"{t.quote}"</p>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -400,7 +496,7 @@ function Testimonials() {
                 <p style={{ color: G.textTer, fontSize: 12, ...mono }}>{t.role} · {t.company}</p>
               </div>
             </div>
-          </div>
+          </BlurReveal>
         ))}
       </div>
     </section>
@@ -416,16 +512,16 @@ function CaseStudies() {
   return (
     <section className="section-wrap" style={{ padding: "80px 24px", maxWidth: 1100, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 48 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+        <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
           <Check size={14} style={{ color: G.gold }} />
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Verified Success Stories</span>
-        </div>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Real Results From <span style={{ color: G.gold }}>Real Clients</span></h2>
-        <p style={{ color: G.textSec, fontSize: 16, maxWidth: 600, margin: "0 auto", ...mono }}>Founders just like you who trust us to help them scale in the fast moving, hyper-competitive social media landscape.</p>
+        </BlurReveal>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"Real Results From Real Clients"}</ScrollBlurText>
+        <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, maxWidth: 600, margin: "0 auto", ...mono }}>Founders just like you who trust us to help them scale in the fast moving, hyper-competitive social media landscape.</BlurReveal>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {cases.map((c, i) => (
-          <div key={i} className="card-padded-lg" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 36 }}>
+          <BlurReveal key={i} className="card-padded-lg" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 36 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
               <div>
                 <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", ...mono }}>{c.category}</span>
@@ -452,7 +548,7 @@ function CaseStudies() {
                 </div>
               ))}
             </div>
-          </div>
+          </BlurReveal>
         ))}
       </div>
     </section>
@@ -476,11 +572,11 @@ function IsThisForYou() {
   return (
     <section className="section-wrap" style={{ padding: "80px 24px", maxWidth: 900, margin: "0 auto" }}>
       <div className="section-header" style={{ textAlign: "center", marginBottom: 48 }}>
-        <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Is This <span style={{ color: G.gold }}>For You?</span></h2>
-        <p style={{ color: G.textSec, fontSize: 16, ...mono }}>Alchemy is for brands that take <span style={{ color: G.text, fontWeight: 600 }}>paid media seriously.</span></p>
+        <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"Is This For You?"}</ScrollBlurText>
+        <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, ...mono }}>Alchemy is for brands that take <span style={{ color: G.text, fontWeight: 600 }}>paid media seriously.</span></BlurReveal>
       </div>
       <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <div className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
+        <BlurReveal className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
           <h3 style={{ color: G.success, fontSize: 16, fontWeight: 600, marginBottom: 20, ...mono }}>This is for you if:</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {forYou.map((item, i) => (
@@ -490,8 +586,8 @@ function IsThisForYou() {
               </div>
             ))}
           </div>
-        </div>
-        <div className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
+        </BlurReveal>
+        <BlurReveal className="card-padded" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, padding: 32 }}>
           <h3 style={{ color: G.danger, fontSize: 16, fontWeight: 600, marginBottom: 20, ...mono }}>Not for you if:</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {notForYou.map((item, i) => (
@@ -501,12 +597,12 @@ function IsThisForYou() {
               </div>
             ))}
           </div>
-        </div>
+        </BlurReveal>
       </div>
-      <p style={{ textAlign: "center", color: G.textTer, fontSize: 14, marginTop: 24, fontStyle: "italic", ...mono }}>"We'd rather be honest upfront than waste your time."</p>
-      <div style={{ textAlign: "center", marginTop: 16 }}>
+      <BlurReveal as="p" style={{ textAlign: "center", color: G.textTer, fontSize: 14, marginTop: 24, fontStyle: "italic", ...mono }}>"We'd rather be honest upfront than waste your time."</BlurReveal>
+      <BlurReveal style={{ textAlign: "center", marginTop: 16 }}>
         <a href="#cta" style={{ color: G.gold, fontSize: 15, fontWeight: 600, textDecoration: "none", ...mono }}>Sound like you? Let's talk →</a>
-      </div>
+      </BlurReveal>
     </section>
   );
 }
@@ -514,32 +610,32 @@ function IsThisForYou() {
 function CTA() {
   return (
     <section id="cta" className="section-wrap" style={{ padding: "80px 24px 60px", maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-      <h2 className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12 }}>Ready to fix your<br /><span style={{ color: G.gold }}>creative bottleneck?</span></h2>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 32, marginTop: 16 }}>
+      <ScrollBlurText as="h2" className="section-title" style={{ ...hd, fontSize: 42, color: G.text, marginBottom: 12, justifyContent: "center" }}>{"Ready to fix your creative bottleneck?"}</ScrollBlurText>
+      <BlurReveal style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 32, marginTop: 16 }}>
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Free creative audit</span>
         <span style={{ color: G.textTer }}>•</span>
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>No obligation</span>
         <span style={{ color: G.textTer }}>•</span>
         <span style={{ color: G.textTer, fontSize: 13, ...mono }}>Friendly team</span>
-      </div>
-      <p style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 32px", ...mono }}>We'll review your current creative, diagnose the bottleneck, and show you exactly how we'd fix it.</p>
-      <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, overflow: "hidden", maxWidth: 700, margin: "0 auto" }}>
+      </BlurReveal>
+      <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 32px", ...mono }}>We'll review your current creative, diagnose the bottleneck, and show you exactly how we'd fix it.</BlurReveal>
+      <BlurReveal style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, overflow: "hidden", maxWidth: 700, margin: "0 auto" }}>
         <iframe src="https://calendly.com/d/cs9w-cwg-b5q/alchemy-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000" style={{ width: "100%", height: 700, border: "none" }} title="Book a Call" />
-      </div>
+      </BlurReveal>
     </section>
   );
 }
 
 function Footer() {
   return (
-    <footer className="footer-wrap" style={{ borderTop: `1px solid ${G.border}`, padding: "40px 24px", maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <BlurReveal as="footer" className="footer-wrap" style={{ borderTop: `1px solid ${G.border}`, padding: "40px 24px", maxWidth: 1100, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div>
         <p style={{ color: G.textSec, fontSize: 13, ...mono }}>About Us</p>
         <a href="mailto:team@scalewithalchemy.com" style={{ color: G.textTer, fontSize: 13, textDecoration: "none", ...mono }}>team@scalewithalchemy.com</a>
       </div>
       <p style={{ color: G.textTer, fontSize: 12, ...mono }}>Email</p>
       <p style={{ color: G.textTer, fontSize: 12, ...mono }}>&copy; 2026 Alchemy</p>
-    </footer>
+    </BlurReveal>
   );
 }
 
