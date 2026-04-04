@@ -199,7 +199,7 @@ function Nav() {
 function Hero() {
   return (
     <section className="hero-section" style={{ position: "relative", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "120px 24px 80px", overflow: "hidden" }}>
-      <div className="hero-ring" style={{ position: "absolute", top: "50%", left: "50%", width: 600, height: 600, borderRadius: "50%", border: `1px dashed ${G.goldBorder}`, opacity: 0.3 }} />
+      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, borderRadius: "50%", border: `1px solid ${G.goldBorder}`, opacity: 0.3 }} />
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)" }} />
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 800 }}>
@@ -702,8 +702,6 @@ export default function AlchemyLanding() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes heroSpin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
-        .hero-ring { animation: heroSpin 60s linear infinite; }
         @media (max-width: 768px) {
           .nav-links { display: none !important; }
           .nav-hamburger { display: block !important; }
