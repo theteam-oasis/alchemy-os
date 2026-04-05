@@ -9,11 +9,12 @@ import {
   AlertCircle,
   Link,
   Image,
-  Video,
   FileText,
   Loader2,
   Copy,
   ExternalLink,
+  X,
+  Plus,
 } from "lucide-react";
 
 // ─── Design Tokens ───
@@ -65,9 +66,8 @@ export default function ProposalCreatePage() {
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
 
-  const [images, setImages] = useState([null, null, null]);
-  const [imageUrls, setImageUrls] = useState([null, null, null]);
-  const [uploading, setUploading] = useState([false, false, false]);
+  const [imageUrls, setImageUrls] = useState([]);
+  const [uploading, setUploading] = useState([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -95,12 +95,12 @@ export default function ProposalCreatePage() {
 
   // ─── Image Upload ───
 
-  async function handleImageUpload(index, file) {
+  async function handleImageUpload(file) {
     if (!file || !slug) return;
 
-    const newUploading = [...uploading];
-    newUploading[index] = true;
-    setUploading(newUploading);
+    const index = imageUrls.length;
+    setUploading((prev) => [...prev, true]);
+    setImageUrls((prev) => [...prev, null]); // placeholder
 
     try {
       const ext = file.name.split(".").pop();
@@ -115,21 +115,28 @@ export default function ProposalCreatePage() {
         data: { publicUrl },
       } = supabase.storage.from("brand-assets").getPublicUrl(path);
 
-      const newUrls = [...imageUrls];
-      newUrls[index] = publicUrl;
-      setImageUrls(newUrls);
-
-      const newImages = [...images];
-      newImages[index] = file;
-      setImages(newImages);
+      setImageUrls((prev) => {
+        const updated = [...prev];
+        updated[index] = publicUrl;
+        return updated;
+      });
     } catch (err) {
       console.error("Upload error:", err);
-      setError(`Image ${index + 1} upload failed: ${err.message}`);
+      setError(`Image upload failed: ${err.message}`);
+      // Remove the placeholder on error
+      setImageUrls((prev) => prev.filter((_, i) => i !== index));
     } finally {
-      const reset = [...uploading];
-      reset[index] = false;
-      setUploading(reset);
+      setUploading((prev) => {
+        const updated = [...prev];
+        updated[index] = false;
+        return updated;
+      });
     }
+  }
+
+  function removeImage(index) {
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
+    setUploading((prev) => prev.filter((_, i) => i !== index));
   }
 
   // ─── Submit ───
@@ -328,7 +335,6 @@ export default function ProposalCreatePage() {
     gap: 6,
   };
 
-  const imageLabels = ["Static Image 1", "Static Image 2", "Static Image 3"];
 
   return (
     <div
@@ -425,42 +431,33 @@ export default function ProposalCreatePage() {
           <div>
             <label style={{ ...labelStyle, marginBottom: 16 }}>
               <Image size={14} color={G.textSec} />
-              Static Images (3)
+              Static Images {imageUrls.filter(Boolean).length > 0 && `(${imageUrls.filter(Boolean).length})`}
             </label>
 
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 12,
               }}
             >
-              {[0, 1, 2].map((i) => (
-                <div key={i}>
-                  <label
+              {imageUrls.map((url, i) => (
+                <div key={i} style={{ position: "relative" }}>
+                  <div
                     style={{
                       display: "flex",
-                      flexDirection: "column",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: 8,
                       height: 140,
-                      border: `1px dashed ${
-                        imageUrls[i] ? G.success : G.goldBorder
-                      }`,
+                      border: `1px dashed ${url ? G.success : G.goldBorder}`,
                       borderRadius: 12,
-                      background: imageUrls[i]
-                        ? `${G.success}08`
-                        : G.goldSoft,
-                      cursor: uploading[i] ? "wait" : "pointer",
+                      background: url ? `${G.success}08` : G.goldSoft,
                       overflow: "hidden",
-                      position: "relative",
-                      transition: "border-color 0.15s",
                     }}
                   >
-                    {imageUrls[i] ? (
+                    {url ? (
                       <img
-                        src={imageUrls[i]}
+                        src={url}
                         alt={`Upload ${i + 1}`}
                         style={{
                           width: "100%",
@@ -469,43 +466,75 @@ export default function ProposalCreatePage() {
                           borderRadius: 11,
                         }}
                       />
-                    ) : uploading[i] ? (
+                    ) : (
                       <Loader2
                         size={20}
                         color={G.textSec}
                         style={{ animation: "spin 1s linear infinite" }}
                       />
-                    ) : (
-                      <>
-                        <Upload size={18} color={G.textTer} />
-                        <span
-                          style={{
-                            ...mono,
-                            fontSize: 11,
-                            color: G.textTer,
-                          }}
-                        >
-                          {imageLabels[i]}
-                        </span>
-                      </>
                     )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) =>
-                        handleImageUpload(i, e.target.files?.[0])
-                      }
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        opacity: 0,
-                        cursor: "pointer",
-                      }}
-                      disabled={uploading[i] || !slug}
-                    />
-                  </label>
+                  </div>
+                  {/* X button to remove */}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -6,
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      background: G.text,
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 0,
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
               ))}
+
+              {/* Add Image button */}
+              <label
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  height: 140,
+                  border: `1px dashed ${G.goldBorder}`,
+                  borderRadius: 12,
+                  background: G.goldSoft,
+                  cursor: slug ? "pointer" : "not-allowed",
+                  opacity: slug ? 1 : 0.5,
+                  transition: "border-color 0.15s",
+                }}
+              >
+                <Plus size={20} color={G.textTer} />
+                <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Add Image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    handleImageUpload(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                  style={{
+                    position: "absolute",
+                    width: 0,
+                    height: 0,
+                    opacity: 0,
+                  }}
+                  disabled={!slug}
+                />
+              </label>
             </div>
 
             {!slug && brandName === "" && (
