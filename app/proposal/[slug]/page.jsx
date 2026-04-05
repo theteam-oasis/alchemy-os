@@ -120,10 +120,10 @@ function CountdownTimer() {
   const pad = (n) => String(n).padStart(2, "0");
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", marginBottom: 32 }}>
-      <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: "#B8860B", letterSpacing: "0.05em", textTransform: "uppercase" }}>50% Off Ends In</span>
+      <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: "#C5960A", letterSpacing: "0.05em", textTransform: "uppercase" }}>50% Off Ends In</span>
       <div style={{ display: "flex", gap: 6 }}>
         {[{ v: timeLeft.hours, l: "h" }, { v: timeLeft.minutes, l: "m" }, { v: timeLeft.seconds, l: "s" }].map((t, i) => (
-          <span key={i} style={{ ...mono, fontSize: 15, fontWeight: 700, color: "#B8860B", background: "#B8860B12", padding: "4px 8px", borderRadius: 6, border: "1px solid #B8860B20" }}>{pad(t.v)}{t.l}</span>
+          <span key={i} style={{ ...mono, fontSize: 15, fontWeight: 700, color: "#C5960A", background: "#C5960A12", padding: "4px 8px", borderRadius: 6, border: "1px solid #C5960A20" }}>{pad(t.v)}{t.l}</span>
         ))}
       </div>
     </div>
