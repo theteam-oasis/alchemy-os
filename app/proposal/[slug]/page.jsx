@@ -216,11 +216,11 @@ export default function DynamicProposalPage() {
             </div>
           </Reveal>
 
-          <HeroBlurText as="h1" className="hero-proposal-title" style={{ ...hd, fontSize: 58, color: G.text, lineHeight: 1.1, marginBottom: 16, justifyContent: "center" }} staggerMs={70}>{`Creative for ${brandName}`}</HeroBlurText>
+          <HeroBlurText as="h1" className="hero-proposal-title" style={{ ...hd, fontSize: 58, color: G.text, lineHeight: 1.1, marginBottom: 16, justifyContent: "center" }} staggerMs={70}>{"In the Age of A.I. Content, the Ultimate Edge is Taste"}</HeroBlurText>
 
           <div style={{ marginTop: 24, marginBottom: 16 }}>
-            <HeroBlurText as="p" className="hero-proposal-sub" style={{ ...hd, fontSize: 26, color: G.textSec, lineHeight: 1.4, justifyContent: "center" }} staggerMs={50}>{"AI-powered ad creative built for"}</HeroBlurText>
-            <HeroBlurText as="p" className="hero-proposal-sub" style={{ ...hd, fontSize: 26, color: G.gold, lineHeight: 1.4, justifyContent: "center" }} staggerMs={50}>{"performance at scale."}</HeroBlurText>
+            <HeroBlurText as="p" className="hero-proposal-sub" style={{ ...hd, fontSize: 26, color: G.textSec, lineHeight: 1.4, justifyContent: "center" }} staggerMs={50}>{"Get High Converting, Beautiful,"}</HeroBlurText>
+            <HeroBlurText as="p" className="hero-proposal-sub" style={{ ...hd, fontSize: 26, color: G.gold, lineHeight: 1.4, justifyContent: "center" }} staggerMs={50}>{"Ready to Deploy Meta Ads"}</HeroBlurText>
           </div>
 
           <Reveal delay={600} as="p" style={{ color: G.textTer, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto", ...mono }}>We combine proprietary AI systems with human creative direction to produce high-volume, performance-tested ad creative optimized for Meta's Andromeda algorithm.</Reveal>

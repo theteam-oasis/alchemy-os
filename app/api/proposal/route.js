@@ -10,7 +10,7 @@ export async function POST(request) {
 
     const { data, error } = await supabase
       .from('proposals')
-      .insert({ slug, brand_name, static_urls, video_url })
+      .upsert({ slug, brand_name, static_urls, video_url }, { onConflict: 'slug' })
       .select()
       .single()
 
