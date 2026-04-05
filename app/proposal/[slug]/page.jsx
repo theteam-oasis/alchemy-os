@@ -155,19 +155,19 @@ const packages = [
   {
     name: "The Spark", price: "$1,250", originalPrice: "$2,500", period: "",
     description: "Perfect for testing the waters.", icon: Zap,
-    features: ["15 Static ad creatives", "1 Hero video ad", "Ad copy included", "Delivered in 5 days"],
+    features: ["15 Static ad creatives", "1 Hero video ad", "Ad copy included", "2 Rounds of revisions", "Delivered in 7 days"],
     cta: "Get Started", highlighted: false,
   },
   {
     name: "The Sprint", price: "$2,500", originalPrice: "$5,000", period: "",
     description: "Everything you need to launch fast.", icon: TrendingUp,
-    features: ["25 Static ad creatives", "1 Hero video ad", "Ad copy & hook variations", "Creative strategy session", "Delivered in 5 days"],
+    features: ["25 Static ad creatives", "1 Hero video ad", "Ad copy & hook variations", "Creative strategy session", "2 Rounds of revisions", "Delivered in 7 days"],
     cta: "Most Popular", highlighted: true,
   },
   {
     name: "The Arsenal", price: "$6,250", originalPrice: "$12,500", period: "",
     description: "Full creative firepower for scale.", icon: Users,
-    features: ["50 Static ad creatives", "3 Hero video ads", "Full creative strategy", "Testing roadmap included", "Hook & copy variations", "Delivered in 7 days"],
+    features: ["50 Static ad creatives", "3 Hero video ads", "Full creative strategy", "Testing roadmap included", "Hook & copy variations", "2 Rounds of revisions", "Delivered in 7 days"],
     cta: "Let's Talk", highlighted: false,
   },
 ];
