@@ -402,7 +402,7 @@ export default function ProposalPage() {
                 flexDirection: "column",
               }}>
                 {pkg.highlighted && (
-                  <div style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: G.gold, color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "5px 16px", borderRadius: 980, ...mono }}>Recommended</div>
+                  <div style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: G.gold, color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "5px 16px", borderRadius: 980, ...mono }}>Most Popular</div>
                 )}
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: pkg.highlighted ? G.gold : G.goldSoft, border: pkg.highlighted ? "none" : `1px solid ${G.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
                   <pkg.icon size={18} style={{ color: pkg.highlighted ? "#fff" : G.gold }} />
