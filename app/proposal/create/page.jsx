@@ -64,7 +64,7 @@ export default function ProposalCreatePage() {
   const [brandName, setBrandName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
-  const [videoUrl, setVideoUrl] = useState("");
+
   const [images, setImages] = useState([null, null, null]);
   const [imageUrls, setImageUrls] = useState([null, null, null]);
   const [uploading, setUploading] = useState([false, false, false]);
@@ -148,7 +148,7 @@ export default function ProposalCreatePage() {
           brandName,
           slug,
           images: imageUrls.filter(Boolean),
-          videoUrl,
+          videoUrl: "",
         }),
       });
 
@@ -525,21 +525,6 @@ export default function ProposalCreatePage() {
 
           {/* Divider */}
           <div style={{ height: 1, background: G.border }} />
-
-          {/* Video URL */}
-          <div>
-            <label style={labelStyle}>
-              <Video size={14} color={G.textSec} />
-              Video URL
-            </label>
-            <input
-              type="url"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="https://wistia.com/... or YouTube/Vimeo URL"
-              style={inputStyle}
-            />
-          </div>
 
           {/* Error */}
           {error && (

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Users } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Users, Quote } from "lucide-react";
 
 /* ── Design tokens (matching main site) ── */
 const G = {
@@ -164,6 +164,29 @@ const samples = [
   { src: "/assets/skincare-closeup-CKKAxIIz.png", label: "Skincare Studio Shot", category: "Product Photography" },
   { src: "/assets/scent-diffuser-studio-8F9hzFSi.png", label: "Diffuser Lifestyle", category: "Lifestyle Creative" },
   { src: "/assets/golf-ad-BF4ytyZB.jpeg", label: "Golf Performance Ad", category: "Performance Ad" },
+  { src: "/assets/tallow-balm-ad-j98A_I8X.jpeg", label: "Tallow Balm Ad", category: "DTC Creative" },
+  { src: "/assets/sock-scientific-tech-CtYs3SdE.jpeg", label: "Scientific Infographic", category: "Educational Ad" },
+  { src: "/assets/ugc-socks-Dvn42rza.jpeg", label: "UGC Style Creative", category: "UGC Content" },
+];
+
+/* ── Stats ── */
+const stats = [
+  { value: "46%", label: "Avg. Increase in CTR" },
+  { value: "29%", label: "Avg. Lower CPA" },
+  { value: "8x", label: "Avg. Creative Velocity" },
+];
+
+const results = [
+  { metric: "Revenue Growth", category: "Skincare & Beauty", detail: "$80K → $340K/mo", timeline: "In 6 months" },
+  { metric: "Peak ROAS", category: "Fashion & Apparel", detail: "$0 → $210K revenue", timeline: "In 90 days" },
+  { metric: "Scale Achieved", category: "Health & Supplements", detail: "$500K → $1.2M/mo", timeline: "Stable CPA" },
+];
+
+/* ── Testimonials ── */
+const testimonials = [
+  { quote: "I honestly don't know where I'd be without the Alchemy Team. Their marketing strategies are insanely smart, but what really stands out is how much they actually care. Andrew and the Alchemy team has helped us generate over $500k in revenue so far.", name: "Peter D.", role: "Founder", company: "Luxury Landscape Design" },
+  { quote: "Working with Andrew (and Alchemy) has been the best business decision I've ever made. His knowledge of marketing and business has helped me achieve things I had spent years on without success.", name: "Aaron W.", role: "Founder", company: "Media Network" },
+  { quote: "I have interviewed 30 agencies in the last few months. I haven't seen even one of them innovating at 1/10th the rate of the Alchemy team. It is so exciting to watch them build this system and lead the way.", name: "Kathryn B.", role: "Founder", company: "Education Platform" },
 ];
 
 /* ── Packages ── */
@@ -234,9 +257,13 @@ export default function ProposalPage() {
         body { background: ${G.bg}; -webkit-font-smoothing: antialiased; }
         .proposal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         .package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
         @media (max-width: 900px) {
           .proposal-grid { grid-template-columns: 1fr; }
           .package-grid { grid-template-columns: 1fr; }
+          .stats-grid { grid-template-columns: 1fr; }
+          .testimonial-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 600px) {
           .hero-proposal-title { font-size: 42px !important; }
@@ -274,6 +301,10 @@ export default function ProposalPage() {
           </div>
 
           <Reveal delay={600} as="p" style={{ color: G.textTer, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto", ...mono }}>We combine proprietary AI systems with human creative direction to produce high-volume, performance-tested ad creative optimized for Meta's Andromeda algorithm.</Reveal>
+
+          <Reveal delay={800}>
+            <a href="#book" onClick={(e) => { e.preventDefault(); document.getElementById("book")?.scrollIntoView({ behavior: "smooth" }); }} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 32, padding: "14px 32px", background: G.gold, color: "#FFFFFF", fontSize: 15, fontWeight: 600, borderRadius: 980, textDecoration: "none", cursor: "pointer", ...mono }}>Get Started <ArrowRight size={16} /></a>
+          </Reveal>
         </section>
 
         {/* ── Divider ── */}
@@ -299,6 +330,35 @@ export default function ProposalPage() {
                   <span style={{ fontSize: 11, fontWeight: 600, color: G.textTer, letterSpacing: "0.08em", textTransform: "uppercase", ...mono }}>{s.category}</span>
                   <p style={{ fontSize: 15, fontWeight: 600, color: G.text, marginTop: 4, ...mono }}>{s.label}</p>
                 </div>
+              </BlurReveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Stats ── */}
+        <section style={{ marginBottom: 100 }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+              <TrendingUp size={14} style={{ color: G.gold }} />
+              <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Proven Results</span>
+            </BlurReveal>
+            <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Numbers That Speak"}</ScrollBlurText>
+            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Real performance metrics from brands we've scaled.</BlurReveal>
+          </div>
+          <div className="stats-grid">
+            {stats.map((s, i) => (
+              <BlurReveal key={i} style={{ textAlign: "center", padding: "40px 24px", borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
+                <div style={{ ...hd, fontSize: 48, color: G.gold, lineHeight: 1, marginBottom: 8 }}>{s.value}</div>
+                <div style={{ fontSize: 14, color: G.textSec, fontWeight: 500, ...mono }}>{s.label}</div>
+              </BlurReveal>
+            ))}
+          </div>
+          <div className="stats-grid" style={{ marginTop: 24 }}>
+            {results.map((r, i) => (
+              <BlurReveal key={i} style={{ padding: "28px 24px", borderRadius: 16, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: G.textTer, letterSpacing: "0.08em", textTransform: "uppercase", ...mono }}>{r.category}</span>
+                <div style={{ ...hd, fontSize: 24, color: G.text, margin: "8px 0 4px" }}>{r.detail}</div>
+                <div style={{ fontSize: 13, color: G.textSec, ...mono }}>{r.timeline}</div>
               </BlurReveal>
             ))}
           </div>
@@ -355,6 +415,29 @@ export default function ProposalPage() {
                   border: pkg.highlighted ? "none" : `1px solid ${G.goldBorder}`,
                   transition: "all 0.2s",
                 }}>{pkg.cta} <ArrowRight size={15} /></a>
+              </BlurReveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Testimonials ── */}
+        <section style={{ marginBottom: 100 }}>
+          <div style={{ textAlign: "center", marginBottom: 48 }}>
+            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+              <Users size={14} style={{ color: G.gold }} />
+              <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Testimonials</span>
+            </BlurReveal>
+            <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"What Our Partners Say"}</ScrollBlurText>
+          </div>
+          <div className="testimonial-grid">
+            {testimonials.map((t, i) => (
+              <BlurReveal key={i} style={{ padding: "32px 28px", borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card, display: "flex", flexDirection: "column" }}>
+                <Quote size={20} style={{ color: G.textTer, marginBottom: 16, transform: "scaleX(-1)" }} />
+                <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.7, flex: 1, ...mono }}>{t.quote}</p>
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: G.text, ...mono }}>{t.name}</div>
+                  <div style={{ fontSize: 13, color: G.textTer, ...mono }}>{t.role}, {t.company}</div>
+                </div>
               </BlurReveal>
             ))}
           </div>
