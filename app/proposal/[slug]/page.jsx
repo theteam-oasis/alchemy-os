@@ -97,6 +97,39 @@ function BlurReveal({ children, as: Tag = "div", style = {}, blurMax = 6 }) {
   return (<Tag ref={ref} style={{ ...style, filter: `blur(${blurMax * (1 - p)}px)`, opacity: p, transform: `translateY(${18 * (1 - p)}px)`, willChange: "filter, opacity, transform" }}>{children}</Tag>);
 }
 
+/* ── Countdown Timer ── */
+function CountdownTimer() {
+  const [timeLeft, setTimeLeft] = useState({ hours: 48, minutes: 0, seconds: 0 });
+  const [endTime] = useState(() => {
+    if (typeof window === "undefined") return Date.now() + 48 * 60 * 60 * 1000;
+    const stored = localStorage.getItem("proposal_countdown_end");
+    if (stored && Number(stored) > Date.now()) return Number(stored);
+    const end = Date.now() + 48 * 60 * 60 * 1000;
+    localStorage.setItem("proposal_countdown_end", String(end));
+    return end;
+  });
+  useEffect(() => {
+    const tick = () => {
+      const diff = Math.max(0, endTime - Date.now());
+      setTimeLeft({ hours: Math.floor(diff / 3600000), minutes: Math.floor((diff % 3600000) / 60000), seconds: Math.floor((diff % 60000) / 1000) });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [endTime]);
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginBottom: 12 }}>
+      <span style={{ ...mono, fontSize: 12, fontWeight: 600, color: "#FF3B30", letterSpacing: "0.05em", textTransform: "uppercase" }}>50% Off Ends In</span>
+      <div style={{ display: "flex", gap: 4 }}>
+        {[{ v: timeLeft.hours, l: "h" }, { v: timeLeft.minutes, l: "m" }, { v: timeLeft.seconds, l: "s" }].map((t, i) => (
+          <span key={i} style={{ ...mono, fontSize: 13, fontWeight: 700, color: "#FF3B30", background: "#FF3B3010", padding: "2px 6px", borderRadius: 4 }}>{pad(t.v)}{t.l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Stats ── */
 const stats = [
   { value: "46%", label: "Avg. Increase in CTR" },
@@ -120,21 +153,21 @@ const testimonials = [
 /* ── Packages ── */
 const packages = [
   {
-    name: "Launch Offer", price: "$2,500", originalPrice: "$5,000", period: "",
-    description: "4 slots available. 48 hours only.", icon: Zap,
-    features: ["25 static ad creatives", "1 hero video ad", "Ad copy & hook variations", "Delivered in 5 days"],
-    cta: "Claim Slot", highlighted: true,
-  },
-  {
-    name: "The Sprint", price: "$5,000", period: "",
-    description: "Everything you need to launch fast.", icon: TrendingUp,
-    features: ["25 static ad creatives", "1 hero video ad", "Ad copy & hook variations", "Delivered in 5 days"],
+    name: "The Spark", price: "$1,250", originalPrice: "$2,500", period: "",
+    description: "Perfect for testing the waters.", icon: Zap,
+    features: ["15 Static ad creatives", "1 Hero video ad", "Ad copy included", "Delivered in 5 days"],
     cta: "Get Started", highlighted: false,
   },
   {
-    name: "The Arsenal", price: "$12,500", period: "",
+    name: "The Sprint", price: "$2,500", originalPrice: "$5,000", period: "",
+    description: "Everything you need to launch fast.", icon: TrendingUp,
+    features: ["25 Static ad creatives", "1 Hero video ad", "Ad copy & hook variations", "Creative strategy session", "Delivered in 5 days"],
+    cta: "Most Popular", highlighted: true,
+  },
+  {
+    name: "The Arsenal", price: "$6,250", originalPrice: "$12,500", period: "",
     description: "Full creative firepower for scale.", icon: Users,
-    features: ["50 static ad creatives", "3 hero video ads", "Full creative strategy", "Testing roadmap included", "Delivered in 7 days"],
+    features: ["50 Static ad creatives", "3 Hero video ads", "Full creative strategy", "Testing roadmap included", "Hook & copy variations", "Delivered in 7 days"],
     cta: "Let's Talk", highlighted: false,
   },
 ];
@@ -273,33 +306,14 @@ export default function DynamicProposalPage() {
           </section>
         )}
 
-        {/* ── Stats ── */}
-        <section style={{ marginBottom: 100 }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
-              <TrendingUp size={14} style={{ color: G.gold }} />
-              <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Proven Results</span>
-            </BlurReveal>
-            <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Numbers That Speak"}</ScrollBlurText>
-            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Real performance metrics from brands we've scaled.</BlurReveal>
-          </div>
-          <div className="stats-grid">
-            {stats.map((s, i) => (
-              <BlurReveal key={i} style={{ textAlign: "center", padding: "40px 24px", borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
-                <div style={{ ...hd, fontSize: 48, color: G.gold, lineHeight: 1, marginBottom: 8 }}>{s.value}</div>
-                <div style={{ fontSize: 14, color: G.textSec, fontWeight: 500, ...mono }}>{s.label}</div>
-              </BlurReveal>
-            ))}
-          </div>
-          <div className="stats-grid" style={{ marginTop: 24 }}>
-            {results.map((r, i) => (
-              <BlurReveal key={i} style={{ padding: "28px 24px", borderRadius: 16, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: G.textTer, letterSpacing: "0.08em", textTransform: "uppercase", ...mono }}>{r.category}</span>
-                <div style={{ ...hd, fontSize: 24, color: G.text, margin: "8px 0 4px" }}>{r.detail}</div>
-                <div style={{ fontSize: 13, color: G.textSec, ...mono }}>{r.timeline}</div>
-              </BlurReveal>
-            ))}
-          </div>
+        {/* ── Bold Statement ── */}
+        <section style={{ marginBottom: 100, textAlign: "center", padding: "60px 0" }}>
+          <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 24 }}>
+            <TrendingUp size={14} style={{ color: G.gold }} />
+            <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Proven Results</span>
+          </BlurReveal>
+          <ScrollBlurText as="h2" style={{ ...hd, fontSize: 44, color: G.text, lineHeight: 1.2, maxWidth: 700, margin: "0 auto", justifyContent: "center" }}>{"Over $11M Generated With Our Ads"}</ScrollBlurText>
+          <BlurReveal as="p" style={{ ...hd, fontSize: 22, color: G.textSec, lineHeight: 1.5, maxWidth: 560, margin: "20px auto 0", justifyContent: "center" }}>Across every industry from skincare to supplements to service businesses.</BlurReveal>
         </section>
 
         {/* ── Packages ── */}
@@ -312,6 +326,7 @@ export default function DynamicProposalPage() {
             <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Choose Your Plan"}</ScrollBlurText>
             <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Flexible packages designed to match your creative volume and growth stage.</BlurReveal>
           </div>
+          <CountdownTimer />
           <div className="package-grid">
             {packages.map((pkg, i) => (
               <BlurReveal key={i} style={{
