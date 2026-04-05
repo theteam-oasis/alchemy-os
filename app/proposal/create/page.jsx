@@ -68,6 +68,8 @@ export default function ProposalCreatePage() {
 
   const [imageUrls, setImageUrls] = useState([]);
   const [uploading, setUploading] = useState([]);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -137,6 +139,36 @@ export default function ProposalCreatePage() {
   function removeImage(index) {
     setImageUrls((prev) => prev.filter((_, i) => i !== index));
     setUploading((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleDragStart(index) {
+    setDragIndex(index);
+  }
+
+  function handleDragOver(e, index) {
+    e.preventDefault();
+    if (index !== dragOverIndex) setDragOverIndex(index);
+  }
+
+  function handleDrop(index) {
+    if (dragIndex === null || dragIndex === index) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    setImageUrls((prev) => {
+      const updated = [...prev];
+      const [moved] = updated.splice(dragIndex, 1);
+      updated.splice(index, 0, moved);
+      return updated;
+    });
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
   }
 
   // ─── Submit ───
@@ -442,14 +474,28 @@ export default function ProposalCreatePage() {
               }}
             >
               {imageUrls.map((url, i) => (
-                <div key={i} style={{ position: "relative" }}>
+                <div
+                  key={i}
+                  draggable={!!url}
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={handleDragEnd}
+                  style={{
+                    position: "relative",
+                    opacity: dragIndex === i ? 0.4 : 1,
+                    transform: dragOverIndex === i && dragIndex !== i ? "scale(1.03)" : "scale(1)",
+                    transition: "opacity 0.15s, transform 0.15s",
+                    cursor: url ? "grab" : "default",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       height: 140,
-                      border: `1px dashed ${url ? G.success : G.goldBorder}`,
+                      border: `1px dashed ${dragOverIndex === i && dragIndex !== i ? G.gold : url ? G.success : G.goldBorder}`,
                       borderRadius: 12,
                       background: url ? `${G.success}08` : G.goldSoft,
                       overflow: "hidden",
