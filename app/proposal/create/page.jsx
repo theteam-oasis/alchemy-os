@@ -746,6 +746,30 @@ export default function ProposalCreatePage() {
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
+            <a
+              href={`https://${proposalUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                ...mono,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: "12px 20px",
+                fontSize: 14,
+                fontWeight: 600,
+                background: G.gold,
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: 10,
+                cursor: "pointer",
+                textDecoration: "none",
+              }}
+            >
+              <ExternalLink size={14} />
+              View Proposal
+            </a>
           </div>
         )}
       </div>
