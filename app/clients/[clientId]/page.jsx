@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+import { supabase } from '@/lib/supabase'
 const S={approved:{l:'Approved',c:'#111111',bg:'#f8f8f8',b:'#111111',i:'✓'},revisions:{l:'Revisions',c:'#888888',bg:'#f8f8f8',b:'#cccccc',i:'✎'},declined:{l:'Declined',c:'#cccccc',bg:'#f8f8f8',b:'#eeeeee',i:'✕'},pending:{l:'Awaiting',c:'#aaaaaa',bg:'#f8f8f8',b:'#eeeeee',i:'○'}}
 
 export default function ClientProfilePage({ params }) {

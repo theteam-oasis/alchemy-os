@@ -1,7 +1,6 @@
 'use client' // v5 - no compression, full quality images
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@supabase/supabase-js'
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+import { supabase as sb } from '@/lib/supabase'
 
 const STORAGE_KEY = 'stowic-brief-v4'
 const ADMIN_PASSWORD = 'stowic2024'
