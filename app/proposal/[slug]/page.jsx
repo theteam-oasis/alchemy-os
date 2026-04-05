@@ -120,21 +120,21 @@ const testimonials = [
 /* ── Packages ── */
 const packages = [
   {
-    name: "Ignite", price: "$2,500", period: "/mo",
-    description: "For brands testing AI creative at scale", icon: Zap,
-    features: ["15 static ad creatives per month", "3 concept directions", "2 revision rounds", "Meta-optimized formats", "Performance copy variations", "Monthly creative strategy call"],
+    name: "Launch Offer", price: "$2,500", originalPrice: "$5,000", period: "",
+    description: "4 slots available. 48 hours only.", icon: Zap,
+    features: ["25 static ad creatives", "1 hero video ad", "Ad copy & hook variations", "Delivered in 5 days"],
+    cta: "Claim Slot", highlighted: true,
+  },
+  {
+    name: "The Sprint", price: "$5,000", period: "",
+    description: "Everything you need to launch fast.", icon: TrendingUp,
+    features: ["25 static ad creatives", "1 hero video ad", "Ad copy & hook variations", "Delivered in 5 days"],
     cta: "Get Started", highlighted: false,
   },
   {
-    name: "Accelerate", price: "$5,000", period: "/mo",
-    description: "For brands ready to dominate Andromeda", icon: TrendingUp,
-    features: ["40 static + 5 video creatives per month", "6 concept directions", "Unlimited revisions", "Meta + TikTok formats", "UGC-style scripts included", "Bi-weekly strategy calls", "A/B testing frameworks", "Dedicated creative strategist"],
-    cta: "Most Popular", highlighted: true,
-  },
-  {
-    name: "Enterprise", price: "Custom", period: "",
-    description: "For agencies and high-spend brands", icon: Users,
-    features: ["Unlimited creatives", "Full creative team access", "Custom AI model training", "White-label deliverables", "Multi-brand management", "Weekly strategy sessions", "Priority turnaround (24h)", "Dedicated Slack channel"],
+    name: "The Arsenal", price: "$12,500", period: "",
+    description: "Full creative firepower for scale.", icon: Users,
+    features: ["50 static ad creatives", "3 hero video ads", "Full creative strategy", "Testing roadmap included", "Delivered in 7 days"],
     cta: "Let's Talk", highlighted: false,
   },
 ];
@@ -327,9 +327,10 @@ export default function DynamicProposalPage() {
                 </div>
                 <h3 style={{ fontSize: 22, fontWeight: 700, color: G.text, marginBottom: 4, ...mono }}>{pkg.name}</h3>
                 <p style={{ fontSize: 14, color: G.textSec, marginBottom: 20, ...mono }}>{pkg.description}</p>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginBottom: 28 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 28 }}>
                   <span style={{ ...hd, fontSize: 42, color: G.text }}>{pkg.price}</span>
                   {pkg.period && <span style={{ fontSize: 15, color: G.textTer, ...mono }}>{pkg.period}</span>}
+                  {pkg.originalPrice && <span style={{ fontSize: 18, color: G.textTer, textDecoration: "line-through", ...mono }}>{pkg.originalPrice}</span>}
                 </div>
                 <div style={{ height: 1, background: G.border, marginBottom: 24 }} />
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, flex: 1 }}>
