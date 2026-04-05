@@ -475,11 +475,14 @@ export default function ProposalCreatePage() {
             >
               {imageUrls.map((url, i) => (
                 <div
-                  key={i}
+                  key={url || `uploading-${i}`}
                   draggable={!!url}
-                  onDragStart={() => handleDragStart(i)}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    handleDragStart(i);
+                  }}
                   onDragOver={(e) => handleDragOver(e, i)}
-                  onDrop={() => handleDrop(i)}
+                  onDrop={(e) => { e.preventDefault(); handleDrop(i); }}
                   onDragEnd={handleDragEnd}
                   style={{
                     position: "relative",
@@ -499,17 +502,21 @@ export default function ProposalCreatePage() {
                       borderRadius: 12,
                       background: url ? `${G.success}08` : G.goldSoft,
                       overflow: "hidden",
+                      pointerEvents: "none",
                     }}
                   >
                     {url ? (
                       <img
                         src={url}
                         alt={`Upload ${i + 1}`}
+                        draggable={false}
                         style={{
                           width: "100%",
                           height: "100%",
                           objectFit: "cover",
                           borderRadius: 11,
+                          pointerEvents: "none",
+                          userSelect: "none",
                         }}
                       />
                     ) : (
