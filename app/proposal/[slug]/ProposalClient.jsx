@@ -1,45 +1,33 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Quote, Phone } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Play, Quote, Phone } from "lucide-react";
 
-/* ── Design tokens (matching main site) ── */
+/* ── Design tokens ── */
 const G = {
-  bg: "#FFFFFF",
-  card: "#FFFFFF",
-  cardBorder: "#E8E8ED",
+  bg: "#FFFFFF", card: "#FFFFFF", cardBorder: "#E8E8ED",
   cardShadow: "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
-  gold: "#000000",
-  goldSoft: "#00000008",
-  goldBorder: "#D2D2D7",
-  text: "#1D1D1F",
-  textSec: "#86868B",
-  textTer: "#AEAEB2",
-  border: "#E8E8ED",
-  success: "#34C759",
+  gold: "#000000", goldSoft: "#00000008", goldBorder: "#D2D2D7",
+  text: "#1D1D1F", textSec: "#86868B", textTer: "#AEAEB2",
+  border: "#E8E8ED", success: "#34C759",
 };
-
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 const mono = { fontFamily: "'Inter', -apple-system, sans-serif" };
 
-/* ── Smooth easing ── */
 function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
 
-/* ── Mount fade-in (matches HeroReveal) ── */
 function Reveal({ children, as: Tag = "div", style = {}, className = "", delay = 0 }) {
   const [show, setShow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setShow(true), delay); return () => clearTimeout(t); }, [delay]);
   return (
     <Tag className={className} style={{
       ...style,
-      filter: show ? "blur(0px)" : "blur(12px)",
-      opacity: show ? 1 : 0,
+      filter: show ? "blur(0px)" : "blur(12px)", opacity: show ? 1 : 0,
       transform: show ? "translateY(0px)" : "translateY(18px)",
       transition: "filter 1.2s cubic-bezier(0.25,0.1,0.25,1), opacity 1.2s cubic-bezier(0.25,0.1,0.25,1), transform 1.2s cubic-bezier(0.25,0.1,0.25,1)",
     }}>{children}</Tag>
   );
 }
 
-/* ── Hero headline: words stagger in on mount ── */
 function HeroBlurText({ children, as: Tag = "span", style = {}, className = "", staggerMs = 60 }) {
   const text = typeof children === "string" ? children : "";
   const words = text.split(" ");
@@ -50,18 +38,16 @@ function HeroBlurText({ children, as: Tag = "span", style = {}, className = "", 
       {words.map((w, i) => (
         <span key={i} style={{
           display: "inline-block",
-          filter: show ? "blur(0px)" : "blur(14px)",
-          opacity: show ? 1 : 0,
+          filter: show ? "blur(0px)" : "blur(14px)", opacity: show ? 1 : 0,
           transform: show ? "translateY(0px)" : "translateY(16px)",
           transition: `filter 1s cubic-bezier(0.25,0.1,0.25,1) ${i * staggerMs}ms, opacity 1s cubic-bezier(0.25,0.1,0.25,1) ${i * staggerMs}ms, transform 1s cubic-bezier(0.25,0.1,0.25,1) ${i * staggerMs}ms`,
-        ...(w === "Taste." ? { fontStyle: "italic" } : {}),
+          ...(w === "Taste." ? { fontStyle: "italic" } : {}),
         }}>{w}</span>
       ))}
     </Tag>
   );
 }
 
-/* ── Scroll-linked blur text (word-by-word) ── */
 function ScrollBlurText({ children, blurMax = 8, stagger = true, as: Tag = "span", style = {}, className = "" }) {
   const text = typeof children === "string" ? children : null;
   const ref = useRef(null);
@@ -69,95 +55,46 @@ function ScrollBlurText({ children, blurMax = 8, stagger = true, as: Tag = "span
   const smoothRef = useRef(0);
   const [smooth, setSmooth] = useState(0);
   const raf = useRef(null);
-
   const tick = useCallback(() => {
     const el = ref.current;
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.5);
-      progressRef.current = Math.min(1, Math.max(0, raw));
-    }
+    if (el) { const rect = el.getBoundingClientRect(); const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.5); progressRef.current = Math.min(1, Math.max(0, raw)); }
     smoothRef.current += (progressRef.current - smoothRef.current) * 0.08;
     if (Math.abs(progressRef.current - smoothRef.current) < 0.005) smoothRef.current = progressRef.current;
-    setSmooth(smoothRef.current);
-    raf.current = requestAnimationFrame(tick);
+    setSmooth(smoothRef.current); raf.current = requestAnimationFrame(tick);
   }, []);
-
-  useEffect(() => {
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
-  }, [tick]);
-
+  useEffect(() => { raf.current = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf.current); }, [tick]);
   if (text && stagger) {
     const words = text.split(" ");
     return (
       <Tag ref={ref} className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em" }}>
         {words.map((w, i) => {
-          const s = (i / words.length) * 0.7;
-          const e = s + 0.45;
+          const s = (i / words.length) * 0.7; const e = s + 0.45;
           const wp = ease(Math.min(1, Math.max(0, (smooth - s) / (e - s))));
-          return (
-            <span key={i} style={{
-              display: "inline-block",
-              filter: `blur(${blurMax * (1 - wp)}px)`,
-              opacity: wp,
-              transform: `translateY(${10 * (1 - wp)}px)`,
-              willChange: "filter, opacity, transform",
-            }}>{w}</span>
-          );
+          return (<span key={i} style={{ display: "inline-block", filter: `blur(${blurMax * (1 - wp)}px)`, opacity: wp, transform: `translateY(${10 * (1 - wp)}px)`, willChange: "filter, opacity, transform" }}>{w}</span>);
         })}
       </Tag>
     );
   }
-
   const p = ease(smooth);
-  return (
-    <Tag ref={ref} className={className} style={{
-      ...style,
-      filter: `blur(${blurMax * (1 - p)}px)`,
-      opacity: p,
-      transform: `translateY(${16 * (1 - p)}px)`,
-      willChange: "filter, opacity, transform",
-    }}>{children}</Tag>
-  );
+  return (<Tag ref={ref} className={className} style={{ ...style, filter: `blur(${blurMax * (1 - p)}px)`, opacity: p, transform: `translateY(${16 * (1 - p)}px)`, willChange: "filter, opacity, transform" }}>{children}</Tag>);
 }
 
-/* ── Scroll-linked blur reveal ── */
 function BlurReveal({ children, as: Tag = "div", style = {}, blurMax = 6 }) {
   const ref = useRef(null);
   const progressRef = useRef(0);
   const smoothRef = useRef(0);
   const [smooth, setSmooth] = useState(0);
   const raf = useRef(null);
-
   const tick = useCallback(() => {
     const el = ref.current;
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.45);
-      progressRef.current = Math.min(1, Math.max(0, raw));
-    }
+    if (el) { const rect = el.getBoundingClientRect(); const raw = (window.innerHeight * 0.95 - rect.top) / (window.innerHeight * 0.45); progressRef.current = Math.min(1, Math.max(0, raw)); }
     smoothRef.current += (progressRef.current - smoothRef.current) * 0.08;
     if (Math.abs(progressRef.current - smoothRef.current) < 0.005) smoothRef.current = progressRef.current;
-    setSmooth(smoothRef.current);
-    raf.current = requestAnimationFrame(tick);
+    setSmooth(smoothRef.current); raf.current = requestAnimationFrame(tick);
   }, []);
-
-  useEffect(() => {
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
-  }, [tick]);
-
+  useEffect(() => { raf.current = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf.current); }, [tick]);
   const p = ease(smooth);
-  return (
-    <Tag ref={ref} style={{
-      ...style,
-      filter: `blur(${blurMax * (1 - p)}px)`,
-      opacity: p,
-      transform: `translateY(${18 * (1 - p)}px)`,
-      willChange: "filter, opacity, transform",
-    }}>{children}</Tag>
-  );
+  return (<Tag ref={ref} style={{ ...style, filter: `blur(${blurMax * (1 - p)}px)`, opacity: p, transform: `translateY(${18 * (1 - p)}px)`, willChange: "filter, opacity, transform" }}>{children}</Tag>);
 }
 
 /* ── Countdown Timer ── */
@@ -178,11 +115,7 @@ function CountdownTimer() {
     setMounted(true);
     const tick = () => {
       const diff = Math.max(0, endTimeRef.current - Date.now());
-      setTimeLeft({
-        hours: Math.floor(diff / 3600000),
-        minutes: Math.floor((diff % 3600000) / 60000),
-        seconds: Math.floor((diff % 60000) / 1000),
-      });
+      setTimeLeft({ hours: Math.floor(diff / 3600000), minutes: Math.floor((diff % 3600000) / 60000), seconds: Math.floor((diff % 60000) / 1000) });
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -202,16 +135,6 @@ function CountdownTimer() {
     </div>
   );
 }
-
-/* ── Sample creative data ── */
-const samples = [
-  { src: "/assets/skincare-closeup-CKKAxIIz.png", category: "Lifestyle" },
-  { src: "/assets/scent-diffuser-studio-8F9hzFSi.png", category: "Product Hero" },
-  { src: "/assets/golf-ad-BF4ytyZB.jpeg", category: "Detail Shot" },
-  { src: "/assets/tallow-balm-ad-j98A_I8X.jpeg", category: "Editorial" },
-  { src: "/assets/sock-scientific-tech-CtYs3SdE.jpeg", category: "Scene Setting" },
-  { src: "/assets/ugc-socks-Dvn42rza.jpeg", category: "Wild Card" },
-];
 
 /* ── Stats ── */
 const stats = [
@@ -236,56 +159,34 @@ const testimonials = [
 /* ── Packages ── */
 const packages = [
   {
-    name: "Spark",
-    price: "$2,500",
-    originalPrice: "$5,000",
-    period: "",
-    description: "Perfect for testing the waters.",
-    icon: Zap,
-    features: [
-      "25 Static ad creatives",
-      "1 Hero video ad (45 seconds)",
-      "2 Rounds of revisions",
-      "Delivered in 7 days",
-    ],
-    cta: "Get Started",
-    highlighted: false,
+    name: "Spark", price: "$2,500", originalPrice: "$5,000", period: "",
+    description: "Perfect for testing the waters.", icon: Zap,
+    features: ["25 Static ad creatives", "1 Hero video ad (45 seconds)", "2 Rounds of revisions", "Delivered in 7 days"],
+    cta: "Get Started", highlighted: false,
   },
   {
-    name: "Accelerate",
-    price: "$5,000",
-    originalPrice: "$10,000",
-    period: "",
-    description: "Everything you need to scale fast.",
-    icon: TrendingUp,
-    features: [
-      "75 Static ad creatives",
-      "2 Hero video ads (45 seconds each)",
-      "2 Rounds of revisions",
-      "Delivered in 7 days",
-    ],
-    cta: "Get Started",
-    highlighted: true,
+    name: "Accelerate", price: "$5,000", originalPrice: "$10,000", period: "",
+    description: "Everything you need to scale fast.", icon: TrendingUp,
+    features: ["75 Static ad creatives", "2 Hero video ads (45 seconds each)", "2 Rounds of revisions", "Delivered in 7 days"],
+    cta: "Get Started", highlighted: true,
   },
   {
-    name: "Scale",
-    price: "$12,500",
-    originalPrice: "$25,000",
-    period: "",
-    description: "Full creative firepower for scale.",
-    icon: Rocket,
-    features: [
-      "250 Static ad creatives",
-      "8 Hero video ads (45 seconds each)",
-      "2 Rounds of revisions",
-      "Delivered in 7 days",
-    ],
-    cta: "Get Started",
-    highlighted: false,
+    name: "Scale", price: "$12,500", originalPrice: "$25,000", period: "",
+    description: "Full creative firepower for scale.", icon: Rocket,
+    features: ["250 Static ad creatives", "8 Hero video ads (45 seconds each)", "2 Rounds of revisions", "Delivered in 7 days"],
+    cta: "Get Started", highlighted: false,
   },
 ];
 
-export default function ProposalPage() {
+export default function ProposalClient({ proposal }) {
+  const brandName = proposal.brand_name;
+  const statics = proposal.static_urls || [];
+  const videoUrl = proposal.video_url;
+  const hideLabels = ["bond-matchmaking", "chiller-body"].includes(proposal.slug);
+  const tallSlugs = ["dude-meds", "chiller-body"];
+  const aspectRatio = tallSlugs.includes(proposal.slug) ? "177.78%" : "100%";
+  const hideDiscount = proposal.slug === "chiller-body";
+
   return (
     <>
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "0 24px" }}>
@@ -298,7 +199,7 @@ export default function ProposalPage() {
             </div>
             <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em", ...mono }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Studios</span></span>
           </div>
-          <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Creative Partnership Proposal</span>
+          <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Proposal for {brandName}</span>
         </nav>
 
         {/* ── Hero ── */}
@@ -318,35 +219,57 @@ export default function ProposalPage() {
           </div>
 
           <Reveal delay={600} as="p" style={{ color: G.textTer, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto", ...mono }}>We combine proprietary AI systems with human creative direction to produce high-volume, performance-tested ad creative optimized for Meta's Andromeda algorithm.</Reveal>
-
-          <Reveal delay={800}>
-            <a href="#book" onClick={(e) => { e.preventDefault(); document.getElementById("book")?.scrollIntoView({ behavior: "smooth" }); }} style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 32, padding: "14px 32px", background: G.gold, color: "#FFFFFF", fontSize: 15, fontWeight: 600, borderRadius: 980, textDecoration: "none", cursor: "pointer", ...mono }}>Get Started <ArrowRight size={16} /></a>
-          </Reveal>
         </section>
 
         {/* ── Creative Samples ── */}
-        <section style={{ marginBottom: 100 }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
-              <Sparkles size={14} style={{ color: G.gold }} />
-              <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Sample Work</span>
-            </BlurReveal>
-            <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"What We Create"}</ScrollBlurText>
-            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>A selection of recent creative produced for brands scaling their paid social.</BlurReveal>
-          </div>
-          <div className="proposal-grid">
-            {samples.map((s, i) => (
-              <BlurReveal key={i} style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
-                <div style={{ position: "relative", paddingTop: "100%", background: "#F5F5F7" }}>
-                  <img src={s.src} alt={s.category} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-                <div style={{ padding: "14px 20px" }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: G.text, ...mono }}>{s.category}</p>
-                </div>
+        {statics.length > 0 && (
+          <section style={{ marginBottom: 100 }}>
+            <div style={{ textAlign: "center", marginBottom: 48 }}>
+              <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+                <Sparkles size={14} style={{ color: G.gold }} />
+                <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Sample Creative</span>
               </BlurReveal>
-            ))}
-          </div>
-        </section>
+              <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{`Creative for ${brandName}`}</ScrollBlurText>
+              <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>A preview of the creative direction we'd take for your brand.</BlurReveal>
+            </div>
+            <div className="proposal-grid">
+              {statics.map((src, i) => {
+                const creativeTypes = ["Lifestyle", "Product Hero", "Detail Shot", "Editorial", "Scene Setting", "Wild Card"];
+                const label = creativeTypes[i % creativeTypes.length];
+                return (
+                <BlurReveal key={i} style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
+                  <div style={{ position: "relative", paddingTop: aspectRatio, background: "#F5F5F7" }}>
+                    <img src={src} alt={`${brandName} ${label}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                  {!hideLabels && (
+                    <div style={{ padding: "14px 20px" }}>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: G.text, ...mono }}>{label}</p>
+                    </div>
+                  )}
+                </BlurReveal>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Video ── */}
+        {videoUrl && (
+          <section style={{ marginBottom: 100 }}>
+            <div style={{ textAlign: "center", marginBottom: 48 }}>
+              <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
+                <Play size={14} style={{ color: G.gold }} />
+                <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Video</span>
+              </BlurReveal>
+              <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Sample Video Creative"}</ScrollBlurText>
+            </div>
+            <BlurReveal style={{ borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, overflow: "hidden", background: "#000" }}>
+              <div style={{ position: "relative", paddingTop: "56.25%" }}>
+                <iframe src={videoUrl} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }} title={`${brandName} Video`} allowFullScreen />
+              </div>
+            </BlurReveal>
+          </section>
+        )}
 
         {/* ── Bold Statement ── */}
         <section style={{ marginBottom: 48, textAlign: "center", padding: "60px 0" }}>
@@ -368,19 +291,13 @@ export default function ProposalPage() {
             <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Choose Your Plan"}</ScrollBlurText>
             <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Flexible packages designed to match your creative volume and growth stage.</BlurReveal>
           </div>
-          <CountdownTimer />
+          {!hideDiscount && <CountdownTimer />}
           <div className="package-grid">
             {packages.map((pkg, i) => (
               <BlurReveal key={i} style={{
-                borderRadius: 20,
-                border: pkg.highlighted ? `2px solid ${G.gold}` : `1px solid ${G.cardBorder}`,
+                borderRadius: 20, border: pkg.highlighted ? `2px solid ${G.gold}` : `1px solid ${G.cardBorder}`,
                 boxShadow: pkg.highlighted ? "0 8px 32px rgba(0,0,0,0.10)" : G.cardShadow,
-                background: G.card,
-                padding: "36px 28px",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
+                background: G.card, padding: "36px 28px", position: "relative", display: "flex", flexDirection: "column", height: "100%",
               }}>
                 {pkg.highlighted && (
                   <div style={{ position: "absolute", top: -13, left: "50%", transform: "translateX(-50%)", background: G.gold, color: "#fff", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "5px 16px", borderRadius: 980, ...mono }}>Most Popular</div>
@@ -393,7 +310,7 @@ export default function ProposalPage() {
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 28 }}>
                   <span style={{ ...hd, fontSize: 42, color: G.text }}>{pkg.price}</span>
                   {pkg.period && <span style={{ fontSize: 15, color: G.textTer, ...mono }}>{pkg.period}</span>}
-                  {pkg.originalPrice && <span style={{ fontSize: 18, color: G.textTer, textDecoration: "line-through", ...mono }}>{pkg.originalPrice}</span>}
+                  {pkg.originalPrice && !hideDiscount && <span style={{ fontSize: 18, color: G.textTer, textDecoration: "line-through", ...mono }}>{pkg.originalPrice}</span>}
                 </div>
                 <div style={{ height: 1, background: G.border, marginBottom: 24 }} />
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, flex: 1 }}>
@@ -407,10 +324,8 @@ export default function ProposalPage() {
                 <a href="#book" style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   padding: "14px 24px", borderRadius: 980, marginTop: 28, textDecoration: "none", fontSize: 15, fontWeight: 600, ...mono,
-                  background: pkg.highlighted ? G.gold : "transparent",
-                  color: pkg.highlighted ? "#fff" : G.text,
-                  border: pkg.highlighted ? "none" : `1px solid ${G.goldBorder}`,
-                  transition: "all 0.2s",
+                  background: pkg.highlighted ? G.gold : "transparent", color: pkg.highlighted ? "#fff" : G.text,
+                  border: pkg.highlighted ? "none" : `1px solid ${G.goldBorder}`, transition: "all 0.2s",
                 }}>{pkg.cta}</a>
               </BlurReveal>
             ))}
@@ -445,7 +360,7 @@ export default function ProposalPage() {
           </div>
         </section>
 
-        {/* ── Calendly Embed ── */}
+        {/* ── Calendly ── */}
         <section id="book" style={{ marginBottom: 100 }}>
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
@@ -453,7 +368,7 @@ export default function ProposalPage() {
               <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Next Step</span>
             </BlurReveal>
             <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"Book a Creative Strategy Call"}</ScrollBlurText>
-            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Pick a time that works and we'll walk through the creative strategy for your brand.</BlurReveal>
+            <BlurReveal as="p" style={{ color: G.textSec, fontSize: 15, lineHeight: 1.6, maxWidth: 480, margin: "0 auto", ...mono }}>Pick a time that works and we'll walk through the creative strategy for {brandName}.</BlurReveal>
           </div>
           <BlurReveal style={{ borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, overflow: "hidden", background: G.card, marginBottom: 48 }}>
             <iframe
@@ -483,7 +398,7 @@ export default function ProposalPage() {
               </div>
               <span style={{ fontSize: 13, color: G.textTer, ...mono }}>Alchemy Studios</span>
             </div>
-            <span style={{ fontSize: 12, color: G.textTer, ...mono }}>Confidential Proposal</span>
+            <span style={{ fontSize: 12, color: G.textTer, ...mono }}>Confidential Proposal for {brandName}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
             <div style={{ display: "flex", gap: 20 }}>

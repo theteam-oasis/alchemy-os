@@ -17,3 +17,19 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+/* Proposal page grids */
+.proposal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.package-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.testimonial-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+@media (max-width: 900px) {
+  .proposal-grid { grid-template-columns: 1fr; }
+  .package-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .hero-proposal-title { font-size: 42px !important; }
+  .hero-proposal-sub { font-size: 22px !important; }
+}

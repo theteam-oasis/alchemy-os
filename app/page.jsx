@@ -208,11 +208,10 @@ function Hero() {
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>AI-Powered Creative Studio</span>
         </HeroReveal>
 
-        <HeroBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center" }} staggerMs={70}>{"For brands scaling with Paid Social"}</HeroBlurText>
+        <HeroBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center", textTransform: "capitalize" }} staggerMs={70}>{"For brands scaling with Paid Social"}</HeroBlurText>
 
-        <div style={{ marginTop: 32, marginBottom: 16 }}>
-          <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center" }} staggerMs={50}>{"Your ads aren't failing."}</HeroBlurText>
-          <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.gold, lineHeight: 1.3, justifyContent: "center" }} staggerMs={50}>{"Your creative pipeline is."}</HeroBlurText>
+        <div style={{ marginTop: 16, marginBottom: 16 }}>
+          <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center", whiteSpace: "nowrap", fontStyle: "italic" }} staggerMs={50}>{"Your ads aren't failing. Your creative pipeline is."}</HeroBlurText>
         </div>
 
         <HeroReveal delay={600} as="p" className="hero-body" style={{ color: G.textSec, fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px", ...mono }}>High volume A.I. creative built for the Andromeda age of Meta.</HeroReveal>
