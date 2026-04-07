@@ -253,7 +253,7 @@ export default function ProposalClient({ proposal }) {
             {proposal.slug === "chiller-body" && (
               <BlurReveal style={{ textAlign: "center", marginTop: 48 }}>
                 <a
-                  href="https://drive.google.com/uc?export=download&id=11zC1PF2Ht_SbTY_-AburC-rF5kv2NVyQ"
+                  href="https://drive.google.com/file/d/11zC1PF2Ht_SbTY_-AburC-rF5kv2NVyQ/view"
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
