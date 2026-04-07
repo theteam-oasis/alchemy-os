@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Play, Quote, Phone } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Play, Quote, Phone, Download } from "lucide-react";
 
 /* ── Design tokens ── */
 const G = {
@@ -250,6 +250,27 @@ export default function ProposalClient({ proposal }) {
                 );
               })}
             </div>
+            {proposal.slug === "chiller-body" && (
+              <BlurReveal style={{ textAlign: "center", marginTop: 48 }}>
+                <a
+                  href="https://drive.google.com/uc?export=download&id=1u1Yjgham_qXqggJDuXcJtS9tbzYxWQdE"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 10,
+                    padding: "14px 32px", borderRadius: 980,
+                    background: G.gold, color: "#fff",
+                    fontSize: 15, fontWeight: 600, textDecoration: "none",
+                    transition: "opacity 0.2s", ...mono,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                >
+                  <Download size={16} />
+                  Download Hero Video
+                </a>
+              </BlurReveal>
+            )}
           </section>
         )}
 
