@@ -66,7 +66,6 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
         background: image ? K.ink : "#1C1C18",
         overflow: "hidden",
         cursor: image ? "default" : "pointer",
-        outline: `1px solid ${dragOver ? K.sand : K.charcoal}`,
       }}
     >
       {image ? (
