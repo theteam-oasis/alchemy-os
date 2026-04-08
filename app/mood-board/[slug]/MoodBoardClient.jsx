@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Clock, Cloud, Sun, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog, Wind, Droplets, Thermometer } from "lucide-react";
 
-/* ── Tokens ── */
 const K = {
   ink: "#0D0D0B", offWhite: "#F7F5F0", sand: "#C8BFA8",
   stone: "#8C8880", smoke: "#E4E0D8", charcoal: "#3A3834",
@@ -40,6 +39,17 @@ function ImageTile({ label, ratio, image }) {
   );
 }
 
+function WeatherIcon({ code, size = 14 }) {
+  if (code <= 1) return <Sun size={size} strokeWidth={1.5} color={K.sand} />;
+  if (code <= 3) return <Cloud size={size} strokeWidth={1.5} color={K.stone} />;
+  if (code <= 48) return <CloudFog size={size} strokeWidth={1.5} color={K.stone} />;
+  if (code <= 55) return <CloudDrizzle size={size} strokeWidth={1.5} color={K.stone} />;
+  if (code <= 65) return <CloudRain size={size} strokeWidth={1.5} color={K.stone} />;
+  if (code <= 77) return <CloudSnow size={size} strokeWidth={1.5} color={K.stone} />;
+  if (code <= 82) return <CloudRain size={size} strokeWidth={1.5} color={K.stone} />;
+  return <CloudLightning size={size} strokeWidth={1.5} color={K.stone} />;
+}
+
 const columns = [
   [{ idx: 0, label: "hero landscape", ratio: "9:16" }, { idx: 1, label: "golden hour", ratio: "1:1" }, { idx: 2, label: "texture", ratio: "1:1" }],
   [{ idx: 3, label: "location detail", ratio: "1:1" }, { idx: 4, label: "back to camera", ratio: "9:16" }, { idx: 5, label: "product in context", ratio: "1:1" }],
@@ -53,33 +63,91 @@ export default function MoodBoardClient({ board, images: imageRows }) {
   const imageMap = {};
   imageRows.forEach((img) => { imageMap[img.slot] = img.url; });
 
+  const [weather, setWeather] = useState(null);
+
+  useEffect(() => {
+    if (board.location_lat && board.location_lng) {
+      fetch(`/api/mood-board/weather?lat=${board.location_lat}&lng=${board.location_lng}`)
+        .then((r) => r.json())
+        .then((d) => { if (d.success) setWeather(d.weather); })
+        .catch(() => {});
+    }
+  }, [board.location_lat, board.location_lng]);
+
   const brandName = board.brand_name || board.slug;
   const hasLocation = board.location_name || board.location_image_url;
 
   return (
     <div style={{ background: K.ink, minHeight: "100vh", color: K.offWhite }}>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <header style={{ padding: "48px 48px 0", maxWidth: 1400, margin: "0 auto" }}>
         <Reveal delay={0}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 40 }}>
-            <div>
-              <h1 style={{ ...font.display, color: K.offWhite, fontSize: 56, lineHeight: 1, marginBottom: 6 }}>
-                {brandName.toUpperCase()}
-              </h1>
-              <p style={{ ...font.label, color: K.stone, fontSize: 10 }}>mood board — 2026</p>
-            </div>
-            <p style={{ ...font.quote, color: K.sand, fontSize: 16, textAlign: "right" }}>
-              mood board
-            </p>
-          </div>
+          <h1 style={{ ...font.display, color: K.offWhite, fontSize: 56, lineHeight: 1, marginBottom: 6 }}>
+            {brandName.toUpperCase()}
+          </h1>
+          <p style={{ ...font.label, color: K.stone, fontSize: 10, marginBottom: 32 }}>mood board — 2026</p>
         </Reveal>
+
+        {/* ── Info bar: location + weather + shoot time + mood words ── */}
         <Reveal delay={150}>
-          <div style={{ width: "100%", height: 1, background: K.charcoal, marginBottom: 40 }} />
+          <div style={{ borderTop: `1px solid ${K.charcoal}`, borderBottom: `1px solid ${K.charcoal}`, padding: "16px 0", marginBottom: 32, display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" }}>
+
+            {/* Location */}
+            {board.location_name && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 24, borderRight: `1px solid ${K.charcoal}`, marginRight: 24 }}>
+                <MapPin size={12} strokeWidth={1.5} color={K.sand} />
+                {board.location_maps_url ? (
+                  <a href={board.location_maps_url} target="_blank" rel="noopener noreferrer" style={{ ...font.body, color: K.offWhite, fontSize: 13, textDecoration: "none" }}>
+                    {board.location_name}
+                  </a>
+                ) : (
+                  <span style={{ ...font.body, color: K.offWhite, fontSize: 13 }}>{board.location_name}</span>
+                )}
+              </div>
+            )}
+
+            {/* Shoot time */}
+            {board.shoot_time && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, paddingRight: 24, borderRight: `1px solid ${K.charcoal}`, marginRight: 24 }}>
+                <Clock size={12} strokeWidth={1.5} color={K.sand} />
+                <span style={{ ...font.body, color: K.offWhite, fontSize: 13 }}>{board.shoot_time}</span>
+              </div>
+            )}
+
+            {/* Weather */}
+            {weather && (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingRight: 24, borderRight: `1px solid ${K.charcoal}`, marginRight: 24 }}>
+                <WeatherIcon code={weather.code} />
+                <span style={{ ...font.body, color: K.offWhite, fontSize: 13 }}>{weather.temp}{weather.unit}</span>
+                <span style={{ ...font.caption, color: K.stone, textTransform: "none" }}>{weather.condition}</span>
+                <span style={{ ...font.caption, color: K.stone, textTransform: "none" }}>{weather.humidity}% humidity</span>
+                <span style={{ ...font.caption, color: K.stone, textTransform: "none" }}>{weather.wind} km/h wind</span>
+              </div>
+            )}
+
+            {/* Mood words */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {moodWords.map((word, i) => (
+                <span key={i} style={{ ...font.quote, color: K.stone, fontSize: 13 }}>{word}</span>
+              ))}
+            </div>
+          </div>
         </Reveal>
       </header>
 
-      {/* Image grid */}
+      {/* ── Location image (if exists) ── */}
+      {board.location_image_url && (
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 48px 12px" }}>
+          <Reveal delay={200}>
+            <div style={{ width: "100%", height: 200, overflow: "hidden", position: "relative" }}>
+              <img src={board.location_image_url} alt={board.location_name || "Location"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            </div>
+          </Reveal>
+        </div>
+      )}
+
+      {/* ── Image grid ── */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 48px" }}>
         <Reveal delay={250}>
           <div style={{ display: "flex", gap: 0 }}>
@@ -94,54 +162,9 @@ export default function MoodBoardClient({ board, images: imageRows }) {
         </Reveal>
       </div>
 
-      {/* Location card */}
-      {hasLocation && (
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "40px 48px 0" }}>
-          <Reveal delay={300}>
-            <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${K.charcoal}`, paddingTop: 32 }}>
-              {board.location_image_url && (
-                <div style={{ width: 280, flexShrink: 0, overflow: "hidden" }}>
-                  <img src={board.location_image_url} alt={board.location_name || "Shoot location"} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", minHeight: 160 }} />
-                </div>
-              )}
-              <div style={{ flex: 1, padding: "24px 32px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 12 }}>
-                <span style={{ ...font.label, color: K.sand, fontSize: 9 }}>
-                  <MapPin size={10} strokeWidth={1.5} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-                  shoot location
-                </span>
-                {board.location_name && <span style={{ ...font.quote, color: K.offWhite, fontSize: 20 }}>{board.location_name}</span>}
-                {board.location_maps_url && (
-                  <a href={board.location_maps_url} target="_blank" rel="noopener noreferrer"
-                    style={{ ...font.caption, color: K.stone, textDecoration: "none", textTransform: "none", letterSpacing: "0.02em" }}>
-                    view on google maps →
-                  </a>
-                )}
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      )}
-
-      {/* Mood words */}
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "48px 48px 0" }}>
-        <Reveal delay={350}>
-          <div style={{ display: "flex", gap: 0, marginBottom: 40 }}>
-            {moodWords.map((word, i) => (
-              <div key={i} style={{ flex: 1, padding: "16px 0", borderTop: `1px solid ${K.charcoal}`, borderRight: i < moodWords.length - 1 ? `1px solid ${K.charcoal}` : "none", paddingRight: 16 }}>
-                <span style={{ ...font.quote, color: K.offWhite, fontSize: 17 }}>{word}</span>
-              </div>
-            ))}
-          </div>
-        </Reveal>
-
-        <Reveal delay={400}>
-          <p style={{ ...font.quote, color: K.stone, fontSize: 15, lineHeight: 1.8, maxWidth: 520, marginBottom: 48 }}>
-            every image should feel like a memory rather than a photograph. you remember the mist, the warmth, the light on the water.
-          </p>
-        </Reveal>
-
-        {/* Footer */}
-        <div style={{ borderTop: `1px solid ${K.charcoal}`, paddingTop: 20, paddingBottom: 40, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      {/* ── Footer ── */}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "32px 48px 40px" }}>
+        <div style={{ borderTop: `1px solid ${K.charcoal}`, paddingTop: 20, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
           <div>
             <span style={{ ...font.display, color: K.offWhite, fontSize: 20 }}>{brandName.toUpperCase()}</span>
             <p style={{ ...font.caption, color: K.stone, marginTop: 6, textTransform: "none" }}>

@@ -119,6 +119,9 @@ export default function MoodBoardCreate() {
   const [locMapsUrl, setLocMapsUrl] = useState("");
   const [locImage, setLocImage] = useState("");
   const [locUploading, setLocUploading] = useState(false);
+  const [shootTime, setShootTime] = useState("");
+  const [locLat, setLocLat] = useState("");
+  const [locLng, setLocLng] = useState("");
   const locImageRef = useRef(null);
 
   /* Auto-slug */
@@ -132,6 +135,23 @@ export default function MoodBoardCreate() {
     else setPwError(true);
   }
 
+  /* ── Extract lat/lng from Google Maps URL ── */
+  function parseCoordsFromMapsUrl(url) {
+    if (!url) return null;
+    // Matches @lat,lng or ?q=lat,lng or /place/lat,lng
+    const atMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (atMatch) return { lat: atMatch[1], lng: atMatch[2] };
+    const qMatch = url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (qMatch) return { lat: qMatch[1], lng: qMatch[2] };
+    return null;
+  }
+
+  /* ── Auto-extract coords when maps URL changes ── */
+  useEffect(() => {
+    const coords = parseCoordsFromMapsUrl(locMapsUrl);
+    if (coords) { setLocLat(coords.lat); setLocLng(coords.lng); }
+  }, [locMapsUrl]);
+
   /* ── Create / save board ── */
   const saveBoard = useCallback(async () => {
     if (!slug) return;
@@ -141,9 +161,10 @@ export default function MoodBoardCreate() {
       body: JSON.stringify({
         slug, brand_name: brandName,
         location_name: locName, location_maps_url: locMapsUrl, location_image_url: locImage,
+        shoot_time: shootTime, location_lat: locLat || null, location_lng: locLng || null,
       }),
     });
-  }, [slug, brandName, locName, locMapsUrl, locImage]);
+  }, [slug, brandName, locName, locMapsUrl, locImage, shootTime, locLat, locLng]);
 
   const handleCreate = useCallback(async () => {
     if (!slug || !brandName) return;
@@ -360,6 +381,11 @@ export default function MoodBoardCreate() {
                 <MapPin size={10} strokeWidth={1.5} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />google maps link
               </label>
               <input type="url" placeholder="https://maps.google.com/..." value={locMapsUrl} onChange={(e) => setLocMapsUrl(e.target.value)} style={inputStyle} />
+              {locLat && locLng && <span style={{ ...font.caption, color: K.sand, textTransform: "none", marginTop: 4, display: "block" }}>coordinates detected: {locLat}, {locLng}</span>}
+            </div>
+            <div>
+              <label style={{ ...font.label, color: K.stone, fontSize: 9, display: "block", marginBottom: 6 }}>shoot time</label>
+              <input type="text" placeholder="6:30am — golden hour" value={shootTime} onChange={(e) => setShootTime(e.target.value)} style={inputStyle} />
             </div>
           </div>
         </div>

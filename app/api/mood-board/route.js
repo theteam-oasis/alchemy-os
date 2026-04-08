@@ -66,7 +66,7 @@ export async function PUT(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
   const body = await request.json();
-  const { slug, brand_name, location_name, location_maps_url, location_image_url } = body;
+  const { slug, brand_name, location_name, location_maps_url, location_image_url, shoot_time, location_lat, location_lng } = body;
 
   if (!slug) return NextResponse.json({ success: false, error: 'Missing slug' });
 
@@ -76,6 +76,9 @@ export async function PUT(request) {
     location_name: location_name || '',
     location_maps_url: location_maps_url || '',
     location_image_url: location_image_url || '',
+    shoot_time: shoot_time || '',
+    location_lat: location_lat || null,
+    location_lng: location_lng || null,
   };
 
   const { data, error } = await supabase
