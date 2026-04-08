@@ -151,21 +151,26 @@ export default function MoodBoardCreate() {
     setCreated(true);
   }, [slug, brandName, saveBoard]);
 
+  /* ── Keep slug in a ref so callbacks always have latest value ── */
+  const slugRef = useRef(slug);
+  useEffect(() => { slugRef.current = slug; }, [slug]);
+
   /* ── Image upload ── */
   const handleUpload = useCallback(async (index, file) => {
-    if (!slug) return;
+    const currentSlug = slugRef.current;
+    if (!currentSlug) { alert("Enter a brand name first"); return; }
     setUploading((p) => ({ ...p, [index]: true }));
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("slot", index);
-      form.append("slug", slug);
+      form.append("slug", currentSlug);
       const res = await fetch("/api/mood-board", { method: "POST", body: form });
       const data = await res.json();
       if (data.success) setImages((p) => ({ ...p, [index]: data.url }));
     } catch (e) { console.error("Upload failed:", e); }
     setUploading((p) => ({ ...p, [index]: false }));
-  }, [slug]);
+  }, []);
 
   const handleRemove = useCallback(async (index) => {
     setImages((p) => { const n = { ...p }; delete n[index]; return n; });
@@ -173,10 +178,10 @@ export default function MoodBoardCreate() {
       await fetch("/api/mood-board", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slot: index, slug }),
+        body: JSON.stringify({ slot: index, slug: slugRef.current }),
       });
     } catch (e) { console.error("Delete failed:", e); }
-  }, [slug]);
+  }, []);
 
   /* ── Drag swap ── */
   const handleDragStart = useCallback((idx) => setDragIdx(idx), []);
@@ -197,18 +202,18 @@ export default function MoodBoardCreate() {
       await fetch("/api/mood-board", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, fromSlot: fromIdx, toSlot: toIdx }),
+        body: JSON.stringify({ slug: slugRef.current, fromSlot: fromIdx, toSlot: toIdx }),
       });
     } catch (e) { console.error("Swap failed:", e); }
-  }, [dragIdx, slug]);
+  }, [dragIdx]);
 
   /* ── Location image upload ── */
   const handleLocImageUpload = useCallback(async (file) => {
-    if (!slug) return;
+    if (!slugRef.current) { alert("Enter a brand name first"); return; }
     setLocUploading(true);
     try {
       const form = new FormData();
-      form.append("board", slug);
+      form.append("board", slugRef.current);
       form.append("name", locName);
       form.append("maps_url", locMapsUrl);
       form.append("image", file);
@@ -217,7 +222,7 @@ export default function MoodBoardCreate() {
       if (data.success && data.location) setLocImage(data.location.image_url);
     } catch (e) { console.error("Location image upload failed:", e); }
     setLocUploading(false);
-  }, [slug, locName, locMapsUrl]);
+  }, [locName, locMapsUrl]);
 
   const filled = Object.keys(images).length;
   const boardUrl = `scalewithalchemy.com/mood-board/${slug}`;
