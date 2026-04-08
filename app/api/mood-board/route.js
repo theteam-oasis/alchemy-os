@@ -1,38 +1,42 @@
 import { supabase } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
-const TABLE = 'mood_board_images';
+const IMAGES_TABLE = 'mood_board_images';
+const BOARDS_TABLE = 'mood_boards';
 
+/* GET — fetch board metadata + images by slug */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const board = searchParams.get('board') || 'koko';
+  const slug = searchParams.get('slug') || searchParams.get('board');
 
-  if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
+  if (!supabase || !slug) return NextResponse.json({ success: false, error: 'Missing slug or no database' });
 
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select('*')
-    .eq('board', board)
-    .order('slot', { ascending: true });
+  const [boardRes, imagesRes] = await Promise.all([
+    supabase.from(BOARDS_TABLE).select('*').eq('slug', slug).single(),
+    supabase.from(IMAGES_TABLE).select('*').eq('board', slug).order('slot', { ascending: true }),
+  ]);
 
-  if (error) return NextResponse.json({ success: false, error: error.message });
-  return NextResponse.json({ success: true, images: data || [] });
+  const board = boardRes.data || null;
+  const images = imagesRes.data || [];
+
+  return NextResponse.json({ success: true, board, images });
 }
 
+/* POST — upload image to a slot (FormData: file, slot, board/slug) */
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
   const formData = await request.formData();
   const file = formData.get('file');
   const slot = parseInt(formData.get('slot'), 10);
-  const board = formData.get('board') || 'koko';
+  const slug = formData.get('slug') || formData.get('board');
 
-  if (!file || isNaN(slot)) {
-    return NextResponse.json({ success: false, error: 'Missing file or slot' });
+  if (!file || isNaN(slot) || !slug) {
+    return NextResponse.json({ success: false, error: 'Missing file, slot, or slug' });
   }
 
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const path = `mood-board/${board}/slot-${slot}-${Date.now()}.${ext}`;
+  const path = `mood-board/${slug}/slot-${slot}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: uploadError } = await supabase.storage
@@ -44,11 +48,10 @@ export async function POST(request) {
   const { data: urlData } = supabase.storage.from('brand-assets').getPublicUrl(path);
   const publicUrl = urlData.publicUrl;
 
-  // Remove old image for this slot
-  await supabase.from(TABLE).delete().eq('board', board).eq('slot', slot);
+  await supabase.from(IMAGES_TABLE).delete().eq('board', slug).eq('slot', slot);
 
-  const { error: dbError } = await supabase.from(TABLE).insert({
-    board,
+  const { error: dbError } = await supabase.from(IMAGES_TABLE).insert({
+    board: slug,
     slot,
     url: publicUrl,
     filename: file.name,
@@ -58,41 +61,70 @@ export async function POST(request) {
   return NextResponse.json({ success: true, url: publicUrl });
 }
 
+/* PUT — create or update board metadata (JSON: slug, brand_name, location fields) */
+export async function PUT(request) {
+  if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
+
+  const body = await request.json();
+  const { slug, brand_name, location_name, location_maps_url, location_image_url } = body;
+
+  if (!slug) return NextResponse.json({ success: false, error: 'Missing slug' });
+
+  const row = {
+    slug,
+    brand_name: brand_name || '',
+    location_name: location_name || '',
+    location_maps_url: location_maps_url || '',
+    location_image_url: location_image_url || '',
+  };
+
+  const { data, error } = await supabase
+    .from(BOARDS_TABLE)
+    .upsert(row, { onConflict: 'slug' })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ success: false, error: error.message });
+  return NextResponse.json({ success: true, board: data });
+}
+
+/* PATCH — swap two image slots */
 export async function PATCH(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
-  const { board = 'koko', fromSlot, toSlot } = await request.json();
-  if (fromSlot === undefined || toSlot === undefined) {
-    return NextResponse.json({ success: false, error: 'Missing fromSlot or toSlot' });
+  const { slug, board, fromSlot, toSlot } = await request.json();
+  const boardSlug = slug || board;
+  if (fromSlot === undefined || toSlot === undefined || !boardSlug) {
+    return NextResponse.json({ success: false, error: 'Missing params' });
   }
 
-  // Get both rows
   const { data: rows } = await supabase
-    .from(TABLE)
+    .from(IMAGES_TABLE)
     .select('*')
-    .eq('board', board)
+    .eq('board', boardSlug)
     .in('slot', [fromSlot, toSlot]);
 
   const fromRow = rows?.find((r) => r.slot === fromSlot);
   const toRow = rows?.find((r) => r.slot === toSlot);
 
-  // Swap: update slot numbers
   if (fromRow && toRow) {
-    await supabase.from(TABLE).update({ slot: -1 }).eq('id', fromRow.id);
-    await supabase.from(TABLE).update({ slot: fromSlot }).eq('id', toRow.id);
-    await supabase.from(TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
+    await supabase.from(IMAGES_TABLE).update({ slot: -1 }).eq('id', fromRow.id);
+    await supabase.from(IMAGES_TABLE).update({ slot: fromSlot }).eq('id', toRow.id);
+    await supabase.from(IMAGES_TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
   } else if (fromRow && !toRow) {
-    await supabase.from(TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
+    await supabase.from(IMAGES_TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
   }
 
   return NextResponse.json({ success: true });
 }
 
+/* DELETE — remove image from slot */
 export async function DELETE(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
-  const { slot, board = 'koko' } = await request.json();
+  const { slot, slug, board } = await request.json();
+  const boardSlug = slug || board;
 
-  await supabase.from(TABLE).delete().eq('board', board).eq('slot', slot);
+  await supabase.from(IMAGES_TABLE).delete().eq('board', boardSlug).eq('slot', slot);
   return NextResponse.json({ success: true });
 }
