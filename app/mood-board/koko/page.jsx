@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { MapPin } from "lucide-react";
 
 /* ── Koko brand tokens ── */
 const K = {
@@ -91,6 +92,7 @@ const columns = [
 /* ── Public mood board — read-only ── */
 export default function KokoMoodBoard() {
   const [images, setImages] = useState({});
+  const [location, setLocation] = useState(null);
 
   useEffect(() => {
     fetch("/api/mood-board?board=koko")
@@ -102,6 +104,10 @@ export default function KokoMoodBoard() {
           setImages(map);
         }
       })
+      .catch(() => {});
+    fetch("/api/mood-board/location?board=koko")
+      .then((r) => r.json())
+      .then((d) => { if (d.success && d.location) setLocation(d.location); })
       .catch(() => {});
   }, []);
 
@@ -147,6 +153,47 @@ export default function KokoMoodBoard() {
           </div>
         </Reveal>
       </div>
+
+      {/* ── Location card ── */}
+      {location && (location.name || location.image_url) && (
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "40px 48px 0" }}>
+          <Reveal delay={300}>
+            <div style={{ display: "flex", gap: 0, borderTop: `1px solid ${K.charcoal}`, paddingTop: 32 }}>
+              {location.image_url && (
+                <div style={{ width: 280, flexShrink: 0, overflow: "hidden" }}>
+                  <img
+                    src={location.image_url}
+                    alt={location.name || "Shoot location"}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", minHeight: 160 }}
+                  />
+                </div>
+              )}
+              <div style={{
+                flex: 1, padding: "24px 32px",
+                display: "flex", flexDirection: "column", justifyContent: "center", gap: 12,
+              }}>
+                <span style={{ ...font.label, color: K.sand, fontSize: 9 }}>
+                  <MapPin size={10} strokeWidth={1.5} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+                  shoot location
+                </span>
+                {location.name && (
+                  <span style={{ ...font.quote, color: K.offWhite, fontSize: 20 }}>{location.name}</span>
+                )}
+                {location.maps_url && (
+                  <a
+                    href={location.maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ ...font.caption, color: K.stone, textDecoration: "none", textTransform: "none", letterSpacing: "0.02em" }}
+                  >
+                    view on google maps →
+                  </a>
+                )}
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      )}
 
       {/* ── Mood words ── */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "48px 48px 0" }}>

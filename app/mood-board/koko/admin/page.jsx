@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Upload, Loader2, Lock, GripVertical } from "lucide-react";
+import { Upload, Loader2, Lock, GripVertical, MapPin, Image as ImageIcon } from "lucide-react";
 
 /* ── Koko brand tokens ── */
 const K = {
@@ -162,6 +162,13 @@ export default function KokoMoodBoardAdmin() {
   const [uploading, setUploading] = useState({});
   const [dragIdx, setDragIdx] = useState(null);
 
+  const [locName, setLocName] = useState("");
+  const [locMapsUrl, setLocMapsUrl] = useState("");
+  const [locImage, setLocImage] = useState("");
+  const [locUploading, setLocUploading] = useState(false);
+  const [locSaving, setLocSaving] = useState(false);
+  const locImageRef = useRef(null);
+
   function handleAuth(e) {
     e.preventDefault();
     if (password === "alchemy2024") {
@@ -172,7 +179,7 @@ export default function KokoMoodBoardAdmin() {
     }
   }
 
-  /* ── Load images ── */
+  /* ── Load images + location ── */
   useEffect(() => {
     if (!authed) return;
     fetch("/api/mood-board?board=koko")
@@ -182,6 +189,16 @@ export default function KokoMoodBoardAdmin() {
           const map = {};
           d.images.forEach((img) => { map[img.slot] = img.url; });
           setImages(map);
+        }
+      })
+      .catch(() => {});
+    fetch("/api/mood-board/location?board=koko")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.location) {
+          setLocName(d.location.name || "");
+          setLocMapsUrl(d.location.maps_url || "");
+          setLocImage(d.location.image_url || "");
         }
       })
       .catch(() => {});
@@ -243,6 +260,37 @@ export default function KokoMoodBoardAdmin() {
       });
     } catch (e) { console.error("Swap failed:", e); }
   }, [dragIdx]);
+
+  /* ── Save location ── */
+  const saveLocation = useCallback(async (newImage) => {
+    setLocSaving(true);
+    try {
+      const form = new FormData();
+      form.append("board", "koko");
+      form.append("name", locName);
+      form.append("maps_url", locMapsUrl);
+      form.append("existing_image_url", newImage || locImage);
+      await fetch("/api/mood-board/location", { method: "POST", body: form });
+    } catch (e) { console.error("Location save failed:", e); }
+    setLocSaving(false);
+  }, [locName, locMapsUrl, locImage]);
+
+  const handleLocImageUpload = useCallback(async (file) => {
+    setLocUploading(true);
+    try {
+      const form = new FormData();
+      form.append("board", "koko");
+      form.append("name", locName);
+      form.append("maps_url", locMapsUrl);
+      form.append("image", file);
+      const res = await fetch("/api/mood-board/location", { method: "POST", body: form });
+      const data = await res.json();
+      if (data.success && data.location) {
+        setLocImage(data.location.image_url);
+      }
+    } catch (e) { console.error("Location image upload failed:", e); }
+    setLocUploading(false);
+  }, [locName, locMapsUrl]);
 
   const filled = Object.keys(images).length;
 
@@ -333,6 +381,86 @@ export default function KokoMoodBoardAdmin() {
               ))}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── Location editor ── */}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "40px 48px 0" }}>
+        <div style={{ borderTop: `1px solid ${K.charcoal}`, paddingTop: 16, marginBottom: 24 }}>
+          <span style={{ ...font.label, color: K.stone, fontSize: 10 }}>shoot location</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 20 }}>
+          {/* Location image */}
+          <div
+            onClick={() => !locUploading && locImageRef.current?.click()}
+            style={{
+              width: 200, minHeight: 140, borderRadius: 4,
+              background: locImage ? "transparent" : "#1C1C18",
+              border: `1px solid ${K.charcoal}`,
+              overflow: "hidden", cursor: "pointer", position: "relative", flexShrink: 0,
+            }}
+          >
+            {locImage ? (
+              <img src={locImage} alt="Location" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 6, padding: 20 }}>
+                {locUploading ? (
+                  <Loader2 size={18} color={K.sand} strokeWidth={1} style={{ animation: "spin 1s linear infinite" }} />
+                ) : (
+                  <>
+                    <ImageIcon size={16} color={K.stone} strokeWidth={1} />
+                    <span style={{ ...font.label, color: K.stone, fontSize: 8 }}>location image</span>
+                  </>
+                )}
+              </div>
+            )}
+            <input
+              ref={locImageRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => { if (e.target.files[0]) handleLocImageUpload(e.target.files[0]); }}
+            />
+          </div>
+
+          {/* Location fields */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <label style={{ ...font.label, color: K.stone, fontSize: 9, display: "block", marginBottom: 6 }}>location name</label>
+              <input
+                type="text"
+                placeholder="Seseh Beach, Bali"
+                value={locName}
+                onChange={(e) => setLocName(e.target.value)}
+                onBlur={() => saveLocation()}
+                style={{
+                  width: "100%", padding: "10px 14px", background: "#1C1C18",
+                  border: `1px solid ${K.charcoal}`, borderRadius: 4,
+                  color: K.offWhite, fontSize: 13, outline: "none", ...font.body,
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ ...font.label, color: K.stone, fontSize: 9, display: "block", marginBottom: 6 }}>
+                <MapPin size={10} strokeWidth={1.5} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+                google maps link
+              </label>
+              <input
+                type="url"
+                placeholder="https://maps.google.com/..."
+                value={locMapsUrl}
+                onChange={(e) => setLocMapsUrl(e.target.value)}
+                onBlur={() => saveLocation()}
+                style={{
+                  width: "100%", padding: "10px 14px", background: "#1C1C18",
+                  border: `1px solid ${K.charcoal}`, borderRadius: 4,
+                  color: K.offWhite, fontSize: 13, outline: "none", ...font.body,
+                }}
+              />
+            </div>
+            {locSaving && <span style={{ ...font.caption, color: K.sand, textTransform: "none" }}>saving...</span>}
+          </div>
         </div>
       </div>
 
