@@ -46,8 +46,6 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
   const [hover, setHover] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  const aspectMap = { "1:1": "1/1", "9:16": "9/16", "16:9": "16/9" };
-
   return (
     <div
       onMouseEnter={() => setHover(true)}
@@ -63,13 +61,12 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
       onClick={() => !image && !uploading && fileRef.current?.click()}
       style={{
         position: "relative",
-        aspectRatio: aspectMap[ratio],
-        background: image ? "transparent" : K.ink,
-        border: dragOver ? `2px solid ${K.sand}` : `1px solid rgba(200,191,168,0.12)`,
-        borderRadius: 2,
+        width: "100%",
+        aspectRatio: ratio === "9:16" ? "9/16" : "1/1",
+        background: image ? K.ink : "#1C1C18",
         overflow: "hidden",
         cursor: image ? "default" : "pointer",
-        transition: "border-color 0.3s ease",
+        outline: `1px solid ${dragOver ? K.sand : K.charcoal}`,
       }}
     >
       {image ? (
@@ -82,12 +79,11 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
           {hover && (
             <div style={{
               position: "absolute", inset: 0,
-              background: "rgba(13,13,11,0.4)",
+              background: "rgba(13,13,11,0.45)",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
               backdropFilter: "blur(2px)",
             }}>
               <span style={{ ...font.label, color: K.offWhite, fontSize: 8 }}>{label}</span>
-              <span style={{ ...font.caption, color: K.stone, textTransform: "none", letterSpacing: "0.02em" }}>{ratio}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); onRemove(index); }}
                 style={{
@@ -112,7 +108,6 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
             <>
               <Upload size={14} color={K.stone} strokeWidth={1} />
               <span style={{ ...font.label, color: K.stone, fontSize: 8 }}>{label}</span>
-              <span style={{ ...font.caption, color: K.charcoal, textTransform: "none", letterSpacing: "0.02em" }}>{ratio}</span>
             </>
           )}
         </div>
@@ -128,27 +123,44 @@ function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }
   );
 }
 
+/*
+ * Grid layout — 4 columns, each with 1× 9:16 + 2× 1:1.
+ * Every column totals the same height (9/16 + 1 + 1 = 41/16 of the column width)
+ * so all four columns end flush — perfect puzzle, zero gaps.
+ *
+ * Col 1: 9:16, 1:1, 1:1    (portrait top)
+ * Col 2: 1:1, 9:16, 1:1    (portrait middle)
+ * Col 3: 1:1, 1:1, 9:16    (portrait bottom)
+ * Col 4: 9:16, 1:1, 1:1    (portrait top)
+ */
+const columns = [
+  [
+    { idx: 0, label: "hero landscape", ratio: "9:16" },
+    { idx: 1, label: "golden hour", ratio: "1:1" },
+    { idx: 2, label: "texture", ratio: "1:1" },
+  ],
+  [
+    { idx: 3, label: "location detail", ratio: "1:1" },
+    { idx: 4, label: "back to camera", ratio: "9:16" },
+    { idx: 5, label: "product in context", ratio: "1:1" },
+  ],
+  [
+    { idx: 6, label: "co-ed lifestyle", ratio: "1:1" },
+    { idx: 7, label: "candid / ease", ratio: "1:1" },
+    { idx: 8, label: "silhouette", ratio: "9:16" },
+  ],
+  [
+    { idx: 9, label: "the cave shot", ratio: "9:16" },
+    { idx: 10, label: "blue hour", ratio: "1:1" },
+    { idx: 11, label: "movement", ratio: "1:1" },
+  ],
+];
+
 /* ── Main ── */
 export default function KokoMoodBoard() {
   const [images, setImages] = useState({});
   const [uploading, setUploading] = useState({});
 
-  const slots = [
-    { label: "hero — wide landscape", ratio: "16:9" },
-    { label: "back to camera", ratio: "9:16" },
-    { label: "golden hour", ratio: "1:1" },
-    { label: "movement", ratio: "9:16" },
-    { label: "co-ed lifestyle", ratio: "16:9" },
-    { label: "location detail", ratio: "1:1" },
-    { label: "product in context", ratio: "1:1" },
-    { label: "silhouette", ratio: "9:16" },
-    { label: "texture — skin, sand", ratio: "16:9" },
-    { label: "candid / ease", ratio: "9:16" },
-    { label: "blue hour", ratio: "1:1" },
-    { label: "the cave shot", ratio: "16:9" },
-  ];
-
-  /* ── Load saved images ── */
   useEffect(() => {
     fetch("/api/mood-board?board=koko")
       .then((r) => r.json())
@@ -162,7 +174,6 @@ export default function KokoMoodBoard() {
       .catch(() => {});
   }, []);
 
-  /* ── Upload ── */
   const handleUpload = useCallback(async (index, file) => {
     setUploading((p) => ({ ...p, [index]: true }));
     try {
@@ -172,16 +183,11 @@ export default function KokoMoodBoard() {
       form.append("board", "koko");
       const res = await fetch("/api/mood-board", { method: "POST", body: form });
       const data = await res.json();
-      if (data.success) {
-        setImages((p) => ({ ...p, [index]: data.url }));
-      }
-    } catch (e) {
-      console.error("Upload failed:", e);
-    }
+      if (data.success) setImages((p) => ({ ...p, [index]: data.url }));
+    } catch (e) { console.error("Upload failed:", e); }
     setUploading((p) => ({ ...p, [index]: false }));
   }, []);
 
-  /* ── Remove ── */
   const handleRemove = useCallback(async (index) => {
     setImages((p) => { const n = { ...p }; delete n[index]; return n; });
     try {
@@ -190,9 +196,7 @@ export default function KokoMoodBoard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot: index, board: "koko" }),
       });
-    } catch (e) {
-      console.error("Delete failed:", e);
-    }
+    } catch (e) { console.error("Delete failed:", e); }
   }, []);
 
   const moodWords = ["raw", "cinematic", "effortless", "discovered", "timeless"];
@@ -218,55 +222,26 @@ export default function KokoMoodBoard() {
         </Reveal>
       </header>
 
-      {/* ── Image grid ── */}
+      {/* ── Image grid — 4 flex columns, perfect puzzle ── */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 48px" }}>
         <Reveal delay={250}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 6,
-          }}>
-            {/* Row 1: 16:9 (span 2) | 9:16 | 1:1 */}
-            <div style={{ gridColumn: "span 2" }}>
-              <ImageSlot index={0} label={slots[0].label} ratio={slots[0].ratio} image={images[0]} uploading={uploading[0]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div>
-              <ImageSlot index={1} label={slots[1].label} ratio={slots[1].ratio} image={images[1]} uploading={uploading[1]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <ImageSlot index={2} label={slots[2].label} ratio={slots[2].ratio} image={images[2]} uploading={uploading[2]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-
-            {/* Row 2: 9:16 | 16:9 (span 2) | 1:1 */}
-            <div>
-              <ImageSlot index={3} label={slots[3].label} ratio={slots[3].ratio} image={images[3]} uploading={uploading[3]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <ImageSlot index={4} label={slots[4].label} ratio={slots[4].ratio} image={images[4]} uploading={uploading[4]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <ImageSlot index={5} label={slots[5].label} ratio={slots[5].ratio} image={images[5]} uploading={uploading[5]} onUpload={handleUpload} onRemove={handleRemove} />
-              <ImageSlot index={6} label={slots[6].label} ratio={slots[6].ratio} image={images[6]} uploading={uploading[6]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-
-            {/* Row 3: 9:16 | 16:9 (span 2) | 9:16 */}
-            <div>
-              <ImageSlot index={7} label={slots[7].label} ratio={slots[7].ratio} image={images[7]} uploading={uploading[7]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div style={{ gridColumn: "span 2" }}>
-              <ImageSlot index={8} label={slots[8].label} ratio={slots[8].ratio} image={images[8]} uploading={uploading[8]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div>
-              <ImageSlot index={9} label={slots[9].label} ratio={slots[9].ratio} image={images[9]} uploading={uploading[9]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-
-            {/* Row 4: 1:1 | 16:9 (span 3) */}
-            <div>
-              <ImageSlot index={10} label={slots[10].label} ratio={slots[10].ratio} image={images[10]} uploading={uploading[10]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
-            <div style={{ gridColumn: "span 3" }}>
-              <ImageSlot index={11} label={slots[11].label} ratio={slots[11].ratio} image={images[11]} uploading={uploading[11]} onUpload={handleUpload} onRemove={handleRemove} />
-            </div>
+          <div style={{ display: "flex", gap: 0 }}>
+            {columns.map((col, ci) => (
+              <div key={ci} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 0 }}>
+                {col.map((slot) => (
+                  <ImageSlot
+                    key={slot.idx}
+                    index={slot.idx}
+                    label={slot.label}
+                    ratio={slot.ratio}
+                    image={images[slot.idx]}
+                    uploading={uploading[slot.idx]}
+                    onUpload={handleUpload}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
