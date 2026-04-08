@@ -1,6 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Upload, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 /* ── Koko brand tokens ── */
 const K = {
@@ -40,98 +39,32 @@ function Reveal({ children, style = {}, delay = 0 }) {
   );
 }
 
-/* ── Image slot ── */
-function ImageSlot({ index, label, ratio, image, uploading, onUpload, onRemove }) {
-  const fileRef = useRef(null);
-  const [hover, setHover] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-
+/* ── Read-only image tile ── */
+function ImageTile({ label, ratio, image }) {
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file?.type.startsWith("image/")) onUpload(index, file);
-      }}
-      onClick={() => !image && !uploading && fileRef.current?.click()}
-      style={{
-        position: "relative",
-        width: "100%",
-        aspectRatio: ratio === "9:16" ? "9/16" : "1/1",
-        background: image ? K.ink : "#1C1C18",
-        overflow: "hidden",
-        cursor: image ? "default" : "pointer",
-      }}
-    >
+    <div style={{
+      position: "relative",
+      width: "100%",
+      aspectRatio: ratio === "9:16" ? "9/16" : "1/1",
+      background: "#1C1C18",
+      overflow: "hidden",
+    }}>
       {image ? (
-        <>
-          <img
-            src={image}
-            alt={label}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", position: "absolute", inset: 0 }}
-          />
-          {hover && (
-            <div style={{
-              position: "absolute", inset: 0,
-              background: "rgba(13,13,11,0.45)",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
-              backdropFilter: "blur(2px)",
-            }}>
-              <span style={{ ...font.label, color: K.offWhite, fontSize: 8 }}>{label}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); onRemove(index); }}
-                style={{
-                  background: "none", border: `1px solid ${K.offWhite}`, color: K.offWhite,
-                  padding: "6px 18px", borderRadius: 2, cursor: "pointer",
-                  ...font.label, fontSize: 9, marginTop: 4,
-                }}
-              >
-                remove
-              </button>
-            </div>
-          )}
-        </>
+        <img
+          src={image}
+          alt={label}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", position: "absolute", inset: 0 }}
+        />
       ) : (
-        <div style={{
-          position: "absolute", inset: 0,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
-        }}>
-          {uploading ? (
-            <Loader2 size={18} color={K.sand} strokeWidth={1} style={{ animation: "spin 1s linear infinite" }} />
-          ) : (
-            <>
-              <Upload size={14} color={K.stone} strokeWidth={1} />
-              <span style={{ ...font.label, color: K.stone, fontSize: 8 }}>{label}</span>
-            </>
-          )}
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ ...font.label, color: K.charcoal, fontSize: 8 }}>{label}</span>
         </div>
       )}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => { if (e.target.files[0]) onUpload(index, e.target.files[0]); }}
-      />
     </div>
   );
 }
 
-/*
- * Grid layout — 4 columns, each with 1× 9:16 + 2× 1:1.
- * Every column totals the same height (9/16 + 1 + 1 = 41/16 of the column width)
- * so all four columns end flush — perfect puzzle, zero gaps.
- *
- * Col 1: 9:16, 1:1, 1:1    (portrait top)
- * Col 2: 1:1, 9:16, 1:1    (portrait middle)
- * Col 3: 1:1, 1:1, 9:16    (portrait bottom)
- * Col 4: 9:16, 1:1, 1:1    (portrait top)
- */
+/* ── Grid layout — 4 columns, each 1×9:16 + 2×1:1, all flush ── */
 const columns = [
   [
     { idx: 0, label: "hero landscape", ratio: "9:16" },
@@ -155,10 +88,9 @@ const columns = [
   ],
 ];
 
-/* ── Main ── */
+/* ── Public mood board — read-only ── */
 export default function KokoMoodBoard() {
   const [images, setImages] = useState({});
-  const [uploading, setUploading] = useState({});
 
   useEffect(() => {
     fetch("/api/mood-board?board=koko")
@@ -171,31 +103,6 @@ export default function KokoMoodBoard() {
         }
       })
       .catch(() => {});
-  }, []);
-
-  const handleUpload = useCallback(async (index, file) => {
-    setUploading((p) => ({ ...p, [index]: true }));
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("slot", index);
-      form.append("board", "koko");
-      const res = await fetch("/api/mood-board", { method: "POST", body: form });
-      const data = await res.json();
-      if (data.success) setImages((p) => ({ ...p, [index]: data.url }));
-    } catch (e) { console.error("Upload failed:", e); }
-    setUploading((p) => ({ ...p, [index]: false }));
-  }, []);
-
-  const handleRemove = useCallback(async (index) => {
-    setImages((p) => { const n = { ...p }; delete n[index]; return n; });
-    try {
-      await fetch("/api/mood-board", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slot: index, board: "koko" }),
-      });
-    } catch (e) { console.error("Delete failed:", e); }
   }, []);
 
   const moodWords = ["raw", "cinematic", "effortless", "discovered", "timeless"];
@@ -221,22 +128,18 @@ export default function KokoMoodBoard() {
         </Reveal>
       </header>
 
-      {/* ── Image grid — 4 flex columns, perfect puzzle ── */}
+      {/* ── Image grid ── */}
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 48px" }}>
         <Reveal delay={250}>
           <div style={{ display: "flex", gap: 0 }}>
             {columns.map((col, ci) => (
               <div key={ci} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 0 }}>
                 {col.map((slot) => (
-                  <ImageSlot
+                  <ImageTile
                     key={slot.idx}
-                    index={slot.idx}
                     label={slot.label}
                     ratio={slot.ratio}
                     image={images[slot.idx]}
-                    uploading={uploading[slot.idx]}
-                    onUpload={handleUpload}
-                    onRemove={handleRemove}
                   />
                 ))}
               </div>
@@ -276,18 +179,16 @@ export default function KokoMoodBoard() {
               swimwithkoko.com — @swimwithkoko — Canggu, Bali
             </p>
           </div>
-          <p style={{ ...font.quote, color: K.charcoal, fontSize: 13 }}>
-            "out where the wild things are"
-          </p>
+          <div style={{ textAlign: "right" }}>
+            <p style={{ ...font.quote, color: K.charcoal, fontSize: 13, marginBottom: 6 }}>
+              "out where the wild things are"
+            </p>
+            <a href="/mood-board/koko/admin" style={{ ...font.caption, color: K.charcoal, textDecoration: "none", textTransform: "none" }}>
+              admin
+            </a>
+          </div>
         </div>
       </div>
-
-      <style jsx global>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @media (max-width: 768px) {
-          header { padding: 32px 20px 0 !important; }
-        }
-      `}</style>
     </div>
   );
 }

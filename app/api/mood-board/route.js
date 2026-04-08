@@ -58,6 +58,36 @@ export async function POST(request) {
   return NextResponse.json({ success: true, url: publicUrl });
 }
 
+export async function PATCH(request) {
+  if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
+
+  const { board = 'koko', fromSlot, toSlot } = await request.json();
+  if (fromSlot === undefined || toSlot === undefined) {
+    return NextResponse.json({ success: false, error: 'Missing fromSlot or toSlot' });
+  }
+
+  // Get both rows
+  const { data: rows } = await supabase
+    .from(TABLE)
+    .select('*')
+    .eq('board', board)
+    .in('slot', [fromSlot, toSlot]);
+
+  const fromRow = rows?.find((r) => r.slot === fromSlot);
+  const toRow = rows?.find((r) => r.slot === toSlot);
+
+  // Swap: update slot numbers
+  if (fromRow && toRow) {
+    await supabase.from(TABLE).update({ slot: -1 }).eq('id', fromRow.id);
+    await supabase.from(TABLE).update({ slot: fromSlot }).eq('id', toRow.id);
+    await supabase.from(TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
+  } else if (fromRow && !toRow) {
+    await supabase.from(TABLE).update({ slot: toSlot }).eq('id', fromRow.id);
+  }
+
+  return NextResponse.json({ success: true });
+}
+
 export async function DELETE(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
