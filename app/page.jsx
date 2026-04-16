@@ -21,22 +21,28 @@ function HeroReveal({ children, as: Tag = "div", style = {}, className = "", del
 }
 
 /* ── Hero headline: words stagger in on mount ── */
-function HeroBlurText({ children, as: Tag = "span", style = {}, className = "", staggerMs = 60 }) {
+function HeroBlurText({ children, as: Tag = "span", style = {}, className = "", staggerMs = 60, mobileBreakAfter = [] }) {
   const text = typeof children === "string" ? children : "";
   const words = text.split(" ");
   const [show, setShow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setShow(true), 100); return () => clearTimeout(t); }, []);
   return (
-    <Tag className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em" }}>
-      {words.map((w, i) => (
-        <span key={i} style={{
-          display: "inline-block",
-          filter: show ? "blur(0px)" : "blur(14px)",
-          opacity: show ? 1 : 0,
-          transform: show ? "translateY(0px)" : "translateY(16px)",
-          transition: `filter 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, opacity 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, transform 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms`,
-        }}>{w}</span>
-      ))}
+    <Tag className={className} style={{ ...style, display: "flex", flexWrap: "wrap", gap: "0 0.3em", justifyContent: style.justifyContent || "flex-start" }}>
+      {words.flatMap((w, i) => {
+        const items = [
+          <span key={`w-${i}`} style={{
+            display: "inline-block",
+            filter: show ? "blur(0px)" : "blur(14px)",
+            opacity: show ? 1 : 0,
+            transform: show ? "translateY(0px)" : "translateY(16px)",
+            transition: `filter 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, opacity 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms, transform 1s cubic-bezier(0.25, 0.1, 0.25, 1) ${i * staggerMs}ms`,
+          }}>{w}</span>
+        ];
+        if (mobileBreakAfter.includes(i)) {
+          items.push(<span key={`br-${i}`} className="mobile-break" aria-hidden="true" style={{ flexBasis: "100%", height: 0 }} />);
+        }
+        return items;
+      })}
     </Tag>
   );
 }
@@ -208,7 +214,7 @@ function Hero() {
           <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>AI-Powered Creative Studio</span>
         </HeroReveal>
 
-        <HeroBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center", textTransform: "capitalize" }} staggerMs={70}>{"For brands scaling with Paid Social"}</HeroBlurText>
+        <HeroBlurText as="h1" className="hero-title" style={{ ...hd, fontSize: 64, color: G.text, lineHeight: 1.1, marginBottom: 8, justifyContent: "center", textTransform: "capitalize" }} staggerMs={70} mobileBreakAfter={[2]}>{"For brands scaling with Paid Social"}</HeroBlurText>
 
         <div style={{ marginTop: 16, marginBottom: 16 }}>
           <HeroBlurText as="p" className="hero-subtitle" style={{ ...hd, fontSize: 32, color: G.text, lineHeight: 1.3, justifyContent: "center", whiteSpace: "nowrap", fontStyle: "italic" }} staggerMs={50}>{"Your ads aren't failing. Your creative pipeline is."}</HeroBlurText>
@@ -701,6 +707,10 @@ export default function AlchemyLanding() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .mobile-break { display: none; }
+        @media (max-width: 768px) {
+          .mobile-break { display: block !important; }
+        }
         @media (max-width: 768px) {
           .nav-links { display: none !important; }
           .nav-hamburger { display: block !important; }
