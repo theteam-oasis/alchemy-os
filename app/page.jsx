@@ -177,7 +177,7 @@ function Nav() {
         <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${G.gold}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Sparkles size={14} style={{ color: G.gold }} />
         </div>
-        <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em" }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Studios</span></span>
+        <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em" }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Productions</span></span>
       </div>
       <div className="nav-links" style={{ display: "flex", alignItems: "center", gap: 32 }}>
         {links.map(l => <a key={l.href} href={l.href} style={{ color: G.textSec, fontSize: 14, textDecoration: "none", fontWeight: 500, transition: "color 0.2s", ...mono }} onMouseEnter={e => e.target.style.color = G.text} onMouseLeave={e => e.target.style.color = G.textSec}>{l.label}</a>)}
@@ -199,7 +199,7 @@ function Nav() {
 function Hero() {
   return (
     <section className="hero-section" style={{ position: "relative", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "120px 24px 80px", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, borderRadius: "50%", border: `1px solid ${G.goldBorder}`, opacity: 0.3 }} />
+      <div className="hero-circle" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, borderRadius: "50%", border: `1px solid ${G.goldBorder}`, opacity: 0.3 }} />
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,0,0,0.03) 0%, transparent 70%)" }} />
 
       <div style={{ position: "relative", zIndex: 2, maxWidth: 800 }}>
@@ -666,7 +666,7 @@ function CTA() {
       </BlurReveal>
       <BlurReveal as="p" style={{ color: G.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 32px", ...mono }}>We'll review your current creative, diagnose the bottleneck, and show you exactly how we'd fix it.</BlurReveal>
       <BlurReveal style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 16, overflow: "hidden", maxWidth: 700, margin: "0 auto" }}>
-        <iframe src="https://calendly.com/d/cs9w-cwg-b5q/alchemy-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000" style={{ width: "100%", height: 700, border: "none" }} title="Book a Call" />
+        <iframe src="https://calendly.com/corinne-theoasis/alchemy-a-i-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000" style={{ width: "100%", height: 700, border: "none" }} title="Book a Call" />
       </BlurReveal>
     </section>
   );
@@ -706,38 +706,39 @@ export default function AlchemyLanding() {
           .nav-hamburger { display: block !important; }
 
           /* Hero */
-          .hero-section { min-height: auto !important; padding: 100px 20px 48px !important; }
-          .hero-title { font-size: 42px !important; }
-          .hero-subtitle { font-size: 24px !important; }
-          .hero-body { font-size: 15px !important; }
-          .hero-cta { padding: 14px 28px !important; font-size: 15px !important; }
+          .hero-section { min-height: auto !important; padding: 100px 16px 48px !important; }
+          .hero-title { font-size: 38px !important; line-height: 1.15 !important; }
+          .hero-subtitle { font-size: 20px !important; white-space: normal !important; }
+          .hero-body { font-size: 15px !important; max-width: 100% !important; }
+          .hero-cta { padding: 14px 28px !important; font-size: 15px !important; width: 100% !important; justify-content: center !important; }
+          .hero-circle { width: 360px !important; height: 360px !important; }
 
           /* Section titles & spacing */
-          .section-title { font-size: 32px !important; }
-          .section-wrap { padding-top: 48px !important; padding-bottom: 48px !important; }
+          .section-title { font-size: 30px !important; }
+          .section-wrap { padding-top: 48px !important; padding-bottom: 48px !important; padding-left: 16px !important; padding-right: 16px !important; }
           .section-header { margin-bottom: 32px !important; }
 
           /* Grids */
-          .stats-grid { flex-direction: column !important; }
+          .stats-grid { flex-direction: column !important; gap: 0 !important; }
           .stats-grid > div { padding: 20px !important; }
           .stat-value { font-size: 36px !important; }
-          .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
-          .grid-3 { grid-template-columns: 1fr !important; }
+          .grid-4 { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+          .grid-3 { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
           .grid-2 { grid-template-columns: 1fr !important; }
           .case-inner-grid { grid-template-columns: 1fr !important; }
           .features-grid { grid-template-columns: 1fr !important; }
           .results-flex { flex-direction: column !important; }
 
           /* Cards */
-          .card-padded { padding: 20px !important; }
-          .card-padded-lg { padding: 24px !important; }
+          .card-padded { padding: 16px !important; }
+          .card-padded-lg { padding: 20px !important; }
 
           /* Testimonials */
           .testimonial-quote { font-size: 14px !important; line-height: 1.7 !important; }
 
           /* Logos */
-          .logo-bar img { height: 28px !important; }
-          .logo-bar { gap: 14px !important; }
+          .logo-bar img { height: 24px !important; }
+          .logo-bar { gap: 12px !important; }
 
           /* HowItWorks arrows */
           .step-arrow { display: none !important; }
@@ -750,9 +751,9 @@ export default function AlchemyLanding() {
           .footer-wrap { flex-direction: column !important; gap: 16px !important; text-align: center !important; }
         }
         @media (max-width: 480px) {
-          .hero-title { font-size: 36px !important; }
-          .hero-subtitle { font-size: 22px !important; }
-          .section-title { font-size: 28px !important; }
+          .hero-title { font-size: 32px !important; line-height: 1.15 !important; }
+          .hero-subtitle { font-size: 18px !important; white-space: normal !important; }
+          .section-title { font-size: 26px !important; }
           .grid-4 { grid-template-columns: 1fr !important; }
           .stat-value { font-size: 32px !important; }
         }
