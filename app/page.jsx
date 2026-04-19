@@ -149,6 +149,41 @@ function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blu
   );
 }
 
+/* ── Lazy Wistia iframe: only loads when near viewport ── */
+function LazyVideo({ vid, title = "Video Ad" }) {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (!ref.current || inView) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" }
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [inView]);
+  return (
+    <div ref={ref} style={{ position: "relative", paddingBottom: "177.78%", height: 0, background: "#0A0A0A" }}>
+      {inView && (
+        <iframe
+          src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`}
+          title={title}
+          allow="autoplay; fullscreen"
+          frameBorder="0"
+          scrolling="no"
+          loading="lazy"
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+        />
+      )}
+    </div>
+  );
+}
+
 const G = {
   bg: "#FFFFFF",
   card: "#FFFFFF",
@@ -346,9 +381,7 @@ function CreativeExamples() {
             <BlurReveal className="grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               {videoIds.map((vid, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
-                    <iframe src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`} title="Video Ad" allow="autoplay; fullscreen" frameBorder="0" scrolling="no" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
-                  </div>
+                  <LazyVideo vid={vid} title="Video Ad" />
                 </div>
               ))}
             </BlurReveal>
@@ -358,7 +391,7 @@ function CreativeExamples() {
               {staticAds.slice(0, 12).map((ad, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden", position: "relative" }}>
                   <div style={{ position: "relative", paddingBottom: "177.78%", overflow: "hidden" }}>
-                    <img src={ad.img} alt={ad.label} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <img src={ad.img} alt={ad.label} loading="lazy" decoding="async" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                   <div style={{ position: "absolute", top: 10, left: 10 }}>
                     <span style={{ padding: "4px 12px", borderRadius: 980, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", color: G.text, fontSize: 11, fontWeight: 600, ...mono }}>{ad.tag}</span>
@@ -375,9 +408,7 @@ function CreativeExamples() {
             <BlurReveal className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               {ugcIds.map((vid, i) => (
                 <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ position: "relative", paddingBottom: "177.78%", height: 0 }}>
-                    <iframe src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`} title="UGC Ad" allow="autoplay; fullscreen" frameBorder="0" scrolling="no" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }} />
-                  </div>
+                  <LazyVideo vid={vid} title="UGC Ad" />
                 </div>
               ))}
             </BlurReveal>
@@ -388,7 +419,7 @@ function CreativeExamples() {
       <BlurReveal style={{ marginTop: 40, marginBottom: 40 }}>
         <p style={{ textAlign: "center", color: G.textTer, fontSize: 13, marginBottom: 20, ...mono }}>Trusted by brands we partner with</p>
         <div className="logo-bar" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 20, alignItems: "center", opacity: 0.6 }}>
-          {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(0.5)" }} />)}
+          {logos.map((l, i) => <img key={i} src={l} alt="Partner logo" loading="lazy" decoding="async" style={{ height: 36, objectFit: "contain", filter: "grayscale(100%) brightness(0.5)" }} />)}
         </div>
       </BlurReveal>
     </section>
