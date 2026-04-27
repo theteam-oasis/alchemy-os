@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Check, Sparkles, ArrowRight, RefreshCw, Lock, X, Loader2, ChevronRight, MessageSquare, Plus, Home, Copy, ChevronLeft, Edit3, Send, Download, Image } from "lucide-react";
 import { jsPDF } from "jspdf";
-import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, uploadProductImage, getBrandIntake, getBrandHub } from "../../lib/supabase";
+import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, deleteNote, uploadProductImage, getBrandIntake, getBrandHub } from "../../lib/supabase";
+import DashboardChat from "../../components/DashboardChat";
 
 const A = "#000";
 const fonts = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');`;
@@ -64,10 +65,50 @@ async function callClaude(prompt) {
 // ─── Agency Dashboard ───
 function Dashboard({ clients, onNew, onSelect }) {
   const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
+  const [dashTab, setDashTab] = useState("clients");
+  const [conversations, setConversations] = useState([]);
+  const [activeConvo, setActiveConvo] = useState(null);
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [msgLoading, setMsgLoading] = useState(false);
+
+  const loadConversations = async () => {
+    try {
+      const res = await fetch("/api/portal/messages/all");
+      const data = await res.json();
+      setConversations(data);
+      if (activeConvo) {
+        const updated = data.find(c => c.projectId === activeConvo.projectId);
+        if (updated) setActiveConvo(updated);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (dashTab === "messages") {
+      setMsgLoading(true);
+      loadConversations().then(() => setMsgLoading(false));
+      const iv = setInterval(loadConversations, 5000);
+      return () => clearInterval(iv);
+    }
+  }, [dashTab]);
+
+  const sendReply = async () => {
+    if (!replyText.trim() || !activeConvo || sendingReply) return;
+    setSendingReply(true);
+    await fetch("/api/portal/messages", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: activeConvo.projectId, sender: "team", message: replyText.trim() }),
+    });
+    setReplyText("");
+    setSendingReply(false);
+    await loadConversations();
+  };
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
-        <div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 4 }}>Dashboard</h1><p style={{ color: C.textSec, fontSize: 16 }}>Your agency command center</p></div>
+        <div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 4 }}>Dashboard</h1><p style={{ color: C.textSec, fontSize: 16 }}>Alchemy command center</p></div>
         <Btn primary onClick={onNew} icon={<Plus size={16} />}>New Client</Btn>
       </div>
       <div style={{ display: "flex", gap: 12, marginBottom: 36 }}>
@@ -78,29 +119,155 @@ function Dashboard({ clients, onNew, onSelect }) {
           </div>
         ))}
       </div>
-      <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, overflow: "hidden" }}>
-        <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.5 }}>Stage</span><span style={{ flex: 1 }}>Progress</span><span style={{ flex: 0.8 }}>Status</span><span style={{ flex: 0.5 }}>Date</span><span style={{ flex: 0.3 }}></span>
-        </div>
-        {clients.map((c, i) => (
-          <div key={c.id} onClick={() => onSelect(c)} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", transition: "background 0.15s" }}
-            onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <div style={{ flex: 2, display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600 }}>{c.name[0]}</div>
-              <span style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{c.name}</span>
-            </div>
-            <span style={{ flex: 1.5, color: C.textSec, fontSize: 14 }}>{c.stage}</span>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, height: 4, borderRadius: 2, background: C.bgSoft, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 2, background: sc[c.status] || C.info, width: `${c.progress}%` }} /></div>
-              <span style={{ color: C.textTer, fontSize: 12, minWidth: 28 }}>{c.progress}%</span>
-            </div>
-            <div style={{ flex: 0.8 }}><span style={{ padding: "4px 12px", borderRadius: 980, fontSize: 12, fontWeight: 500, background: (sc[c.status] || C.info) + "12", color: sc[c.status] || C.info }}>{c.status}</span></div>
-            <span style={{ flex: 0.5, color: C.textTer, fontSize: 13 }}>{c.date}</span>
-            <div style={{ flex: 0.3, textAlign: "right" }}><ChevronRight size={16} style={{ color: C.textTer }} /></div>
-          </div>
+
+      {/* Tab switcher */}
+      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.borderLight}`, marginBottom: 0 }}>
+        {[{ k: "clients", l: "Clients" }, { k: "messages", l: "Messages" }].map(t => (
+          <button key={t.k} onClick={() => { setDashTab(t.k); if (t.k !== "messages") setActiveConvo(null); }}
+            style={{ padding: "12px 20px", fontSize: 14, fontWeight: 500, cursor: "pointer", borderBottom: `2px solid ${dashTab === t.k ? C.accent : "transparent"}`, color: dashTab === t.k ? C.text : C.textTer, background: "none", border: "none", borderBottom: `2px solid ${dashTab === t.k ? C.accent : "transparent"}`, fontFamily: "'Inter', sans-serif", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+            {t.k === "messages" && <MessageSquare size={14} />}
+            {t.l}
+            {t.k === "messages" && conversations.length > 0 && (
+              <span style={{ width: 20, height: 20, borderRadius: "50%", background: C.accent, color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{conversations.length}</span>
+            )}
+          </button>
         ))}
-        {clients.length === 0 && <div style={{ padding: 48, textAlign: "center", color: C.textSec }}><p style={{ marginBottom: 16, fontSize: 15 }}>No clients yet.</p><Btn small primary onClick={onNew} icon={<Plus size={14} />}>Add Your First Client</Btn></div>}
       </div>
+
+      {/* Clients tab */}
+      {dashTab === "clients" && (
+        <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
+          <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.5 }}>Stage</span><span style={{ flex: 1 }}>Progress</span><span style={{ flex: 0.8 }}>Status</span><span style={{ flex: 0.5 }}>Date</span><span style={{ flex: 0.3 }}></span>
+          </div>
+          {clients.map((c, i) => (
+            <div key={c.id} onClick={() => onSelect(c)} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", transition: "background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <div style={{ flex: 2, display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600 }}>{c.name[0]}</div>
+                <span style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{c.name}</span>
+              </div>
+              <span style={{ flex: 1.5, color: C.textSec, fontSize: 14 }}>{c.stage}</span>
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: C.bgSoft, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 2, background: sc[c.status] || C.info, width: `${c.progress}%` }} /></div>
+                <span style={{ color: C.textTer, fontSize: 12, minWidth: 28 }}>{c.progress}%</span>
+              </div>
+              <div style={{ flex: 0.8 }}><span style={{ padding: "4px 12px", borderRadius: 980, fontSize: 12, fontWeight: 500, background: (sc[c.status] || C.info) + "12", color: sc[c.status] || C.info }}>{c.status}</span></div>
+              <span style={{ flex: 0.5, color: C.textTer, fontSize: 13 }}>{c.date}</span>
+              <div style={{ flex: 0.3, textAlign: "right" }}><ChevronRight size={16} style={{ color: C.textTer }} /></div>
+            </div>
+          ))}
+          {clients.length === 0 && <div style={{ padding: 48, textAlign: "center", color: C.textSec }}><p style={{ marginBottom: 16, fontSize: 15 }}>No clients yet.</p><Btn small primary onClick={onNew} icon={<Plus size={14} />}>Add Your First Client</Btn></div>}
+        </div>
+      )}
+
+      {/* Messages tab */}
+      {dashTab === "messages" && (
+        <div style={{ display: "flex", gap: 0, minHeight: 500, background: C.card, boxShadow: C.cardShadow, borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
+          {/* Conversation list */}
+          <div style={{ width: 300, flexShrink: 0, borderRight: `1px solid ${C.borderLight}` }}>
+            <div style={{ maxHeight: 500, overflowY: "auto" }}>
+              {msgLoading ? (
+                <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                  <p style={{ fontSize: 13, color: C.textTer }}>Loading...</p>
+                </div>
+              ) : conversations.length === 0 ? (
+                <div style={{ padding: "40px 20px", textAlign: "center" }}>
+                  <MessageSquare size={32} style={{ color: C.textTer, opacity: 0.3, marginBottom: 8 }} />
+                  <p style={{ fontSize: 13, color: C.textTer }}>No conversations yet</p>
+                  <p style={{ fontSize: 12, color: C.textTer, marginTop: 4 }}>Messages from client portals will appear here</p>
+                </div>
+              ) : conversations.map(conv => (
+                <div key={conv.projectId} onClick={() => setActiveConvo(conv)}
+                  style={{
+                    padding: "14px 20px", cursor: "pointer", borderBottom: `1px solid ${C.borderLight}`,
+                    background: activeConvo?.projectId === conv.projectId ? C.bgSoft : "transparent",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseEnter={e => { if (activeConvo?.projectId !== conv.projectId) e.currentTarget.style.background = C.bgHover; }}
+                  onMouseLeave={e => { if (activeConvo?.projectId !== conv.projectId) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{conv.clientName}</span>
+                    <span style={{ fontSize: 10, color: C.textTer }}>
+                      {new Date(conv.lastMessage.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 12, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+                    {conv.lastMessage.sender === "team" ? "You: " : `${conv.clientName}: `}{conv.lastMessage.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Chat thread */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            {!activeConvo ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+                <MessageSquare size={40} style={{ color: C.textTer, opacity: 0.2 }} />
+                <p style={{ fontSize: 14, color: C.textTer }}>Select a conversation</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.borderLight}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>{activeConvo.clientName}</h3>
+                    <p style={{ fontSize: 11, color: C.textTer, margin: 0 }}>/portal/{activeConvo.slug}</p>
+                  </div>
+                  <a href={`/portal/create?id=${activeConvo.projectId}`} target="_blank" style={{ fontSize: 12, fontWeight: 500, color: C.textSec, textDecoration: "none", padding: "6px 14px", border: `1px solid ${C.borderLight}`, borderRadius: 980 }}>
+                    Manage Assets →
+                  </a>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 6, maxHeight: 360 }}>
+                  {activeConvo.messages.map((m, i) => {
+                    const isTeam = m.sender === "team";
+                    const showTime = i === 0 || (new Date(m.created_at) - new Date(activeConvo.messages[i-1].created_at)) > 300000;
+                    return (
+                      <div key={m.id}>
+                        {showTime && (
+                          <p style={{ fontSize: 10, color: C.textTer, textAlign: "center", margin: "12px 0 6px" }}>
+                            {new Date(m.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", justifyContent: isTeam ? "flex-end" : "flex-start" }}>
+                          <div style={{
+                            maxWidth: "70%", padding: "10px 14px", borderRadius: 16,
+                            borderBottomRightRadius: isTeam ? 4 : 16,
+                            borderBottomLeftRadius: isTeam ? 16 : 4,
+                            background: isTeam ? C.accent : C.bgSoft,
+                            color: isTeam ? "#fff" : C.text,
+                          }}>
+                            {!isTeam && <p style={{ fontSize: 10, fontWeight: 700, color: C.textTer, margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>The {activeConvo.clientName} Team</p>}
+                            <p style={{ fontSize: 14, lineHeight: 1.5, margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ padding: "12px 20px 16px", borderTop: `1px solid ${C.borderLight}` }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-end", background: C.bgSoft, borderRadius: 14, padding: "8px 8px 8px 16px", border: `1px solid ${C.borderLight}` }}>
+                    <textarea
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+                      placeholder="Reply as The Alchemy Team..."
+                      rows={1}
+                      style={{ flex: 1, fontSize: 14, color: C.text, background: "transparent", border: "none", outline: "none", resize: "none", lineHeight: 1.5, maxHeight: 80, padding: "4px 0", fontFamily: "'Inter', sans-serif" }}
+                      onInput={e => { e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 80) + "px"; }}
+                    />
+                    <button onClick={sendReply} disabled={!replyText.trim() || sendingReply}
+                      style={{ width: 34, height: 34, borderRadius: "50%", border: "none", cursor: "pointer", background: replyText.trim() ? C.accent : C.border, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s", flexShrink: 0 }}>
+                      <Send size={14} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -125,7 +292,7 @@ function downloadClientPDF(client) {
   doc.setFontSize(26); doc.setFont("helvetica", "bold"); doc.setTextColor(29, 29, 31);
   doc.text(client.name, margin, y); y += 14;
   doc.setFontSize(11); doc.setFont("helvetica", "normal"); doc.setTextColor(134, 134, 139);
-  doc.text("Brand Brief — Generated by ALCHEMY Studios", margin, y); y += 10;
+  doc.text("Brand Brief — Generated by ALCHEMY Productions", margin, y); y += 10;
   doc.setDrawColor(210, 210, 215); doc.line(margin, y, pw - margin, y); y += 24;
 
   const fd = client.formData;
@@ -271,22 +438,79 @@ function downloadClientPDF(client) {
     doc.setPage(i);
     doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(174, 174, 178);
     doc.text(`${client.name} — Brand Brief | Page ${i} of ${pageCount}`, margin, doc.internal.pageSize.getHeight() - 30);
-    doc.text("ALCHEMY Studios", pw - margin - doc.getTextWidth("ALCHEMY Studios"), doc.internal.pageSize.getHeight() - 30);
+    doc.text("ALCHEMY Productions", pw - margin - doc.getTextWidth("ALCHEMY Productions"), doc.internal.pageSize.getHeight() - 30);
   }
 
   doc.save(`${client.name.replace(/[^a-zA-Z0-9]/g, "_")}_Brand_Brief.pdf`);
 }
 
 // ─── Client Detail View ───
-const ALL_STAGES = ["Intake Form", "Review Portal", "Brand Kit Locked", "Ad Production", "Delivered"];
-const STAGE_STATUS = { "Intake Form": "onboarding", "Review Portal": "reviewing", "Brand Kit Locked": "reviewing", "Ad Production": "production", "Delivered": "delivered" };
-const STAGE_PROGRESS = { "Intake Form": 15, "Review Portal": 40, "Brand Kit Locked": 65, "Ad Production": 80, "Delivered": 100 };
+const ALL_STAGES = ["Brand Intake", "Drafts", "Completed Assets"];
+const STAGE_STATUS = { "Brand Intake": "onboarding", "Drafts": "production", "Completed Assets": "delivered" };
+const STAGE_PROGRESS = { "Brand Intake": 33, "Drafts": 66, "Completed Assets": 100 };
 
 function ClientDetail({ client, onBack, onUpdate }) {
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState(client.notes || []);
   const [stageOpen, setStageOpen] = useState(false);
+  const [portal, setPortal] = useState(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalChecked, setPortalChecked] = useState(false);
+  const [clientMessages, setClientMessages] = useState([]);
+  const [clientReply, setClientReply] = useState("");
+  const [clientSending, setClientSending] = useState(false);
   const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
+  const msgEndRef = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/portal/projects").then(r => r.json()).then(projects => {
+      const linked = projects.find(p => p.clientId === client.id);
+      if (linked) setPortal(linked);
+      setPortalChecked(true);
+    }).catch(() => setPortalChecked(true));
+  }, [client.id]);
+
+  // Load and poll this client's messages
+  const loadClientMessages = async (projectId) => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`/api/portal/messages?projectId=${projectId}`);
+      const data = await res.json();
+      setClientMessages(data);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (portal?.id) {
+      loadClientMessages(portal.id);
+      const iv = setInterval(() => loadClientMessages(portal.id), 5000);
+      return () => clearInterval(iv);
+    }
+  }, [portal?.id]);
+
+  useEffect(() => {
+    if (msgEndRef.current) msgEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [clientMessages.length]);
+
+  const sendClientReply = async () => {
+    if (!clientReply.trim() || !portal || clientSending) return;
+    setClientSending(true);
+    await fetch("/api/portal/messages", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: portal.id, sender: "team", message: clientReply.trim() }),
+    });
+    setClientReply("");
+    setClientSending(false);
+    await loadClientMessages(portal.id);
+  };
+
+  const generatePortal = async () => {
+    setPortalLoading(true);
+    const res = await fetch("/api/portal/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientName: client.name, clientId: client.id }) });
+    const p = await res.json();
+    setPortal(p);
+    setPortalLoading(false);
+  };
 
   const handleAddNote = async () => {
     if (!note.trim()) return;
@@ -317,6 +541,35 @@ function ClientDetail({ client, onBack, onUpdate }) {
         </div>
         {client.formData && <Btn small onClick={() => downloadClientPDF(client)} icon={<Download size={14} />}>Download Brief</Btn>}
       </div>
+
+      {/* Quick Links */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        {portal ? (
+          <a href={`/portal/create?id=${portal.id}`} target="_blank" style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, textDecoration: "none", transition: "box-shadow 0.2s" }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = C.cardShadow}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#5856D6" + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><MessageSquare size={18} style={{ color: "#5856D6" }} /></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Feedback Portal</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>{portal.images?.length || 0} images · /portal/{portal.slug}</p></div>
+            <ChevronRight size={16} style={{ color: C.textTer, marginLeft: "auto" }} />
+          </a>
+        ) : (
+          <div onClick={generatePortal} style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, cursor: "pointer", transition: "box-shadow 0.2s" }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = C.cardShadow}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "#5856D6" + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={18} style={{ color: "#5856D6" }} /></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>{portalLoading ? "Creating..." : "Generate Feedback Portal"}</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>Upload assets for client review</p></div>
+          </div>
+        )}
+        {portal ? (
+          <a href={`/delivery/${portal.slug}`} target="_blank" style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, textDecoration: "none", transition: "box-shadow 0.2s" }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = C.cardShadow}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: C.success + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Download size={18} style={{ color: C.success }} /></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Final Assets</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>Approved deliverables · /delivery/{portal.slug}</p></div>
+            <ChevronRight size={16} style={{ color: C.textTer, marginLeft: "auto" }} />
+          </a>
+        ) : (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, opacity: 0.5 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: C.success + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Download size={18} style={{ color: C.success }} /></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Final Assets</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>Generate a portal first</p></div>
+          </div>
+        )}
+      </div>
+
       <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Pipeline Stage</h3>
@@ -368,8 +621,88 @@ function ClientDetail({ client, onBack, onUpdate }) {
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add an internal note..." onKeyDown={e => { if (e.key === "Enter") handleAddNote(); }} style={{ flex: 1, background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 10, padding: "10px 14px", color: C.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none" }} onFocus={e => e.target.style.borderColor = C.accent} onBlur={e => e.target.style.borderColor = C.borderLight} />
           <Btn small primary onClick={handleAddNote} disabled={!note.trim()} icon={<Send size={12} />}>Add</Btn>
         </div>
-        {notes.length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{notes.map(n => <div key={n.id} style={{ padding: "14px 16px", background: C.bgSoft, borderRadius: 10 }}><p style={{ color: C.text, fontSize: 14, lineHeight: 1.5 }}>{n.text}</p><p style={{ color: C.textTer, fontSize: 12, marginTop: 6 }}>{n.date}</p></div>)}</div> : <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>No notes yet.</p>}
+        {notes.length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{notes.map(n => <div key={n.id} style={{ padding: "14px 16px", background: C.bgSoft, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}><div style={{ flex: 1 }}><p style={{ color: C.text, fontSize: 14, lineHeight: 1.5 }}>{n.text}</p><p style={{ color: C.textTer, fontSize: 12, marginTop: 6 }}>{n.date}</p></div><button onClick={async () => { await deleteNote(n.id); setNotes(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: C.textTer, padding: 4, borderRadius: 6, flexShrink: 0, transition: "color 0.15s" }} onMouseEnter={e => e.currentTarget.style.color = C.danger} onMouseLeave={e => e.currentTarget.style.color = C.textTer}><X size={14} /></button></div>)}</div> : <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>No notes yet.</p>}
       </div>
+
+      {/* Feedback Portal */}
+      <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, marginTop: 20 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16 }}>Feedback Portal</h3>
+        {!portalChecked ? (
+          <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>Checking...</p>
+        ) : portal ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.bgSoft, borderRadius: 12, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: C.success + "15", display: "flex", alignItems: "center", justifyContent: "center", color: C.success, fontSize: 18 }}>✓</div>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Portal Active</p>
+                <p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>{portal.images?.length || 0} images · {(portal.heroScripts?.length || 0) + (portal.ugcScripts?.length || 0)} scripts</p>
+              </div>
+              <span style={{ fontSize: 12, color: C.textTer, fontFamily: "monospace" }}>/portal/{portal.slug}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <a href={`/portal/create?id=${portal.id}`} target="_blank" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 980, background: C.accent, color: "#fff", fontSize: 13, fontWeight: 600, textDecoration: "none", fontFamily: "'Inter', sans-serif" }}>Manage Assets →</a>
+              <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/${portal.slug}`); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 980, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}><Copy size={12} /> Copy Client Link</button>
+              <a href={`/portal/${portal.slug}`} target="_blank" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 980, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 13, fontWeight: 500, textDecoration: "none", fontFamily: "'Inter', sans-serif" }}>Preview ↗</a>
+            </div>
+            <p style={{ fontSize: 11, color: C.textTer, marginTop: 12 }}>Password: <span style={{ fontFamily: "monospace", color: C.textSec }}>{portal.slug}2026</span></p>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <p style={{ color: C.textSec, fontSize: 14, marginBottom: 16 }}>No feedback portal yet. Generate one to upload assets and collect client feedback.</p>
+            <button onClick={generatePortal} disabled={portalLoading} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 980, background: C.accent, color: "#fff", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'Inter', sans-serif", opacity: portalLoading ? 0.5 : 1 }}>
+              <Plus size={14} /> {portalLoading ? "Creating..." : "Generate Portal"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Client Messages */}
+      {portal && (
+        <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, marginTop: 20 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <MessageSquare size={18} /> Messages
+            {clientMessages.filter(m => m.sender === "client").length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 600, background: C.info, color: "#fff", borderRadius: 980, padding: "2px 8px", marginLeft: 4 }}>
+                {clientMessages.filter(m => m.sender === "client").length}
+              </span>
+            )}
+          </h3>
+          <div style={{ maxHeight: 400, overflowY: "auto", marginBottom: 16, padding: "4px 0" }}>
+            {clientMessages.length === 0 ? (
+              <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 32 }}>No messages yet. Start a conversation with this client.</p>
+            ) : (
+              clientMessages.map((m, i) => (
+                <div key={m.id || i} style={{ display: "flex", flexDirection: "column", alignItems: m.sender === "team" ? "flex-end" : "flex-start", marginBottom: 12 }}>
+                  <div style={{ maxWidth: "75%", padding: "10px 16px", borderRadius: 14, background: m.sender === "team" ? C.accent : C.bgSoft, color: m.sender === "team" ? "#fff" : C.text, fontSize: 14, lineHeight: 1.5 }}>
+                    {m.message}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, padding: "0 4px" }}>
+                    <span style={{ fontSize: 11, color: C.textTer, fontWeight: 500 }}>
+                      {m.sender === "team" ? "Alchemy Team" : `${client.name || "Client"}`}
+                    </span>
+                    <span style={{ fontSize: 10, color: C.textTer }}>
+                      {new Date(m.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={msgEndRef} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={clientReply}
+              onChange={e => setClientReply(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") sendClientReply(); }}
+              placeholder="Reply to client..."
+              style={{ flex: 1, background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 10, padding: "10px 14px", color: C.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none" }}
+              onFocus={e => e.target.style.borderColor = C.accent}
+              onBlur={e => e.target.style.borderColor = C.borderLight}
+            />
+            <Btn small primary onClick={sendClientReply} disabled={!clientReply.trim() || clientSending} icon={<Send size={12} />}>Send</Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -492,13 +825,13 @@ export default function AlchemyOS() {
     if (dbClient) {
       setCurrentClientId(dbClient.id);
       await saveBrandIntake(dbClient.id, data);
-      await updateClient_db(dbClient.id, { status: 'onboarding', stage: 'Generating', progress: 25 });
+      await updateClient_db(dbClient.id, { status: 'onboarding', stage: 'Brand Intake', progress: 33 });
       if (data.productImages?.length > 0) { const urls = []; for (const img of data.productImages) { if (img.file) { const url = await uploadProductImage(dbClient.id, img.file); if (url) urls.push(url); } } if (urls.length > 0 && supabase) { await supabase.from('brand_intake').update({ product_image_urls: urls }).eq('client_id', dbClient.id); } }
     }
     const r = await callClaude(`You are a senior brand strategist. Generate brand guidelines from this intake:\n${JSON.stringify(data, null, 2)}\nTone sliders 0-100: formality(0=Formal,100=Casual):${data.formality}, mood(0=Serious,100=Playful):${data.mood}, intensity(0=Subtle,100=Bold):${data.intensity}\n\nIMPORTANT: Use the avatar's deepest fears and desires to create emotionally resonant guidelines.\n\nReturn ONLY valid JSON: { "brandSummary": "2-3 paragraphs", "toneOfVoice": { "description": "...", "doList": ["5 items"], "dontList": ["5 items"] }, "audiencePersona": { "name": "...", "age": "...", "description": "...", "painPoints": ["4-5"], "aspirations": ["4-5"], "deepestFears": ["3-4 fears"], "deepestDesires": ["3-4 desires"] }, "visualDirection": { "description": "...", "moodKeywords": ["8-10"], "colorUsage": "..." }, "copyDirection": { "taglineOptions": ["3"], "headlines": ["5"], "hooks": ["5"], "ctaExamples": ["5"] } }`);
     if (r) {
       setGuidelines(r); const init = {}; SECTIONS.forEach(s => init[s] = "pending"); setStatuses(init); setScreen("review");
-      if (currentClientId || dbClient?.id) { const cid = currentClientId || dbClient.id; await saveBrandHub(cid, r, init); await updateClient_db(cid, { status: 'reviewing', stage: 'Review Portal', progress: 50 }); }
+      if (currentClientId || dbClient?.id) { const cid = currentClientId || dbClient.id; await saveBrandHub(cid, r, init); await updateClient_db(cid, { status: 'onboarding', stage: 'Brand Intake', progress: 33 }); }
     } else { setError("Generation failed. Please try again."); setScreen("intake"); }
   };
 
@@ -542,7 +875,7 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
   const newClient = () => { window.location.href = "/brand-intake"; };
 
   const handleLogin = () => {
-    if (password === "alchemy 2024") {
+    if (password === "alchemy2024") {
       setAuthenticated(true); setIsAdmin(true); setView("dashboard"); setAuthError(false);
       sessionStorage.setItem("alchemy_auth", "true");
     } else { setAuthError(true); }
@@ -555,7 +888,7 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
       <style>{fonts}</style>
       <div style={{ textAlign: "center", maxWidth: 380, padding: 24 }}>
         <div style={{ width: 56, height: 56, borderRadius: 16, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Sparkles size={24} style={{ color: "#fff" }} /></div>
-        <h1 style={{ ...hd, fontSize: 32, color: C.text, marginBottom: 8 }}>ALCHEMY Studios</h1>
+        <h1 style={{ ...hd, fontSize: 32, color: C.text, marginBottom: 8 }}>Alchemy Productions</h1>
         <p style={{ color: C.textSec, fontSize: 15, marginBottom: 32 }}>Enter password to continue</p>
         <input type="password" value={password} onChange={e => { setPassword(e.target.value); setAuthError(false); }} onKeyDown={e => { if (e.key === "Enter") handleLogin(); }} placeholder="Password" style={{ width: "100%", padding: "14px 18px", background: C.bgSoft, border: `1px solid ${authError ? C.danger : C.borderLight}`, borderRadius: 12, color: C.text, fontSize: 16, fontFamily: "'Inter', sans-serif", outline: "none", textAlign: "center", boxSizing: "border-box", marginBottom: 16 }} autoFocus />
         {authError && <p style={{ color: C.danger, fontSize: 13, marginBottom: 12 }}>Incorrect password</p>}
@@ -571,7 +904,7 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
       <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: isAdmin ? "pointer" : "default" }} onClick={isAdmin ? goHome : undefined}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Studios</span></span>
+          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Productions</span></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {isAdmin && (view === "client" || view === "detail") && <button onClick={goHome} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.textSec, cursor: "pointer", fontSize: 14, fontFamily: "'Inter', sans-serif" }}><Home size={14} /> Dashboard</button>}
@@ -590,12 +923,13 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
             <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Review & Approve</h1>
             <p style={{ color: C.textSec, marginBottom: 36, fontSize: 16, lineHeight: 1.6 }}>Review each section. Approve what works, request changes on what doesn't.</p>
             {SECTIONS.map(sec => <Section key={sec} sectionKey={sec} data={guidelines[sec]} status={statuses[sec]} feedback={feedbacks[sec] || ""} onFeedbackChange={v => setFeedbacks(p => ({ ...p, [sec]: v }))} onApprove={() => setStatuses(p => ({ ...p, [sec]: "approved" }))} onRequestChanges={() => setStatuses(p => ({ ...p, [sec]: statuses[sec] === "feedback" ? "pending" : "feedback" }))} onSubmitFeedback={() => handleRegen(sec)} isRegen={regen[sec]} formData={formData} />)}
-            {allApproved && <div style={{ textAlign: "center", marginTop: 36, padding: 36, background: C.bgSoft, borderRadius: 16 }}><h3 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: C.text }}>All Sections Approved</h3><p style={{ color: C.textSec, fontSize: 15, marginBottom: 20 }}>Lock your brand kit to begin ad production.</p><Btn primary onClick={async () => { setScreen("locked"); if (currentClientId) { await lockBrandHub(currentClientId); await updateClient_db(currentClientId, { status: 'reviewing', stage: 'Brand Kit Locked', progress: 65 }); } }} icon={<Lock size={16} />}>Lock Brand Kit</Btn></div>}
+            {allApproved && <div style={{ textAlign: "center", marginTop: 36, padding: 36, background: C.bgSoft, borderRadius: 16 }}><h3 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: C.text }}>All Sections Approved</h3><p style={{ color: C.textSec, fontSize: 15, marginBottom: 20 }}>Lock your brand kit to begin ad production.</p><Btn primary onClick={async () => { setScreen("locked"); if (currentClientId) { await lockBrandHub(currentClientId); await updateClient_db(currentClientId, { status: 'production', stage: 'Drafts', progress: 66 }); } }} icon={<Lock size={16} />}>Lock Brand Kit</Btn></div>}
           </div>}
-          {screen === "locked" && <div style={{ textAlign: "center", paddingTop: 80 }}><div style={{ width: 80, height: 80, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Lock size={32} style={{ color: C.text }} /></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>Brand Kit Locked</h1><p style={{ color: C.textSec, fontSize: 17, lineHeight: 1.6, maxWidth: 480, margin: "0 auto 32px" }}>Your brand guidelines are finalized.</p><div style={{ display: "flex", gap: 12, justifyContent: "center" }}><Btn primary onClick={async () => { setScreen("submitted"); if (currentClientId) { await updateClient_db(currentClientId, { status: 'production', stage: 'In Production', progress: 80 }); } }} icon={<Send size={16} />}>Submit for Ad Production</Btn><Btn onClick={() => { setScreen("review"); setStatuses(p => { const n = {...p}; SECTIONS.forEach(s => n[s] = "approved"); return n; }); }}>Review Brand Kit</Btn></div></div>}
+          {screen === "locked" && <div style={{ textAlign: "center", paddingTop: 80 }}><div style={{ width: 80, height: 80, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}><Lock size={32} style={{ color: C.text }} /></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>Brand Kit Locked</h1><p style={{ color: C.textSec, fontSize: 17, lineHeight: 1.6, maxWidth: 480, margin: "0 auto 32px" }}>Your brand guidelines are finalized.</p><div style={{ display: "flex", gap: 12, justifyContent: "center" }}><Btn primary onClick={async () => { setScreen("submitted"); if (currentClientId) { await updateClient_db(currentClientId, { status: 'delivered', stage: 'Completed Assets', progress: 100 }); } }} icon={<Send size={16} />}>Submit for Ad Production</Btn><Btn onClick={() => { setScreen("review"); setStatuses(p => { const n = {...p}; SECTIONS.forEach(s => n[s] = "approved"); return n; }); }}>Review Brand Kit</Btn></div></div>}
           {screen === "submitted" && <div style={{ textAlign: "center", paddingTop: 60 }}><div style={{ position: "relative", width: 100, height: 100, margin: "0 auto 32px" }}><div style={{ position: "absolute", inset: -16, borderRadius: "50%", background: C.success + "10", animation: "pulse-ring 3s ease-in-out infinite" }} /><div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Check size={40} style={{ color: C.success }} /></div></div><h1 style={{ ...hd, fontSize: 40, color: C.text, marginBottom: 12 }}>We've Got Everything</h1><p style={{ color: C.text, fontSize: 18, lineHeight: 1.6, maxWidth: 520, margin: "0 auto 16px", fontWeight: 500 }}>Our team has received your brand kit and will now begin producing your ads.</p><p style={{ color: C.textSec, fontSize: 16, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 36px" }}>We'll craft your AI influencer, generate ad creative across all formats, and build your full campaign.</p><div style={{ maxWidth: 480, margin: "0 auto 36px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, textAlign: "left" }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>What happens next</h3><div style={{ display: "flex", flexDirection: "column", gap: 20 }}>{[{ step: "1", title: "AI Influencer Creation", desc: "Custom digital avatar based on your specs", time: "24-48 hours" }, { step: "2", title: "Ad Creative Production", desc: "100+ ads across all formats", time: "3-5 days" }, { step: "3", title: "Internal QA Review", desc: "Quality and brand consistency check", time: "1-2 days" }, { step: "4", title: "Delivery", desc: "Complete ad library via Google Drive", time: "Same day" }].map(item => <div key={item.step} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}><div style={{ width: 28, height: 28, borderRadius: "50%", background: C.bgSoft, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{item.step}</div><div style={{ flex: 1 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}><p style={{ color: C.text, fontSize: 15, fontWeight: 600 }}>{item.title}</p><span style={{ color: C.textTer, fontSize: 12 }}>{item.time}</span></div><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.4 }}>{item.desc}</p></div></div>)}</div></div><div style={{ maxWidth: 480, margin: "0 auto 36px", padding: 16, background: C.bgSoft, borderRadius: 12 }}><p style={{ color: C.textSec, fontSize: 14, lineHeight: 1.5 }}>Questions? Reach out anytime. We're building something great for <span style={{ color: C.text, fontWeight: 600 }}>{formData?.brandName || "your brand"}</span>.</p></div>{isAdmin && <Btn onClick={goHome} icon={<Home size={16} />}>Back to Dashboard</Btn>}</div>}
         </>}
       </div>
+      {isAdmin && (view === "dashboard" || view === "detail") && <DashboardChat />}
     </div>
   );
 }

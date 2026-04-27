@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Quote, Phone } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Quote, Phone, Download } from "lucide-react";
 
 /* ── Design tokens (matching main site) ── */
 const G = {
@@ -205,12 +205,12 @@ function CountdownTimer() {
 
 /* ── Sample creative data ── */
 const samples = [
-  { src: "/assets/skincare-closeup-CKKAxIIz.png", category: "Lifestyle" },
-  { src: "/assets/scent-diffuser-studio-8F9hzFSi.png", category: "Product Hero" },
-  { src: "/assets/golf-ad-BF4ytyZB.jpeg", category: "Detail Shot" },
-  { src: "/assets/tallow-balm-ad-j98A_I8X.jpeg", category: "Editorial" },
-  { src: "/assets/sock-scientific-tech-CtYs3SdE.jpeg", category: "Scene Setting" },
-  { src: "/assets/ugc-socks-Dvn42rza.jpeg", category: "Wild Card" },
+  { src: "/assets/skincare-closeup-CKKAxIIz.png", category: "Lifestyle", description: "Builds the world" },
+  { src: "/assets/scent-diffuser-studio-8F9hzFSi.png", category: "Product Hero", description: "Anchors the brand" },
+  { src: "/assets/golf-ad-BF4ytyZB.jpeg", category: "Detail Shot", description: "Close-up textures and craftsmanship" },
+  { src: "/assets/tallow-balm-ad-j98A_I8X.jpeg", category: "Editorial", description: "Elevates perception" },
+  { src: "/assets/sock-scientific-tech-CtYs3SdE.jpeg", category: "Scene Setting", description: "Product in its natural environment" },
+  { src: "/assets/ugc-socks-Dvn42rza.jpeg", category: "Wild Card", description: "Unexpected creative angle" },
 ];
 
 /* ── Stats ── */
@@ -226,13 +226,6 @@ const results = [
   { metric: "Scale Achieved", category: "Health & Supplements", detail: "$500K → $1.2M/mo", timeline: "Stable CPA" },
 ];
 
-/* ── Testimonials ── */
-const testimonials = [
-  { quote: "I honestly don't know where I'd be without the Alchemy Team. Their marketing strategies are insanely smart, but what really stands out is how much they actually care. Andrew and the Alchemy team has helped us generate over $500k in revenue so far.", name: "Peter D.", role: "Founder", company: "Luxury Landscape Design" },
-  { quote: "Working with Andrew (and Alchemy) has been the best business decision I've ever made. His knowledge of marketing and business has helped me achieve things I had spent years on without success.", name: "Aaron W.", role: "Founder", company: "Media Network" },
-  { quote: "I have interviewed 30 agencies in the last few months. I haven't seen even one of them innovating at 1/10th the rate of the Alchemy team. It is so exciting to watch them build this system and lead the way.", name: "Kathryn B.", role: "Founder", company: "Education Platform" },
-];
-
 /* ── Packages ── */
 const packages = [
   {
@@ -242,9 +235,11 @@ const packages = [
     period: "",
     description: "Perfect for testing the waters.",
     icon: Zap,
+    campaign: "1 Themed creative campaign",
     features: [
       "25 Static ad creatives",
-      "1 Hero video ad (45 seconds)",
+      "5 Hero Videos (1 core video, 5 hook variants)",
+      "5 UGC Videos (1 core video, 5 hook variants)",
       "2 Rounds of revisions",
       "Delivered in 7 days",
     ],
@@ -258,9 +253,11 @@ const packages = [
     period: "",
     description: "Everything you need to scale fast.",
     icon: TrendingUp,
+    campaign: "2 Themed creative campaigns",
     features: [
       "75 Static ad creatives",
-      "2 Hero video ads (45 seconds each)",
+      "10 Hero Videos (2 core videos, 5 hook variants each)",
+      "10 UGC Videos (2 core videos, 5 hook variants each)",
       "2 Rounds of revisions",
       "Delivered in 7 days",
     ],
@@ -274,9 +271,11 @@ const packages = [
     period: "",
     description: "Full creative firepower for scale.",
     icon: Rocket,
+    campaign: "5 Themed creative campaigns",
     features: [
       "250 Static ad creatives",
-      "8 Hero video ads (45 seconds each)",
+      "25 Hero Videos (5 core videos, 5 hook variants each)",
+      "25 UGC Videos (5 core videos, 5 hook variants each)",
       "2 Rounds of revisions",
       "Delivered in 7 days",
     ],
@@ -296,7 +295,7 @@ export default function ProposalPage() {
             <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${G.gold}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Sparkles size={14} style={{ color: G.gold }} />
             </div>
-            <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em", ...mono }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Studios</span></span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em", ...mono }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Productions</span></span>
           </div>
           <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Creative Partnership Proposal</span>
         </nav>
@@ -339,13 +338,45 @@ export default function ProposalPage() {
               <BlurReveal key={i} style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
                 <div style={{ position: "relative", paddingTop: "100%", background: "#F5F5F7" }}>
                   <img src={s.src} alt={s.category} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  <a
+                    href={`/api/download-image?url=${encodeURIComponent(s.src)}&name=${encodeURIComponent(`${s.category}.png`)}`}
+                    style={{ position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", color: "#1D1D1F", textDecoration: "none", transition: "all 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,1)"; e.currentTarget.style.transform = "scale(1.05)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.85)"; e.currentTarget.style.transform = "scale(1)"; }}
+                  >
+                    <Download size={14} />
+                  </a>
                 </div>
-                <div style={{ padding: "14px 20px" }}>
+                <div style={{ padding: "14px 20px", textAlign: "center" }}>
                   <p style={{ fontSize: 14, fontWeight: 600, color: G.text, ...mono }}>{s.category}</p>
+                  {s.description && <p style={{ fontSize: 12, color: G.textSec, marginTop: 4, ...mono }}>{s.description}</p>}
                 </div>
               </BlurReveal>
             ))}
           </div>
+          <BlurReveal style={{ textAlign: "center", marginTop: 32 }}>
+            <button
+              onClick={() => {
+                samples.forEach(s => {
+                  const a = document.createElement("a");
+                  a.href = `/api/download-image?url=${encodeURIComponent(s.src)}&name=${encodeURIComponent(`${s.category}.png`)}`;
+                  a.click();
+                });
+              }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "12px 28px", borderRadius: 980,
+                background: G.gold, color: "#fff", border: "none",
+                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                transition: "opacity 0.2s", ...mono,
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+              <Download size={16} />
+              Download All Images
+            </button>
+          </BlurReveal>
         </section>
 
         {/* ── Bold Statement ── */}
@@ -396,6 +427,9 @@ export default function ProposalPage() {
                   {pkg.originalPrice && <span style={{ fontSize: 18, color: G.textTer, textDecoration: "line-through", ...mono }}>{pkg.originalPrice}</span>}
                 </div>
                 <div style={{ height: 1, background: G.border, marginBottom: 24 }} />
+                {pkg.campaign && (
+                  <p style={{ fontSize: 13, color: G.textSec, marginBottom: 16, lineHeight: 1.5, ...mono }}>{pkg.campaign}, consisting of:</p>
+                )}
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, flex: 1 }}>
                   {pkg.features.map((f, j) => (
                     <li key={j} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
@@ -417,33 +451,6 @@ export default function ProposalPage() {
           </div>
         </section>
 
-        {/* ── Testimonials ── */}
-        <section style={{ marginBottom: 100 }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <BlurReveal style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 20 }}>
-              <Users size={14} style={{ color: G.gold }} />
-              <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Testimonials</span>
-            </BlurReveal>
-            <ScrollBlurText as="h2" style={{ ...hd, fontSize: 38, color: G.text, lineHeight: 1.2, marginBottom: 12, justifyContent: "center" }}>{"What Our Partners Say"}</ScrollBlurText>
-          </div>
-          <div className="testimonial-grid">
-            {testimonials.map((t, i) => (
-              <BlurReveal key={i} style={{ padding: "32px 28px", borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card, display: "flex", flexDirection: "column" }}>
-                <div style={{ marginBottom: 12, display: "flex", gap: 2 }}>
-                  {[...Array(5)].map((_, j) => (
-                    <span key={j} style={{ fontSize: 18, color: G.text }}>★</span>
-                  ))}
-                </div>
-                <Quote size={20} style={{ color: G.textTer, marginBottom: 12, transform: "scaleX(-1)" }} />
-                <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.7, flex: 1, ...mono }}>{t.quote}</p>
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: G.text, ...mono }}>{t.name}</div>
-                  <div style={{ fontSize: 13, color: G.textTer, ...mono }}>{t.role}, {t.company}</div>
-                </div>
-              </BlurReveal>
-            ))}
-          </div>
-        </section>
 
         {/* ── Calendly Embed ── */}
         <section id="book" style={{ marginBottom: 100 }}>
@@ -457,7 +464,7 @@ export default function ProposalPage() {
           </div>
           <BlurReveal style={{ borderRadius: 20, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, overflow: "hidden", background: G.card, marginBottom: 48 }}>
             <iframe
-              src="https://calendly.com/d/cs9w-cwg-b5q/alchemy-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000"
+              src="https://calendly.com/corinne-theoasis/alchemy-a-i-performance-creatives?hide_gdpr_banner=1&background_color=ffffff&text_color=1d1d1f&primary_color=000000"
               style={{ width: "100%", height: 700, border: "none" }}
               title="Book a Call"
             />
@@ -481,7 +488,7 @@ export default function ProposalPage() {
               <div style={{ width: 24, height: 24, borderRadius: "50%", border: `1.5px solid ${G.goldBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Sparkles size={10} style={{ color: G.textTer }} />
               </div>
-              <span style={{ fontSize: 13, color: G.textTer, ...mono }}>Alchemy Studios</span>
+              <span style={{ fontSize: 13, color: G.textTer, ...mono }}>Alchemy Productions</span>
             </div>
             <span style={{ fontSize: 12, color: G.textTer, ...mono }}>Confidential Proposal</span>
           </div>
@@ -491,10 +498,11 @@ export default function ProposalPage() {
               <a href="/privacy" style={{ fontSize: 12, color: G.textTer, textDecoration: "none", ...mono }}>Privacy Policy</a>
               <a href="/refund-policy" style={{ fontSize: 12, color: G.textTer, textDecoration: "none", ...mono }}>Refund Policy</a>
             </div>
-            <span style={{ fontSize: 11, color: G.textTer, ...mono }}>&copy; 2026 Alchemy Studios LLC. All rights reserved.</span>
+            <span style={{ fontSize: 11, color: G.textTer, ...mono }}>&copy; 2026 Alchemy Productions LLC. All rights reserved.</span>
           </div>
         </footer>
       </div>
+
     </>
   );
 }

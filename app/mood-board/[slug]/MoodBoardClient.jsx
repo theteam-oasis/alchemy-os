@@ -168,7 +168,7 @@ export default function MoodBoardClient({ board, images: imageRows }) {
           <div>
             <span style={{ ...font.display, color: K.offWhite, fontSize: 20 }}>{brandName.toUpperCase()}</span>
             <p style={{ ...font.caption, color: K.stone, marginTop: 6, textTransform: "none" }}>
-              mood board by Alchemy Studios
+              mood board by Alchemy Productions
             </p>
           </div>
           <a href="/mood-board/create" style={{ ...font.caption, color: K.charcoal, textDecoration: "none", textTransform: "none" }}>

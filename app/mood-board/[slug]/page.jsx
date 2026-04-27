@@ -36,7 +36,7 @@ export async function generateMetadata({ params }) {
     title,
     description,
     openGraph: {
-      title, description, type: 'website', siteName: 'Alchemy Studios',
+      title, description, type: 'website', siteName: 'Alchemy Productions',
       ...(firstImage ? { images: [{ url: firstImage, width: 1200, height: 630, alt: `${brandName} Mood Board` }] } : {}),
     },
     twitter: {

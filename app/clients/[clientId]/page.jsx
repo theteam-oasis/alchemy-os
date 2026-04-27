@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { FileText, Palette, BarChart3, MessageSquare, Sparkles, ExternalLink, Copy, Check, Plus, ArrowRight } from 'lucide-react'
 const S={approved:{l:'Approved',c:'#111111',bg:'#f8f8f8',b:'#111111',i:'✓'},revisions:{l:'Revisions',c:'#888888',bg:'#f8f8f8',b:'#cccccc',i:'✎'},declined:{l:'Declined',c:'#cccccc',bg:'#f8f8f8',b:'#eeeeee',i:'✕'},pending:{l:'Awaiting',c:'#aaaaaa',bg:'#f8f8f8',b:'#eeeeee',i:'○'}}
 
 export default function ClientProfilePage({ params }) {
@@ -10,6 +11,15 @@ export default function ClientProfilePage({ params }) {
   const [intake,setIntake]=useState(null)
   const [loading,setLoading]=useState(true)
   const [tab,setTab]=useState('briefs')
+  const [portal,setPortal]=useState(null)
+  const [portalLoading,setPortalLoading]=useState(false)
+  const [linkMode,setLinkMode]=useState(false)
+  const [allPortals,setAllPortals]=useState([])
+  const [dashboards,setDashboards]=useState([])
+  const [dashboardsLoading,setDashboardsLoading]=useState(false)
+  const [copied,setCopied]=useState(null)
+  const copyToClipboard=(text,key)=>{ if(typeof window==='undefined')return; navigator.clipboard.writeText(text); setCopied(key); setTimeout(()=>setCopied(null),1500); }
+  const clientSlug=client?.name?(client.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')):''
   useEffect(()=>{
     Promise.all([
       supabase.from('clients').select('*').eq('id',clientId).single(),
@@ -20,6 +30,40 @@ export default function ClientProfilePage({ params }) {
     .catch(e=>console.error('Supabase error:',e))
     .finally(()=>setLoading(false))
   },[clientId])
+  // Check if a portal project already exists for this client
+  useEffect(()=>{
+    fetch('/api/portal/projects').then(r=>r.json()).then(projects=>{
+      const linked=projects.find(p=>p.clientId===clientId)
+      if(linked)setPortal(linked)
+      setAllPortals(projects.filter(p=>!p.clientId))
+    })
+  },[clientId])
+  // Load marketing dashboards for this client
+  useEffect(()=>{
+    setDashboardsLoading(true)
+    fetch(`/api/marketing-dashboards?clientId=${clientId}`)
+      .then(r=>r.json())
+      .then(j=>{ if(j.success) setDashboards(j.dashboards||[]) })
+      .catch(()=>{})
+      .finally(()=>setDashboardsLoading(false))
+  },[clientId])
+  const generatePortal=async()=>{
+    if(!client)return
+    setPortalLoading(true)
+    const res=await fetch('/api/portal/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientName:client.name,clientId})})
+    const p=await res.json()
+    setPortal(p)
+    setPortalLoading(false)
+  }
+  const linkExistingPortal=async(projectId)=>{
+    setPortalLoading(true)
+    await fetch(`/api/portal/projects/${projectId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId})})
+    const res=await fetch(`/api/portal/projects/${projectId}`)
+    const p=await res.json()
+    setPortal(p)
+    setLinkMode(false)
+    setPortalLoading(false)
+  }
   if(loading)return(<div style={{minHeight:'100vh',background:'white',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:32,height:32,border:'2px solid #eeeeee',borderTopColor:'#111111',borderRadius:'50%',animation:'spin 0.8s linear infinite'}}/><style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style></div>)
 
   return(<>
@@ -81,6 +125,46 @@ export default function ClientProfilePage({ params }) {
       .pimgs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
       .pimg{width:56px;height:56px;border-radius:7px;object-fit:cover;border:1px solid #eeeeee;}
       .empty{text-align:center;padding:60px 0;color:#cccccc;font-size:14px;font-weight:300;}
+
+      /* Tool Hub */
+      .tool-hub{margin-bottom:32px;}
+      .tool-hub-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+      .tool-hub-title{font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#aaaaaa;}
+      .tool-hub-link{font-size:12px;font-weight:500;color:#111;text-decoration:none;display:inline-flex;align-items:center;gap:4px;border-bottom:1px solid transparent;transition:border-color 0.15s;}
+      .tool-hub-link:hover{border-color:#111;}
+      .tool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+      @media (max-width:900px){.tool-grid{grid-template-columns:repeat(2,1fr);}}
+      .tool-card{position:relative;background:#fff;border:1px solid #eeeeee;border-radius:14px;padding:18px;cursor:pointer;transition:all 0.2s ease;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:14px;min-height:148px;overflow:hidden;}
+      .tool-card:hover{border-color:#111;transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.06);}
+      .tool-card.active{border-color:#111;background:#fafafa;}
+      .tool-card.empty-state{border-style:dashed;border-color:#e5e5e5;}
+      .tool-card.empty-state:hover{border-color:#111;border-style:solid;}
+      .tool-icon-wrap{width:36px;height:36px;border-radius:10px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .tool-card.empty-state .tool-icon-wrap{background:#f5f5f5;color:#aaa;}
+      .tool-card-name{font-size:14px;font-weight:600;color:#111;margin-bottom:3px;letter-spacing:-0.01em;}
+      .tool-card-desc{font-size:11px;color:#aaa;font-weight:400;line-height:1.5;}
+      .tool-card-stat{font-family:'DM Mono',monospace;font-size:11px;color:#888;margin-top:auto;padding-top:8px;border-top:1px solid #f5f5f5;display:flex;align-items:center;justify-content:space-between;}
+      .tool-card-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;}
+      .tool-card-status.live{color:#16a34a;}
+      .tool-card-status.empty{color:#aaa;}
+      .tool-card-arrow{width:24px;height:24px;border-radius:50%;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:0;transform:translateX(-4px);transition:all 0.2s ease;}
+      .tool-card:hover .tool-card-arrow{opacity:1;transform:translateX(0);}
+      .tool-card-actions{display:flex;gap:6px;margin-top:8px;}
+      .tool-mini-btn{flex:1;font-size:10px;font-weight:600;padding:6px 8px;border-radius:6px;border:1px solid #eee;background:#fff;color:#666;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;text-decoration:none;text-align:center;display:inline-flex;align-items:center;justify-content:center;gap:4px;}
+      .tool-mini-btn:hover{border-color:#111;color:#111;}
+      .tool-mini-btn.primary{background:#111;color:#fff;border-color:#111;}
+      .tool-mini-btn.primary:hover{background:#333;border-color:#333;color:#fff;}
+
+      /* Client portal banner */
+      .cp-banner{background:linear-gradient(135deg,#111 0%,#333 100%);border-radius:14px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;}
+      .cp-banner-text{flex:1;min-width:0;}
+      .cp-banner-title{font-size:15px;font-weight:600;margin-bottom:3px;letter-spacing:-0.01em;}
+      .cp-banner-sub{font-size:12px;opacity:0.7;font-weight:400;}
+      .cp-banner-actions{display:flex;gap:6px;flex-shrink:0;}
+      .cp-btn{background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
+      .cp-btn:hover{background:rgba(255,255,255,0.25);}
+      .cp-btn.primary{background:#fff;color:#111;border-color:#fff;}
+      .cp-btn.primary:hover{background:#f5f5f5;}
     `}</style>
     <div className="shell">
       <nav className="nav">
@@ -111,8 +195,118 @@ export default function ClientProfilePage({ params }) {
             <div key={l} className="sc"><p className="sn" style={{color:c}}>{n}</p><p className="sl">{l}</p></div>
           ))}
         </div>
+
+        {/* Client Portal Banner */}
+        <div className="cp-banner">
+          <div style={{display:'flex',alignItems:'center',gap:14,flex:1,minWidth:0}}>
+            <div style={{width:42,height:42,borderRadius:10,background:'rgba(255,255,255,0.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <Sparkles size={20} color="#fff" />
+            </div>
+            <div className="cp-banner-text">
+              <p className="cp-banner-title">Client Hub</p>
+              <p className="cp-banner-sub">Single sign-on portal where {client?.name||'this client'} can access all their tools in one place</p>
+            </div>
+          </div>
+          <div className="cp-banner-actions">
+            <button onClick={()=>copyToClipboard(`${typeof window!=='undefined'?window.location.origin:''}/client/${clientSlug}`,'cp')} className="cp-btn">
+              {copied==='cp'?<><Check size={11}/> Copied</>:<><Copy size={11}/> Copy Link</>}
+            </button>
+            <a href={`/client/${clientSlug}`} target="_blank" rel="noreferrer" className="cp-btn primary">
+              <ExternalLink size={11}/> Open
+            </a>
+          </div>
+        </div>
+
+        {/* Tool Hub */}
+        <div className="tool-hub">
+          <div className="tool-hub-h">
+            <span className="tool-hub-title">Linked Tools</span>
+          </div>
+          <div className="tool-grid">
+            {/* Feedback Portal card */}
+            <div className={`tool-card${tab==='portal'?' active':''}${!portal?' empty-state':''}`} onClick={()=>setTab('portal')}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div className="tool-icon-wrap"><MessageSquare size={18}/></div>
+                <div className="tool-card-arrow"><ArrowRight size={12}/></div>
+              </div>
+              <div>
+                <p className="tool-card-name">Feedback Portal</p>
+                <p className="tool-card-desc">{portal?'Asset review & approval':'Set up client review workflow'}</p>
+              </div>
+              <div className="tool-card-stat">
+                {portal?(<>
+                  <span>{portal.images?.length||0} images · {(portal.heroScripts?.length||0)+(portal.ugcScripts?.length||0)} scripts</span>
+                  <span className="tool-card-status live">● Live</span>
+                </>):(
+                  <span className="tool-card-status empty">○ Not setup</span>
+                )}
+              </div>
+            </div>
+
+            {/* Brand Kit card */}
+            <div className={`tool-card${tab==='brand'?' active':''}${!intake?' empty-state':''}`} onClick={()=>setTab('brand')}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div className="tool-icon-wrap"><Palette size={18}/></div>
+                <div className="tool-card-arrow"><ArrowRight size={12}/></div>
+              </div>
+              <div>
+                <p className="tool-card-name">Brand Kit</p>
+                <p className="tool-card-desc">{intake?'Brand identity & guidelines':'Capture brand details'}</p>
+              </div>
+              <div className="tool-card-stat">
+                {intake?(<>
+                  <span>{intake.brand_name||client?.name}</span>
+                  <span className="tool-card-status live">● Complete</span>
+                </>):(
+                  <span className="tool-card-status empty">○ Not setup</span>
+                )}
+              </div>
+            </div>
+
+            {/* Marketing Dashboard card */}
+            <div className={`tool-card${tab==='marketing'?' active':''}${dashboards.length===0?' empty-state':''}`} onClick={()=>setTab('marketing')}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div className="tool-icon-wrap"><BarChart3 size={18}/></div>
+                <div className="tool-card-arrow"><ArrowRight size={12}/></div>
+              </div>
+              <div>
+                <p className="tool-card-name">Marketing Dashboard</p>
+                <p className="tool-card-desc">{dashboards.length>0?'Performance analytics & Oracle AI':'Upload data for live BI'}</p>
+              </div>
+              <div className="tool-card-stat">
+                {dashboards.length>0?(<>
+                  <span>{dashboards.length} dashboard{dashboards.length===1?'':'s'}</span>
+                  <span className="tool-card-status live">● Active</span>
+                </>):(
+                  <span className="tool-card-status empty">○ Not setup</span>
+                )}
+              </div>
+            </div>
+
+            {/* Briefs / Campaigns card */}
+            <div className={`tool-card${tab==='briefs'?' active':''}${campaigns.length===0?' empty-state':''}`} onClick={()=>setTab('briefs')}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div className="tool-icon-wrap"><FileText size={18}/></div>
+                <div className="tool-card-arrow"><ArrowRight size={12}/></div>
+              </div>
+              <div>
+                <p className="tool-card-name">Creative Briefs</p>
+                <p className="tool-card-desc">{campaigns.length>0?'Generated campaigns & storyboards':'Generate first campaign'}</p>
+              </div>
+              <div className="tool-card-stat">
+                {campaigns.length>0?(<>
+                  <span>{campaigns.length} brief{campaigns.length===1?'':'s'}</span>
+                  <span className="tool-card-status live">● Active</span>
+                </>):(
+                  <span className="tool-card-status empty">○ Not setup</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="tabs">
-          {[['briefs',`Briefs (${campaigns.length})`],['brand','Brand Info']].map(([k,lbl])=>(
+          {[['briefs',`Briefs (${campaigns.length})`],['brand','Brand Info'],['portal','Feedback Portal'],['marketing',`Marketing${dashboards.length?` (${dashboards.length})`:''}`]].map(([k,lbl])=>(
             <button key={k} className={`tab${tab===k?' a':''}`} onClick={()=>setTab(k)}>{lbl}</button>
           ))}
         </div>
@@ -150,6 +344,99 @@ export default function ClientProfilePage({ params }) {
             {intake.product_image_urls?.length>0&&<div className="ic" style={{gridColumn:'1/-1'}}><p className="it">Product Images</p><div className="pimgs">{intake.product_image_urls.map((u,i)=><img key={i} src={u} alt="" className="pimg"/>)}</div></div>}
           </div>
         ))}
+        {tab==='marketing'&&(
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div>
+                <p style={{fontSize:14,fontWeight:500,color:'#111',marginBottom:2}}>Marketing Dashboards</p>
+                <p style={{fontSize:12,color:'#aaa',fontWeight:300}}>Private, data-driven dashboards with AI analysis</p>
+              </div>
+              <a href={`/marketing/create?clientId=${clientId}`} className="bp" style={{textDecoration:'none',fontSize:13}}>+ New Dashboard</a>
+            </div>
+            {dashboardsLoading?(
+              <div className="cc" style={{textAlign:'center',padding:'32px',color:'#aaa',fontSize:13}}>Loading...</div>
+            ):dashboards.length===0?(
+              <div className="cc" style={{textAlign:'center',padding:'40px 22px'}}>
+                <div style={{width:48,height:48,borderRadius:'50%',background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:20,border:'1px solid #eee'}}>📊</div>
+                <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>No dashboards yet</p>
+                <p style={{fontSize:12,color:'#aaa',fontWeight:300,marginBottom:24}}>Upload a CSV of marketing data to create your first dashboard. Includes Oracle AI copilot.</p>
+                <a href={`/marketing/create?clientId=${clientId}`} className="bp" style={{textDecoration:'none',fontSize:13,display:'inline-flex',alignItems:'center',gap:6}}>+ Create Dashboard</a>
+              </div>
+            ):(
+              <div className="camps">
+                {dashboards.map(d=>(
+                  <div key={d.id} className="cc" style={{display:'flex',alignItems:'center',gap:16}}>
+                    <div style={{width:40,height:40,borderRadius:8,background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>📊</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p className="ct" style={{marginBottom:2}}>{d.title||d.file_name||'Dashboard'}</p>
+                      <p className="cm" style={{marginBottom:0}}>
+                        {new Date(d.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · {d.file_name||'CSV'}
+                      </p>
+                    </div>
+                    <div style={{display:'flex',gap:6}}>
+                      <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/marketing/${d.slug}`);}} className="bs" style={{fontSize:11,padding:'5px 11px'}}>Copy Link</button>
+                      <a href={`/marketing/${d.slug}`} target="_blank" className="bp" style={{fontSize:11,padding:'5px 11px',textDecoration:'none'}}>Open →</a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {tab==='portal'&&(
+          <div>
+            {portal?(
+              <div className="cc" style={{textAlign:'center',padding:'32px 22px'}}>
+                <div style={{width:48,height:48,borderRadius:'50%',background:'#f0f0f0',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:20}}>✓</div>
+                <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>Portal Active</p>
+                <p style={{fontSize:12,color:'#aaa',fontWeight:300,marginBottom:20}}>
+                  {portal.images?.length||0} images · {(portal.heroScripts?.length||0)+(portal.ugcScripts?.length||0)} scripts
+                </p>
+                <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+                  <a href={`/portal/create?id=${portal.id}`} className="bp" style={{textDecoration:'none',fontSize:13}}>Manage Assets →</a>
+                  <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/portal/${portal.slug}`);}} className="bs" style={{fontSize:13}}>Copy Client Link</button>
+                  <a href={`/portal/${portal.slug}`} target="_blank" className="bs" style={{textDecoration:'none',fontSize:13}}>Preview ↗</a>
+                </div>
+                <p style={{fontSize:11,color:'#ccc',marginTop:16,fontFamily:"'DM Mono',monospace"}}>{typeof window!=='undefined'?`${window.location.origin}/portal/${portal.slug}`:''}</p>
+                <p style={{fontSize:11,color:'#ccc',marginTop:4}}>Password: <span style={{color:'#888',fontFamily:"'DM Mono',monospace"}}>{portal.slug}2026</span></p>
+              </div>
+            ):(
+              <div className="cc" style={{textAlign:'center',padding:'40px 22px'}}>
+                <div style={{width:48,height:48,borderRadius:'50%',background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:20,border:'1px solid #eee'}}>📋</div>
+                <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>No Feedback Portal Yet</p>
+                <p style={{fontSize:12,color:'#aaa',fontWeight:300,marginBottom:24}}>Generate a portal to upload assets and collect client feedback</p>
+                <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+                  <button onClick={generatePortal} disabled={portalLoading} className="bp" style={{fontSize:13,opacity:portalLoading?0.5:1}}>
+                    {portalLoading?'Creating...':'+ Generate Portal'}
+                  </button>
+                  <button onClick={()=>setLinkMode(!linkMode)} className="bs" style={{fontSize:13}}>
+                    {linkMode?'Cancel':'Link Existing'}
+                  </button>
+                </div>
+                {linkMode&&(
+                  <div style={{marginTop:20,textAlign:'left'}}>
+                    {allPortals.length===0?(
+                      <p style={{fontSize:12,color:'#aaa',textAlign:'center'}}>No unlinked portals available</p>
+                    ):(
+                      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                        <p style={{fontSize:10,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase',color:'#ccc',marginBottom:4}}>Unlinked Portals</p>
+                        {allPortals.map(p=>(
+                          <div key={p.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',border:'1px solid #eee',borderRadius:8}}>
+                            <div>
+                              <p style={{fontSize:13,fontWeight:500,color:'#111'}}>{p.clientName}</p>
+                              <p style={{fontSize:11,color:'#aaa'}}>{p.images?.length||0} images · /portal/{p.slug}</p>
+                            </div>
+                            <button onClick={()=>linkExistingPortal(p.id)} className="bp" style={{fontSize:11,padding:'5px 12px'}}>Link</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   </>)

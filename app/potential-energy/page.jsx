@@ -265,7 +265,7 @@ export default function PotentialEnergyPage() {
           <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Sparkles size={16} style={{ color: "#fff" }} />
           </div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Studios</span></span>
+          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Productions</span></span>
         </div>
         <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, color: C.textSec, textDecoration: "none", fontWeight: 500 }}>
           <ChevronLeft size={16} /> Dashboard

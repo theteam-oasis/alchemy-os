@@ -3,10 +3,10 @@ export async function GET(req) {
   const imageUrl = searchParams.get("url");
   let filename = searchParams.get("name") || "image.jpg";
 
-  // Ensure filename ends with a proper image extension
-  if (!/\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
-    filename = filename.replace(/\.[^.]*$/, "") + ".jpg";
-    if (filename === ".jpg") filename = "image.jpg";
+  // Ensure filename ends with .png for high quality
+  if (!/\.(png)$/i.test(filename)) {
+    filename = filename.replace(/\.[^.]*$/, "") + ".png";
+    if (filename === ".png") filename = "image.png";
   }
 
   if (!imageUrl) {

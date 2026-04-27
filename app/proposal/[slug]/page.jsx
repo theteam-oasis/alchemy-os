@@ -37,10 +37,10 @@ export async function generateMetadata({ params }) {
     return { title: 'Proposal Not Found' };
   }
 
-  const brandName = proposal.brand_name;
-  const firstImage = (proposal.static_urls || [])[0] || null;
+  const brandName = (proposal.brand_name || "").replace(/\b\w/g, c => c.toUpperCase());
+  const firstImage = (proposal.static_urls || [])[1] || (proposal.static_urls || [])[0] || null;
   const title = `${brandName} A.I. Ads Proposal`;
-  const description = `A custom creative proposal for ${brandName} by Alchemy Studios. High-converting, beautiful Meta ads powered by A.I.`;
+  const description = `A custom creative proposal for ${brandName} by Alchemy Productions. High-converting, beautiful Meta ads powered by A.I.`;
 
   return {
     metadataBase: new URL('https://scalewithalchemy.com'),
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }) {
       title,
       description,
       type: 'website',
-      siteName: 'Alchemy Studios',
+      siteName: 'Alchemy Productions',
       ...(firstImage ? { images: [{ url: firstImage, width: 1200, height: 630, alt: `${brandName} Creative Preview` }] } : {}),
     },
     twitter: {
