@@ -918,7 +918,9 @@ function Section({ sectionKey, data, status, onApprove, onRequestChanges, onSubm
 // ─── Main ───
 export default function AlchemyOS() {
   const [mounted, setMounted] = useState(false);
-  const [view, setView] = useState("client");
+  // /dashboard should always land on the CRM (the dashboard table view), not the
+  // brand intake form. The intake form lives at /brand-intake.
+  const [view, setView] = useState("dashboard");
   const [screen, setScreen] = useState("intake");
   const [formData, setFormData] = useState(null);
   const [guidelines, setGuidelines] = useState({});

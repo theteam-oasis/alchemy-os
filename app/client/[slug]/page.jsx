@@ -40,6 +40,23 @@ export default function ClientHubPage() {
     }
   }, [slug]);
 
+  // Listen for status changes from the embedded creatives iframe so the sidebar
+  // badge reflects the actual pending count in real time. Each approve/revise/
+  // reject inside /portal/[slug] posts back here.
+  useEffect(() => {
+    if (typeof window === "undefined" || !slug || !authed) return;
+    const handler = (e) => {
+      if (!e?.data || e.data.type !== "creatives:status-change") return;
+      // Refetch the hub data to get fresh feedback aggregates
+      fetch(`/api/client-portal/${slug}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setData(prev => ({ ...prev, feedback: d.feedback, portals: d.portals })); })
+        .catch(() => {});
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [slug, authed]);
+
   // Fetch hub data + auto-provision a dashboard if none + auto-auth linked portals
   useEffect(() => {
     if (!slug || !authed) return;

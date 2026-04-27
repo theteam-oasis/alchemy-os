@@ -90,7 +90,15 @@ export async function POST(req) {
   const updates = { project_id: projectId, item_id: itemId, updated_at: new Date().toISOString() }
   if (approved !== undefined) updates.approved = approved === null ? null : approved
   if (feedbackText !== undefined) updates.feedback_text = feedbackText
-  if (status !== undefined) updates.status = status
+  if (status !== undefined) {
+    updates.status = status
+    // Keep the legacy `approved` boolean in sync with the new `status` field so
+    // toggling off (status=null) actually clears the row, instead of falling back
+    // to a stale `approved=true/false` next time the data is read.
+    if (status === 'approved') updates.approved = true
+    else if (status === 'rejected') updates.approved = false
+    else updates.approved = null
+  }
 
   const { data, error } = await supabase
     .from('portal_feedback')

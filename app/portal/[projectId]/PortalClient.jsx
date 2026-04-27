@@ -118,6 +118,80 @@ function LineCommentBox({ lineIdx, selection, onSubmit, onCancel, saving }) {
   );
 }
 
+// Per-script mood board: team-uploaded reference frames the client can preview.
+// Has its own approve / revise / reject status (stored under itemId `moodboard-<scriptId>`)
+// and its own comment thread, separate from the script itself.
+function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, onAddComment }) {
+  const moodBoard = script.moodBoard || [];
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [text, setText] = useState("");
+  const moodFeedback = { [`mb-${script.id}`]: { comments } };
+  if (moodBoard.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 14, padding: 16, background: "#FAFAFA", border: `1px solid ${G.border}`, borderRadius: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Image size={14} color={G.textSec} />
+          <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            {max === 1 ? "Mood Frame" : "Mood Board"}
+          </span>
+          <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Reference frames from the team</span>
+        </div>
+        <StatusBtns
+          status={status}
+          onApprove={() => onSetStatus("approved")}
+          onReject={() => onSetStatus("rejected")}
+          onRevision={() => onSetStatus("revision")}
+        />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 12 }}>
+        {moodBoard.map((img, i) => (
+          <div key={img.id || i} style={{ position: "relative", aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, overflow: "hidden", background: "#fff", border: `1px solid ${G.border}`, cursor: "zoom-in" }}
+            onClick={() => window.open(img.url, "_blank")}>
+            <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </div>
+        ))}
+      </div>
+      {/* Existing comments */}
+      {comments?.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {comments.map((c, i) => (
+            <div key={i} style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 8, padding: "8px 12px" }}>
+              <p style={{ ...mono, fontSize: 12, color: G.text, lineHeight: 1.55, whiteSpace: "pre-wrap", margin: 0 }}>{c.text}</p>
+              <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
+                {c.sender === "team" ? "Team" : "Client"} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Add comment toggle */}
+      {!showFeedback ? (
+        <button onClick={() => setShowFeedback(true)} style={{ ...mono, padding: "6px 14px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <MessageSquare size={11} /> Comment on mood board
+        </button>
+      ) : (
+        <div>
+          <textarea value={text} onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+            placeholder="What works? What doesn't?" autoFocus
+            style={{ ...mono, width: "100%", padding: "8px 12px", fontSize: 13, border: `1px solid ${G.border}`, borderRadius: 8, outline: "none", background: "#fff", color: G.text, boxSizing: "border-box", resize: "none", minHeight: 56, lineHeight: 1.5, overflow: "hidden" }} />
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button disabled={!text.trim() || saving} onClick={() => { onAddComment(text.trim()); setText(""); setShowFeedback(false); }}
+              style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: G.gold, color: "#fff", border: "none", borderRadius: 980, cursor: text.trim() ? "pointer" : "not-allowed", opacity: text.trim() ? 1 : 0.4 }}>
+              {saving ? "Saving..." : "Submit"}
+            </button>
+            <button onClick={() => { setShowFeedback(false); setText(""); }}
+              style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, saving }) {
   const bd = breakdownScript(content);
   const [activeLine, setActiveLine] = useState(null); // { lineIdx, selection }
@@ -357,6 +431,12 @@ export default function ClientReview({ projectId: serverProjectId }) {
     } catch (e) {
       console.error("[status] save threw", e);
     }
+    // Notify the parent (client hub) so the sidebar pending badge updates in real time
+    try {
+      if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "creatives:status-change", itemId, status: val }, "*");
+      }
+    } catch (e) { /* postMessage to a different origin may throw; safe to ignore */ }
   };
 
   const setItemStatus = async (itemId, newStatus) => {
@@ -820,6 +900,15 @@ export default function ClientReview({ projectId: serverProjectId }) {
                     <span style={{ ...hd, fontSize: 22, color: G.text }}>{script.title}</span>
                     <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
                   </div>
+                  <MoodBoardSection
+                    script={script}
+                    max={6}
+                    status={feedback[`moodboard-${script.id}`]?.status}
+                    comments={feedback[`moodboard-${script.id}`]?.comments}
+                    saving={saving[`moodboard-${script.id}`]}
+                    onSetStatus={(val) => setItemStatus(`moodboard-${script.id}`, val)}
+                    onAddComment={(text) => onAddComment(`moodboard-${script.id}`, text)}
+                  />
                   <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} saving={saving[script.id]} />
                   <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
                 </div>
@@ -850,6 +939,15 @@ export default function ClientReview({ projectId: serverProjectId }) {
                     <span style={{ ...hd, fontSize: 22, color: G.text }}>{script.title}</span>
                     <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
                   </div>
+                  <MoodBoardSection
+                    script={script}
+                    max={1}
+                    status={feedback[`moodboard-${script.id}`]?.status}
+                    comments={feedback[`moodboard-${script.id}`]?.comments}
+                    saving={saving[`moodboard-${script.id}`]}
+                    onSetStatus={(val) => setItemStatus(`moodboard-${script.id}`, val)}
+                    onAddComment={(text) => onAddComment(`moodboard-${script.id}`, text)}
+                  />
                   <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} saving={saving[script.id]} />
                   <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
                 </div>

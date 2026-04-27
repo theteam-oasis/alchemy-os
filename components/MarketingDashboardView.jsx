@@ -12,6 +12,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
+import { generateDemoMarketingData } from "@/lib/demo-marketing-data";
 
 const FONT_URL = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap";
 
@@ -2833,10 +2834,19 @@ function ProductFilterTabs({ products, active, onChange, isMobile, onAddProduct 
 // ── Main Exported Dashboard Component ──
 
 export default function MarketingDashboardView({ data: rawIncomingData, headerBadge, showOracle = true, onUploadNew, topContent, onAddProduct }) {
-  // Allow rendering an empty shell when no data has been uploaded yet
-  const incomingData = rawIncomingData && rawIncomingData.headers
+  // If no real data has been uploaded yet, fall back to a baked-in example
+  // dataset so charts/insights/podium still populate. We surface this with an
+  // "Example Data" badge so the user knows what they're looking at.
+  const hasRealData = !!(rawIncomingData && Array.isArray(rawIncomingData.rows) && rawIncomingData.rows.length > 0);
+  const isExampleData = !hasRealData;
+  const incomingData = hasRealData
     ? rawIncomingData
-    : { headers: [], rows: [], fileName: "No data yet", title: rawIncomingData?.title, clientName: rawIncomingData?.clientName };
+    : {
+        ...generateDemoMarketingData(),
+        title: rawIncomingData?.title,
+        clientName: rawIncomingData?.clientName,
+        fileName: "Example Data",
+      };
   const [view, setView] = useState("dashboard");
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -3220,41 +3230,46 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
               />
             )}
 
-            {/* Empty state when no data has been uploaded yet */}
-            {data.rows.length === 0 && (
+            {/* Example-data banner. Shown when the dashboard has no real rows yet */}
+            {isExampleData && (
               <div style={{
-                padding: "60px 32px",
-                borderRadius: 18,
-                background: C.bgSoft,
-                border: `1px dashed ${C.border}`,
-                textAlign: "center",
-                marginBottom: 28,
+                padding: "14px 18px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, #FFF7E6, #FFFAF0)",
+                border: `1px solid #FFE0A3`,
+                marginBottom: 22,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: 14, flexWrap: "wrap",
               }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: 14,
-                  background: C.bg, margin: "0 auto 16px",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                }}>
-                  <BarChart3 size={24} color={C.textSec} strokeWidth={1.6} />
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: "#FFE0A3",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <Sparkles size={16} color="#8B5A00" strokeWidth={1.8} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#8B5A00", ...body }}>
+                      Example Data
+                    </div>
+                    <div style={{ fontSize: 12, color: "#A6720B", ...body }}>
+                      You're previewing the dashboard with sample numbers. Add a product to replace this with your real data.
+                    </div>
+                  </div>
                 </div>
-                <h3 style={{ ...hd, fontSize: 24, color: C.text, marginBottom: 6 }}>
-                  No data yet
-                </h3>
-                <p style={{ fontSize: 14, color: C.textSec, ...body, marginBottom: 20, maxWidth: 420, margin: "0 auto 20px" }}>
-                  Upload a CSV to start tracking performance. Once you add a product, charts, AI insights, and trend analysis will populate automatically.
-                </p>
                 {onAddProduct && (
                   <button
                     onClick={onAddProduct}
                     style={{
-                      padding: "11px 22px", borderRadius: 980,
+                      padding: "9px 18px", borderRadius: 980,
                       background: C.accent, color: "#fff",
-                      border: "none", fontSize: 14, fontWeight: 500,
-                      cursor: "pointer", ...body,
+                      border: "none", fontSize: 13, fontWeight: 500,
+                      cursor: "pointer", ...body, flexShrink: 0,
                     }}
                   >
-                    + Add Your First Product
+                    + Add Product
                   </button>
                 )}
               </div>

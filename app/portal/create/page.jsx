@@ -40,6 +40,67 @@ function FeedbackBadge({ status, comments }) {
   );
 }
 
+// Mood board section per script. Hero scripts get up to 6 frames, UGC gets 1.
+// The team uploads reference images so the client can preview the visual direction
+// before review. The mood board itself can be approved or sent back for revision
+// (handled separately on the client side using item ID `moodboard-<scriptId>`).
+function ScriptMoodBoard({ type, script, max, onUpload, onRemove, feedback }) {
+  const inputRef = useRef(null);
+  const moodBoard = script.moodBoard || [];
+  const remaining = max - moodBoard.length;
+  const label = type === "hero" ? "Hero Mood Board" : "UGC Mood Frame";
+  const sub = max === 1 ? "1 reference frame" : `${max} reference frames`;
+  const status = feedback?.status;
+  const comments = feedback?.comments?.length || 0;
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${G.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Image size={14} color={G.textSec} />
+          <span style={{ ...mono, fontSize: 12, fontWeight: 600, color: G.text, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</span>
+          <span style={{ ...mono, fontSize: 11, color: G.textTer }}>{moodBoard.length}/{max} · {sub}</span>
+          {status && (
+            <span style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 980, fontSize: 10, fontWeight: 700, background: fbClr[status] || G.textTer, color: "#fff" }}>
+              {status === "approved" ? <CheckCircle2 size={10} /> : status === "rejected" ? <X size={10} /> : <RefreshCw size={10} />}
+              {status === "approved" ? "Approved" : status === "rejected" ? "Rejected" : "Revision"}
+            </span>
+          )}
+          {comments > 0 && (
+            <span style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 980, fontSize: 10, fontWeight: 600, background: "#F5F5F7", color: G.textSec }}>
+              <MessageSquare size={9} />{comments}
+            </span>
+          )}
+        </div>
+        {remaining > 0 && (
+          <button onClick={() => inputRef.current?.click()} style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <Upload size={12} /> Upload {max === 1 ? "frame" : `${remaining} more`}
+          </button>
+        )}
+        <input ref={inputRef} type="file" multiple={max > 1} accept="image/*" style={{ display: "none" }}
+          onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+        {moodBoard.map((img) => (
+          <div key={img.id} style={{ position: "relative", aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
+            <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            <button onClick={() => onRemove(img.id)} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+        {moodBoard.length === 0 && (
+          <div style={{ aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: G.textTer, cursor: "pointer", gridColumn: max === 1 ? "auto" : "1 / -1" }}
+            onClick={() => inputRef.current?.click()}>
+            <Upload size={18} />
+            <span style={{ ...mono, fontSize: 11 }}>{max === 1 ? "Add 1 reference frame" : `Add up to ${max} frames`}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CreatePage() {
   return <Suspense fallback={<div style={{ ...mono, minHeight: "100vh", background: G.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: G.textTer }}>Loading...</p></div>}><CreateProject /></Suspense>;
 }
@@ -117,6 +178,37 @@ function CreateProject() {
   const removeScript = (type, id) => {
     const setter = type === "hero" ? setHeroScripts : setUgcScripts;
     setter(prev => prev.filter(s => s.id !== id));
+  };
+
+  // Upload mood board images for a specific script. Hero scripts allow 6, UGC allows 1.
+  const uploadScriptMoodBoard = async (type, scriptId, files) => {
+    const max = type === "hero" ? 6 : 1;
+    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
+    const arr = Array.from(files);
+    if (arr.length === 0) return;
+    const newImages = [];
+    for (const file of arr) {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("projectId", projectId);
+      const res = await fetch("/api/portal/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (data?.url) newImages.push({ id: crypto.randomUUID(), url: data.url, name: data.name });
+    }
+    setter(prev => prev.map(s => {
+      if (s.id !== scriptId) return s;
+      const existing = s.moodBoard || [];
+      const combined = [...existing, ...newImages].slice(0, max);
+      return { ...s, moodBoard: combined };
+    }));
+  };
+
+  const removeMoodBoardImage = (type, scriptId, imageId) => {
+    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
+    setter(prev => prev.map(s => {
+      if (s.id !== scriptId) return s;
+      return { ...s, moodBoard: (s.moodBoard || []).filter(img => img.id !== imageId) };
+    }));
   };
 
   const saveProject = async () => {
@@ -269,6 +361,11 @@ function CreateProject() {
                   </div>
                   <textarea value={s.content} onChange={(e) => updateScript("hero", s.id, e.target.value)} placeholder="Write or paste your hero video script here..."
                     style={{ ...inputStyle, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} />
+                  <ScriptMoodBoard type="hero" script={s} max={6}
+                    onUpload={(files) => uploadScriptMoodBoard("hero", s.id, files)}
+                    onRemove={(imgId) => removeMoodBoardImage("hero", s.id, imgId)}
+                    feedback={feedback[`moodboard-${s.id}`]}
+                  />
                   {bd.sections.length > 0 && (
                     <div style={{ marginTop: 12, borderTop: `1px solid ${G.border}`, paddingTop: 12 }}>
                       <p style={{ ...mono, fontSize: 11, fontWeight: 600, color: G.textTer, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Script Breakdown</p>
@@ -318,6 +415,11 @@ function CreateProject() {
                   </div>
                   <textarea value={s.content} onChange={(e) => updateScript("ugc", s.id, e.target.value)} placeholder="Write or paste your UGC video script here..."
                     style={{ ...inputStyle, minHeight: 160, resize: "vertical", lineHeight: 1.7 }} />
+                  <ScriptMoodBoard type="ugc" script={s} max={1}
+                    onUpload={(files) => uploadScriptMoodBoard("ugc", s.id, files)}
+                    onRemove={(imgId) => removeMoodBoardImage("ugc", s.id, imgId)}
+                    feedback={feedback[`moodboard-${s.id}`]}
+                  />
                   {bd.sections.length > 0 && (
                     <div style={{ marginTop: 12, borderTop: `1px solid ${G.border}`, paddingTop: 12 }}>
                       <p style={{ ...mono, fontSize: 11, fontWeight: 600, color: G.textTer, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Script Breakdown</p>
