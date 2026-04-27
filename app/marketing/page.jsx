@@ -60,7 +60,7 @@ function parseNum(v) {
 }
 
 function fmt(n, prefix = "") {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (Math.abs(n) >= 1e6) return prefix + (n / 1e6).toFixed(1) + "M";
   if (Math.abs(n) >= 1e3) return prefix + (n / 1e3).toFixed(1) + "K";
   if (n % 1 !== 0) return prefix + n.toFixed(2);
@@ -436,7 +436,7 @@ export default function MarketingDashboard() {
           <div style={{ width: 1, height: 24, background: C.borderLight }} />
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.textSec, fontSize: 14, fontWeight: 500 }}>
             <BarChart3 size={18} strokeWidth={1.5} />
-            Marketing Dashboard
+            Analytics
           </div>
         </div>
         {data && (

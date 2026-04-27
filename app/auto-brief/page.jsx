@@ -35,7 +35,7 @@ export default function AutoBriefPage() {
   useEffect(()=>{
     supabase.from('clients').select('id,name').order('name').then(({data})=>{
       if(!data)return
-      // Deduplicate by name — keep first occurrence (alphabetically sorted)
+      // Deduplicate by name. keep first occurrence (alphabetically sorted)
       const seen=new Set()
       const deduped=data.filter(c=>{
         const key=c.name?.trim().toLowerCase()
@@ -310,7 +310,7 @@ export default function AutoBriefPage() {
 
           {error&&<div className="error-bar">⚠ {error}</div>}
 
-          {/* Client selector — required */}
+          {/* Client selector. required */}
           <div className="section">
             <label className="label">Client <em>required</em></label>
             {clients.length===0?(
@@ -422,7 +422,7 @@ export default function AutoBriefPage() {
         <div className="run-container">
           <div className="run-header">
             <h1 className="run-title">Building your brief</h1>
-            {analysis&&<p className="run-sub">Analyzing <span className="run-brand">{analysis.brandName}</span> — generating 4 Super Bowl-caliber concepts</p>}
+            {analysis&&<p className="run-sub">Analyzing <span className="run-brand">{analysis.brandName}</span>. generating 4 Super Bowl-caliber concepts</p>}
           </div>
 
           <div className="progress-log">
@@ -437,7 +437,7 @@ export default function AutoBriefPage() {
               <div key={i} className={`cc ${cs.status}`}>
                 {cs.status==='building'&&<div className="cc-sweep"/>}
                 <p className="cc-num">Concept {i+1}</p>
-                <p className="cc-title">{cs.title||'—'}</p>
+                <p className="cc-title">{cs.title||'-'}</p>
                 <p className="cc-status" style={{color:cs.status==='error'?'#dc2626':cs.status==='done'?'#111111':'#aaaaaa',animation:cs.status==='building'?'pulse 1.5s infinite':'none'}}>
                   {cs.status==='waiting'&&'○ Waiting'}
                   {cs.status==='building'&&'● Building...'}

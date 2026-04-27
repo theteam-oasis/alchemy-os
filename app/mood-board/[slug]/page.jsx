@@ -28,7 +28,7 @@ export async function generateMetadata({ params }) {
 
   const brandName = data.board.brand_name || slug;
   const firstImage = data.images[0]?.url || null;
-  const title = `${brandName} — Mood Board`;
+  const title = `${brandName}. Mood Board`;
   const description = `Creative mood board for ${brandName}. Photography direction, location, and visual references.`;
 
   return {

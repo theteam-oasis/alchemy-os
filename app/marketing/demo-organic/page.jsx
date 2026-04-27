@@ -121,7 +121,7 @@ function generateOrganicData() {
     ],
     rows,
     fileName: "Organic Social - Q1 2026.csv",
-    title: "Organic Social — Q1 2026 Performance",
+    title: "Organic Social. Q1 2026 Performance",
     clientName: "Demo Client",
   };
 }

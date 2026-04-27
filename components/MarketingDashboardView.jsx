@@ -24,7 +24,7 @@ const C = {
   success: "#34C759", warning: "#FF9500", danger: "#FF3B30", info: "#007AFF",
 };
 
-// iOS system colors — same palette as the metric badges (clean, modern, airy)
+// iOS system colors. same palette as the metric badges (clean, modern, airy)
 const CHART_COLORS = [
   "#34C759", // green
   "#FF3B30", // red
@@ -36,7 +36,7 @@ const CHART_COLORS = [
   "#FFCC00", // yellow
 ];
 
-// Airy 3-stop gradients matching the iOS badge aesthetic — light → signature → signature
+// Airy 3-stop gradients matching the iOS badge aesthetic. light → signature → signature
 const CHART_GRADIENTS = [
   ["#A7F3D0", "#34C759", "#30D158"], // mint → iOS green
   ["#FFB5B0", "#FF3B30", "#FF453A"], // coral → iOS red
@@ -51,7 +51,7 @@ const CHART_GRADIENTS = [
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 const body = { fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" };
 
-// Animated starfield sprinkled across the mobile Oracle button — gold/blue/pink/white particles
+// Animated starfield sprinkled across the mobile Oracle button. gold/blue/pink/white particles
 const STAR_COLORS = [
   { c: "#FCD34D", glow: "rgba(252,211,77,0.9)" },   // gold
   { c: "#93C5FD", glow: "rgba(147,197,253,0.9)" },  // sky blue
@@ -67,7 +67,7 @@ const ORACLE_STARS = Array.from({ length: 36 }, (_, i) => {
   const y = ((i * 41) % 84) + 8;
   return {
     x, y,
-    size: 8 + (i % 5) * 2, // 8, 10, 12, 14, 16px — noticeably bigger
+    size: 8 + (i % 5) * 2, // 8, 10, 12, 14, 16px. noticeably bigger
     color: palette.c,
     glow: palette.glow,
     duration: 1.8 + ((i * 0.19) % 2.6), // 1.8–4.4s
@@ -105,7 +105,7 @@ function parseNum(v) {
 }
 
 function fmt(n, prefix = "") {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (Math.abs(n) >= 1e6) return prefix + (n / 1e6).toFixed(1) + "M";
   if (Math.abs(n) >= 1e3) return prefix + (n / 1e3).toFixed(1) + "K";
   if (n % 1 !== 0) return prefix + n.toFixed(2);
@@ -202,7 +202,7 @@ function StatCard({ label, value, change, icon: Icon, prefix, suffix, delay, act
         <Icon size={17} color={active ? C.text : C.textTer} strokeWidth={1.7} />
       </div>
 
-      {/* Value + label stack — full value always visible */}
+      {/* Value + label stack. full value always visible */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
         <div style={{
           fontSize: 20, fontWeight: 700,
@@ -430,7 +430,7 @@ function buildRichContext({ data, types, stats, overallRoas, totalRevenue, total
     });
   }
 
-  // Deep category breakdown — top and bottom performers
+  // Deep category breakdown. top and bottom performers
   if (categoryCol && categoryData?.length) {
     const ci = data.headers.indexOf(categoryCol);
     const spendIdx = data.headers.indexOf("Spend");
@@ -507,7 +507,7 @@ function buildRichContext({ data, types, stats, overallRoas, totalRevenue, total
     lines.push("");
     lines.push(`=== BY ${otherCat.toUpperCase()} ===`);
     Object.entries(grouped).sort((a, b) => b[1].revenue - a[1].revenue).forEach(([name, m]) => {
-      const roas = m.spend > 0 ? (m.revenue / m.spend).toFixed(2) : "—";
+      const roas = m.spend > 0 ? (m.revenue / m.spend).toFixed(2) : "-";
       const spendShare = totalSpend > 0 ? ((m.spend / totalSpend) * 100).toFixed(0) : "0";
       const revShare = totalRevenue > 0 ? ((m.revenue / totalRevenue) * 100).toFixed(0) : "0";
       lines.push(`• ${name}: spend $${Math.round(m.spend).toLocaleString()} (${spendShare}%), revenue $${Math.round(m.revenue).toLocaleString()} (${revShare}%), ROAS ${roas}x`);
@@ -633,7 +633,7 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
       });
       const json = await res.json();
       if (json.error) {
-        setMessages([...newHistory, { role: "assistant", content: `Sorry — ${json.error}` }]);
+        setMessages([...newHistory, { role: "assistant", content: `Sorry. ${json.error}` }]);
       } else {
         setMessages([...newHistory, { role: "assistant", content: json.answer }]);
       }
@@ -676,7 +676,7 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
           <span>Back to insights</span>
         </button>
       )}
-      {/* Messages area — only when expanded */}
+      {/* Messages area. only when expanded */}
       {expanded && (
         <div ref={scrollRef} style={{
           flex: 1, overflowY: "auto", padding: "12px",
@@ -730,7 +730,7 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
         </div>
       )}
 
-      {/* Suggestion chips — shown above the input when chat is empty and expanded */}
+      {/* Suggestion chips. shown above the input when chat is empty and expanded */}
       {expanded && messages.length === 0 && !loading && (
         <div style={{
           padding: "12px 14px 4px",
@@ -756,7 +756,7 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
         </div>
       )}
 
-      {/* Input row — always visible, larger for easy typing */}
+      {/* Input row. always visible, larger for easy typing */}
       <form
         onSubmit={e => { e.preventDefault(); send(); }}
         style={{
@@ -766,7 +766,7 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
           display: "flex", gap: 10, alignItems: "center",
         }}
       >
-        {/* Back button — solid black, collapses chat when full-height, closes the sheet otherwise */}
+        {/* Back button. solid black, collapses chat when full-height, closes the sheet otherwise */}
         <button type="button"
           onClick={fullHeight ? onToggle : onCloseSheet}
           style={{
@@ -865,7 +865,7 @@ function Oracle({ open, onToggle, data, stats, overallRoas, totalRevenue, totalS
       });
       const json = await res.json();
       if (json.error) {
-        setMessages([...newHistory, { role: "assistant", content: `Sorry — ${json.error}` }]);
+        setMessages([...newHistory, { role: "assistant", content: `Sorry. ${json.error}` }]);
       } else {
         setMessages([...newHistory, { role: "assistant", content: json.answer }]);
       }
@@ -1038,7 +1038,7 @@ function Oracle({ open, onToggle, data, stats, overallRoas, totalRevenue, totalS
           <div style={{
             padding: "0 16px 10px", fontSize: 10, color: C.textTer,
             textAlign: "center", ...body,
-          }}>Oracle can make mistakes — verify important numbers in the dashboard.</div>
+          }}>Oracle can make mistakes. verify important numbers in the dashboard.</div>
         </div>
       )}
     </>
@@ -1075,7 +1075,7 @@ function HeroSummary({ summary, overallRoas, totalRevenue, totalSpend, loading, 
   const roasPerDollar = overallRoas ? `$${overallRoas}` : null;
 
   if (compact) {
-    // Sidebar layout: tighter vertical stack (no health ring — keeps it clean)
+    // Sidebar layout: tighter vertical stack (no health ring. keeps it clean)
     return (
       <div style={{
         marginBottom: 0,
@@ -1348,7 +1348,7 @@ function TrophyIcon({ size = 24, color = C.text }) {
 }
 
 function Laurel({ size = 48, color = C.text, flip = false }) {
-  // Clean, elegant laurel branch — a curved spine with paired leaves
+  // Clean, elegant laurel branch. a curved spine with paired leaves
   // flip=true mirrors it to the right side
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none"
@@ -1727,7 +1727,7 @@ function CopilotSuggestions({ opportunities, warnings, loading, error, onAskOrac
         </div>
       )}
 
-      {/* Row 1 — Opportunities */}
+      {/* Row 1. Opportunities */}
       <div style={{ marginBottom: warnings.length || loading ? 20 : 0 }}>
         <SectionHeader
           icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>}
@@ -1746,7 +1746,7 @@ function CopilotSuggestions({ opportunities, warnings, loading, error, onAskOrac
         )}
       </div>
 
-      {/* Row 2 — Warnings */}
+      {/* Row 2. Warnings */}
       {(warnings.length > 0 || (loading && opportunities.length === 0)) && (
         <div>
           <SectionHeader
@@ -1773,7 +1773,7 @@ function CopilotSuggestions({ opportunities, warnings, loading, error, onAskOrac
           background: C.bgSoft, border: `1px solid ${C.borderLight}`,
           fontSize: 13, color: C.textSec, ...body,
         }}>
-          Couldn't generate insights right now — {error}
+          Couldn't generate insights right now. {error}
         </div>
       )}
     </div>
@@ -1853,7 +1853,7 @@ function FluidHandle({ onOpen, totalItems }) {
             ))}
           </span>
 
-          {/* Sparkle icon — next to the text */}
+          {/* Sparkle icon. next to the text */}
           <span style={{ position: "relative", zIndex: 1, display: "inline-flex" }}>
             <Sparkles size={17} color="#fff" strokeWidth={2} />
           </span>
@@ -1880,7 +1880,7 @@ function FluidHandle({ onOpen, totalItems }) {
     );
   }
 
-  // Geometry — simple rounded rail, arrow lives inside
+  // Geometry. simple rounded rail, arrow lives inside
   const railW = 26;
   const totalW = railW;
   const railLeftX = 0;
@@ -1935,7 +1935,7 @@ function FluidHandle({ onOpen, totalItems }) {
         <ChevronLeft size={14} color="#fff" strokeWidth={2.4} />
       </div>
 
-      {/* Starfield filling the full rail — more density, refined white starlight */}
+      {/* Starfield filling the full rail. more density, refined white starlight */}
       <div style={{
         position: "absolute",
         top: 0, bottom: 0, right: 0,
@@ -1975,7 +1975,7 @@ function FluidHandle({ onOpen, totalItems }) {
         })}
       </div>
 
-      {/* Oracle text — centered vertically, shimmering */}
+      {/* Oracle text. centered vertically, shimmering */}
       <div style={{
         position: "absolute",
         top: 0, bottom: 0, right: 0,
@@ -2008,7 +2008,7 @@ function FluidHandle({ onOpen, totalItems }) {
         }}>Oracle</div>
       </div>
 
-      {/* Live dot near the bottom of the rail — always pulsing */}
+      {/* Live dot near the bottom of the rail. always pulsing */}
       <div style={{
         position: "absolute",
         bottom: 18, right: 0,
@@ -2073,7 +2073,7 @@ function CollapseHandle({ onToggle }) {
         filter: "drop-shadow(-6px 0 22px rgba(0,0,0,0.18))",
       }}
     >
-      {/* Rounded rail shape — rounded LEFT corners only (mirrors Oracle rail) */}
+      {/* Rounded rail shape. rounded LEFT corners only (mirrors Oracle rail) */}
       <svg
         width={railW} height={railHeight}
         viewBox={`0 0 ${railW} ${railHeight}`}
@@ -2118,7 +2118,7 @@ function CollapseHandle({ onToggle }) {
         })}
       </div>
 
-      {/* Chevron RIGHT — at the top of the rail (mirrors Oracle rail's chevron but points the other way) */}
+      {/* Chevron RIGHT. at the top of the rail (mirrors Oracle rail's chevron but points the other way) */}
       <div style={{
         position: "absolute",
         top: 18, left: 0,
@@ -2216,7 +2216,7 @@ function InsightsSidebar({
       setSheetFull(false);
       setDragY(0);
     } else if (isMobile) {
-      // On mobile, open directly at full height — no manual drag needed
+      // On mobile, open directly at full height. no manual drag needed
       setSheetFull(true);
     }
   }, [open, isMobile]);
@@ -2274,7 +2274,7 @@ function InsightsSidebar({
               0 0 0 10px rgba(255,255,255,0.08);
           }
         }
-        /* Soft, slow breath — calm and continuous */
+        /* Soft, slow breath. calm and continuous */
         @keyframes oracleSoftPulse {
           0%, 100% {
             transform: scale(1);
@@ -2295,7 +2295,7 @@ function InsightsSidebar({
           70% { opacity: 0; transform: scale(1.18); border-width: 1px; }
           100% { opacity: 0; transform: scale(1.22); border-width: 1px; }
         }
-        /* Bigger glass ripples — scale way beyond the button, fade slowly */
+        /* Bigger glass ripples. scale way beyond the button, fade slowly */
         @keyframes oracleRipple {
           0% {
             opacity: 0;
@@ -2313,7 +2313,7 @@ function InsightsSidebar({
             transform: scale(2.1);
           }
         }
-        /* Main sparkle icon — gently floats in a figure-8 path */
+        /* Main sparkle icon. gently floats in a figure-8 path */
         @keyframes sparkleFloat {
           0%, 100% {
             transform: translate(0, 0) rotate(0deg) scale(1);
@@ -2332,7 +2332,7 @@ function InsightsSidebar({
             filter: drop-shadow(0 0 5px rgba(251,207,232,0.55));
           }
         }
-        /* Tiny particles orbiting around the sparkle — each traces a different path */
+        /* Tiny particles orbiting around the sparkle. each traces a different path */
         @keyframes particleA {
           0%, 100% { opacity: 0; transform: translate(0, 0) scale(0.5); }
           20% { opacity: 1; transform: translate(-3px, -6px) scale(1); }
@@ -2368,7 +2368,7 @@ function InsightsSidebar({
           60% { opacity: 0.6; transform: scale(0.85) rotate(150deg) translateY(2px); }
           85% { opacity: 0; transform: scale(0.5) rotate(240deg) translateY(-1px); }
         }
-        /* Diagonal translucent shimmer wave — moves exactly one tile for seamless loop */
+        /* Diagonal translucent shimmer wave. moves exactly one tile for seamless loop */
         @keyframes oracleShimmer {
           0% { background-position: 0 0; }
           100% { background-position: -1200px -1200px; }
@@ -2519,7 +2519,7 @@ function InsightsSidebar({
           {/* Mobile: grabber pill with bigger tap area + close X button */}
           {isMobile ? (
             <>
-              {/* Grabber — drag down to close, tap also closes */}
+              {/* Grabber. drag down to close, tap also closes */}
               <div
                 onClick={onToggle}
                 onTouchStart={onDragStart}
@@ -2543,7 +2543,7 @@ function InsightsSidebar({
                   background: C.border,
                 }} />
               </div>
-              {/* Close X button — top right, always visible and very tappable */}
+              {/* Close X button. top right, always visible and very tappable */}
               <button onClick={onToggle}
                 style={{
                   position: "absolute", top: 14, right: 14,
@@ -2610,7 +2610,7 @@ function InsightsSidebar({
             )}
           </div>
 
-          {/* Scrollable insights content — hidden when chat is open (mobile + desktop) */}
+          {/* Scrollable insights content. hidden when chat is open (mobile + desktop) */}
           {!oracleExpanded && (
             <div style={{
               flex: 1, overflowY: "auto",
@@ -2832,7 +2832,11 @@ function ProductFilterTabs({ products, active, onChange, isMobile, onAddProduct 
 
 // ── Main Exported Dashboard Component ──
 
-export default function MarketingDashboardView({ data: incomingData, headerBadge, showOracle = true, onUploadNew, topContent, onAddProduct }) {
+export default function MarketingDashboardView({ data: rawIncomingData, headerBadge, showOracle = true, onUploadNew, topContent, onAddProduct }) {
+  // Allow rendering an empty shell when no data has been uploaded yet
+  const incomingData = rawIncomingData && rawIncomingData.headers
+    ? rawIncomingData
+    : { headers: [], rows: [], fileName: "No data yet", title: rawIncomingData?.title, clientName: rawIncomingData?.clientName };
   const [view, setView] = useState("dashboard");
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -2892,11 +2896,6 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
     const checkMobile = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
-      // Auto-open sidebar only on desktop, never on mobile
-      if (!mobile && !window.__insightsInitialized) {
-        setInsightsOpen(true);
-        window.__insightsInitialized = true;
-      }
     };
     checkMobile();
     window.addEventListener("resize", checkMobile);
@@ -3033,7 +3032,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
     }));
   })();
 
-  // Fetch AI insights — 3 parallel requests so each appears as soon as it's ready.
+  // Fetch AI insights. 3 parallel requests so each appears as soon as it's ready.
   // Refetches when the active product filter changes.
   useEffect(() => {
     if (!data.rows?.length) return;
@@ -3067,7 +3066,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
       }
     }).catch(e => setSuggestionsError(e.message)).finally(() => setInsightsLoading(false));
 
-    // Patterns — only if the data has at least one of: Asset Type, Hook, Placement
+    // Patterns. only if the data has at least one of: Asset Type, Hook, Placement
     const hasCreativeDims = ["Asset Type", "Hook", "Placement"].some(c => data.headers.includes(c));
     if (hasCreativeDims) {
       setPatternsLoading(true);
@@ -3124,7 +3123,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
               <div style={{ width: 1, height: 24, background: C.borderLight }} />
               <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.textSec, fontSize: 14, fontWeight: 500 }}>
                 <BarChart3 size={18} strokeWidth={1.5} />
-                Marketing Dashboard
+                Analytics
               </div>
             </>
           )}
@@ -3198,14 +3197,14 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
           <div>
             <div style={{ marginBottom: isMobile ? 20 : 28 }}>
               <h2 style={{ ...hd, fontSize: isMobile ? 26 : 36, color: C.text, marginBottom: 6, lineHeight: 1.15 }}>
-                {data.title || `${data.clientName ? data.clientName + " — " : ""}Campaign Performance`}
+                {data.title || `${data.clientName ? data.clientName + ". " : ""}Campaign Performance`}
               </h2>
               <p style={{ fontSize: isMobile ? 13 : 15, color: C.textSec, ...body }}>
                 {data.fileName} · {data.rows.length} records · {selectedMetrics.length} metrics tracked
               </p>
             </div>
 
-            {/* Product filter tabs — visible only when data has a Product column */}
+            {/* Product filter tabs. visible only when data has a Product column */}
             {productList.length > 0 && (
               <ProductFilterTabs
                 products={productList}
@@ -3215,7 +3214,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
                 onAddProduct={() => {
                   if (onAddProduct) onAddProduct();
                   else if (typeof window !== "undefined") {
-                    alert("Demo only — Add Product is wired up on saved client dashboards.");
+                    alert("Demo only. Add Product is wired up on saved client dashboards.");
                   }
                 }}
               />
@@ -3278,7 +3277,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
                             const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
                             return (
                               <g key={m}>
-                                {/* Light airy fill — iOS-style */}
+                                {/* Light airy fill. iOS-style */}
                                 <linearGradient id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="0%" stopColor={g[1]} stopOpacity={0.28} />
                                   <stop offset="100%" stopColor={g[1]} stopOpacity={0} />
@@ -3314,7 +3313,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
                       Select metrics below to display on the chart
                     </div>
                   )}
-                  {/* Metric selector — directly under the chart */}
+                  {/* Metric selector. directly under the chart */}
                   <MetricToggleBar
                     metrics={[...numericCols]}
                     selected={selectedMetrics}
@@ -3327,7 +3326,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
                 <ChartCard title={`Performance by ${categoryCol}`} subtitle="Top performers" delay={0.2} mounted={mounted} tight={isMobile}>
                   <ResponsiveContainer width="100%" height={isMobile ? 280 : 300}>
                     {isMobile ? (
-                      /* Horizontal bar on mobile — names read left-to-right, no truncation */
+                      /* Horizontal bar on mobile. names read left-to-right, no truncation */
                       <BarChart
                         data={categoryData.slice(0, 6)}
                         layout="vertical"
@@ -3428,7 +3427,7 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
                       </PieChart>
                     </ResponsiveContainer>
 
-                    {/* Center label — clean Inter, not serif, to match the stat cards */}
+                    {/* Center label. clean Inter, not serif, to match the stat cards */}
                     <div style={{
                       position: "absolute",
                       top: isMobile ? "38%" : "50%",
@@ -3506,14 +3505,14 @@ export default function MarketingDashboardView({ data: incomingData, headerBadge
               )}
             </div>
 
-            {/* Winners Podium — below the charts */}
+            {/* Winners Podium. below the charts */}
             {winners.length >= 2 && (
               <div style={{ marginTop: 28 }}>
                 <WinnersPodium winners={winners} categoryCol={categoryCol} isMobile={isMobile} />
               </div>
             )}
 
-            {/* Creative Patterns — AI-detected winning formats / hooks / placements */}
+            {/* Creative Patterns. AI-detected winning formats / hooks / placements */}
             <CreativePatterns
               patterns={creativePatterns}
               loading={patternsLoading}

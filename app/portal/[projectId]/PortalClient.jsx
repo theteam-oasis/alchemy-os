@@ -296,10 +296,10 @@ export default function ClientReview({ projectId: serverProjectId }) {
   const [rejectReason, setRejectReason] = useState("");
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
 
-  // Check sessionStorage on mount
+  // Check localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem(`portal_auth_${projectId}`);
+      const stored = localStorage.getItem(`portal_auth_${projectId}`);
       if (stored === "true") setAuthed(true);
     }
   }, [projectId]);
@@ -316,6 +316,12 @@ export default function ClientReview({ projectId: serverProjectId }) {
       if (authed) {
         setProject(data);
         fetch(`/api/portal/feedback?projectId=${projectId}`).then(r => r.json()).then(fb => setFeedback(fb));
+        // If portal is linked to a client, propagate auth to the client hub so the
+        // client doesn't have to log in again to access the unified BI hub.
+        if (typeof window !== "undefined" && data.clientName) {
+          const clientSlug = data.clientName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          if (clientSlug) localStorage.setItem(`client_hub_auth_${clientSlug}`, "true");
+        }
       }
     }).catch(() => setNotFound(true));
   }, [projectId, authed]);
@@ -330,7 +336,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
     if (valid) {
       setAuthed(true);
       setAuthError(false);
-      sessionStorage.setItem(`portal_auth_${projectId}`, "true");
+      localStorage.setItem(`portal_auth_${projectId}`, "true");
     } else {
       setAuthError(true);
     }

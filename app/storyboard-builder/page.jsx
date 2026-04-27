@@ -84,7 +84,7 @@ export default function StoryboardBuilder() {
     else setEnvLoading(false)
   }
 
-  // Lock is purely synchronous — no uploads, no async, no waiting
+  // Lock is purely synchronous. no uploads, no async, no waiting
   function lockAsset(type) {
     if (type === 'avatar') {
       if (!avatarImage) return
@@ -281,7 +281,7 @@ export default function StoryboardBuilder() {
       <div className="main">
         <p className="page-eyebrow">Storyboard Builder</p>
         <h1 className="page-title"><strong>Scene by scene.</strong> Your script.</h1>
-        <p className="page-sub">Generate and lock your avatar and environment, upload your product, paste your script — then generate each scene with 2 options to choose from.</p>
+        <p className="page-sub">Generate and lock your avatar and environment, upload your product, paste your script. then generate each scene with 2 options to choose from.</p>
 
         <div className="format-row">
           <button className={`fmt-btn ${aspectRatio==='9:16'?'active':''}`} onClick={()=>setAspectRatio('9:16')}>▮ 9:16 Vertical</button>
@@ -330,7 +330,7 @@ export default function StoryboardBuilder() {
                   </div>
                 </>}
                 {avatarLocked&&<>
-                  <p className="lock-hint">✓ Locked — used in all scenes</p>
+                  <p className="lock-hint">✓ Locked. used in all scenes</p>
                   <button className="btn-unlock" onClick={()=>setAvatarLocked(false)}>Unlock to edit</button>
                 </>}
               </div>
@@ -357,7 +357,7 @@ export default function StoryboardBuilder() {
                   </div>
                 </>}
                 {envLocked&&<>
-                  <p className="lock-hint">✓ Locked — used in all scenes</p>
+                  <p className="lock-hint">✓ Locked. used in all scenes</p>
                   <button className="btn-unlock" onClick={()=>setEnvLocked(false)}>Unlock to edit</button>
                 </>}
               </div>

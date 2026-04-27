@@ -252,7 +252,7 @@ export default function BriefPage({ params }) {
       <div className="brief-shell">
         {/* Header */}
         <div className="brief-header">
-          <p className="brief-agency">Alchemy — Campaign Brief</p>
+          <p className="brief-agency">Alchemy. Campaign Brief</p>
           <h1 className="brief-client-name">{client?.name || 'Client'}</h1>
           <p className="brief-subtitle">
             {campaigns.length} concept{campaigns.length !== 1 ? 's' : ''} prepared for your review
@@ -266,7 +266,7 @@ export default function BriefPage({ params }) {
                 const status = actionState[c.id] || c.client_status || 'pending'
                 return (
                   <button key={c.id} className={`concept-tab ${activeConcept === i ? 'active' : ''}`} onClick={() => setActiveConcept(i)}>
-                    Concept {i + 1}{c.chosen_concept?.title ? ` — ${c.chosen_concept.title}` : ''}
+                    Concept {i + 1}{c.chosen_concept?.title ? `. ${c.chosen_concept.title}` : ''}
                     <span className={`concept-tab-status ${status !== 'pending' ? `status-${status}` : 'status-pending'}`} />
                   </button>
                 )
@@ -424,7 +424,7 @@ export default function BriefPage({ params }) {
           {/* Storyboard */}
           {scenes.length > 0 && (
             <div className="brief-section">
-              <p className="section-label">Full Storyboard — {scenes.length} Scenes</p>
+              <p className="section-label">Full Storyboard. {scenes.length} Scenes</p>
               <div className={`storyboard-grid ${isVertical ? 'portrait' : 'landscape'}`}>
                 {scenes.map((scene, i) => (
                   <div key={i} className="storyboard-tile">

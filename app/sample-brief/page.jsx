@@ -287,7 +287,7 @@ export default function SampleBriefPage() {
               <div key={i} className={`cc ${cp.status}`}>
                 {cp.status==='building'&&<div className="cc-sweep"/>}
                 <p className="cc-num">Concept {i+1}</p>
-                <p className="cc-title">{cp.title||'—'}</p>
+                <p className="cc-title">{cp.title||'-'}</p>
                 <p style={{fontSize:11,color:cp.status==='error'?'#dc2626':cp.status==='done'?'#111111':'#aaaaaa',animation:cp.status==='building'?'pulse 1.5s infinite':'none'}}>
                   {cp.status==='waiting'&&'○ Waiting'}{cp.status==='building'&&'● Generating...'}{cp.status==='done'&&'✓ Complete'}{cp.status==='error'&&'✕ Error'}
                 </p>

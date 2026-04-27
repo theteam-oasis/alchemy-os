@@ -17,23 +17,23 @@ const ACCOUNTS = [
   {
     name: "The Risk Report",
     handle: "@theriskreport",
-    description: "Affordability & insurance narrative — delivered with authority.",
+    description: "Affordability & insurance narrative. delivered with authority.",
     icon: Tv,
     avatar: {
       type: "AI Influencer",
-      persona: "Female AI influencer — man-on-the-street newscaster",
+      persona: "Female AI influencer. man-on-the-street newscaster",
       traits: ["Polished & camera-ready", "Confident on-location presence", "News anchor energy with street-level relatability", "Professional but approachable"],
     },
     categories: [
       { name: "Informational / Educational", desc: "Data-backed posts, stat cards, policy explainer carousels" },
       { name: "Infographics w/ Commentary", desc: "Visual breakdowns of rates, costs, and risk data with voiceover or caption analysis" },
-      { name: "News", desc: "Timely coverage of energy policy, rate hikes, insurance shifts — delivered fast" },
-      { name: "Real, Personal Stories", desc: "Testimonials and real-life impacts — families, small businesses, everyday people" },
+      { name: "News", desc: "Timely coverage of energy policy, rate hikes, insurance shifts. delivered fast" },
+      { name: "Real, Personal Stories", desc: "Testimonials and real-life impacts. families, small businesses, everyday people" },
       { name: "Wildcard / Experimentation", desc: "Format-breaking content to test new hooks and engagement styles" },
     ],
     tone: ["Authoritative", "Credible", "Direct", "Polished", "Urgently informative"],
     toneExample: '"Your energy bill just changed. Here\'s what they didn\'t tell you."',
-    demographic: { primary: "Elite — Professional, Business & Media", age: "35-55", leaning: "Informed decision-makers", geo: "National" },
+    demographic: { primary: "Elite. Professional, Business & Media", age: "35-55", leaning: "Informed decision-makers", geo: "National" },
     visual: {
       aesthetic: "Clean, editorial, news-studio feel. High contrast typography, dark backgrounds with data overlays. Think Bloomberg meets street journalism.",
       formats: ["Talking-head reels on location", "Stat card carousels", "News ticker-style stories", "Interview-style testimonials", "Data visualization posts"],
@@ -42,7 +42,7 @@ const ACCOUNTS = [
   {
     name: "The Real Life Feed",
     handle: "@thereallifefeed",
-    description: "Experimental channel — creative, bold, and unapologetically different.",
+    description: "Experimental channel. creative, bold, and unapologetically different.",
     icon: Heart,
     avatar: {
       type: "AI Influencer",
@@ -53,35 +53,35 @@ const ACCOUNTS = [
       { name: "Extremely Creative / Off the Wall", desc: "Unexpected formats, surreal humor, pattern-interrupts that stop the scroll" },
       { name: "Humorous", desc: "Sketch-style comedy, relatable mom moments tied to energy and cost-of-living" },
       { name: "Eye-Catching / Trend-Based", desc: "Trending audio, viral formats, and meme templates adapted to the energy narrative" },
-      { name: "Wildcard / Experimentation", desc: "Pure creative freedom — test what resonates, iterate fast" },
+      { name: "Wildcard / Experimentation", desc: "Pure creative freedom. test what resonates, iterate fast" },
     ],
     tone: ["Playful", "Warm", "Surprising", "Relatable", "Unfiltered"],
     toneExample: '"Nobody told me adulting meant crying over my electricity bill in the Target parking lot."',
-    demographic: { primary: "Young Moderate", age: "22-35", leaning: "Moderate / apolitical", geo: "National — suburban & urban" },
+    demographic: { primary: "Young Moderate", age: "22-35", leaning: "Moderate / apolitical", geo: "National. suburban & urban" },
     visual: {
-      aesthetic: "Bright, organic, lifestyle-forward. Natural lighting, warm tones, casual & approachable. Feels like scrolling a friend's feed — not a brand.",
+      aesthetic: "Bright, organic, lifestyle-forward. Natural lighting, warm tones, casual & approachable. Feels like scrolling a friend's feed. not a brand.",
       formats: ["Trend-jacking reels", "Comedy sketches", "Day-in-the-life stories", "Reaction-style content", "Meme carousels"],
     },
   },
   {
     name: "The Numbers Behind It",
     handle: "@thenumbersbehindit",
-    description: "All narratives — data meets storytelling, delivered raw.",
+    description: "All narratives. data meets storytelling, delivered raw.",
     icon: BarChart3,
     avatar: {
       type: "AI Influencer",
-      persona: "Blue collar, midwest American male — talks like a conspiracy theorist but speaks the truth",
-      traits: ["Working-class authenticity", "Passionate, fired-up delivery", "Skeptic energy — questions everything", "Says what people are thinking but won't say out loud"],
+      persona: "Blue collar, midwest American male. talks like a conspiracy theorist but speaks the truth",
+      traits: ["Working-class authenticity", "Passionate, fired-up delivery", "Skeptic energy. questions everything", "Says what people are thinking but won't say out loud"],
     },
     categories: [
-      { name: "Did You Know? — Informational / Educational", desc: "Mind-blowing stats and hidden facts presented with \"they don't want you to know\" energy" },
+      { name: "Did You Know?. Informational / Educational", desc: "Mind-blowing stats and hidden facts presented with \"they don't want you to know\" energy" },
       { name: "Anecdotal Storytelling", desc: "Personal stories and analogies that make complex energy issues feel real and urgent" },
-      { name: "News Breakdown / Throughline", desc: "Connecting the dots between headlines — showing the bigger picture others miss" },
+      { name: "News Breakdown / Throughline", desc: "Connecting the dots between headlines. showing the bigger picture others miss" },
       { name: "Wildcard / Experimentation", desc: "Rants, hot takes, and format experiments that push the edge" },
     ],
     tone: ["Raw", "Passionate", "Skeptical", "Truth-telling", "Blue collar wisdom"],
     toneExample: '"They raised your rates AGAIN and nobody\'s talking about it. Let me show you the numbers."',
-    demographic: { primary: "National Moderate Right-Leaning", age: "30-55", leaning: "Right-leaning / populist", geo: "National — heartland & rural" },
+    demographic: { primary: "National Moderate Right-Leaning", age: "30-55", leaning: "Right-leaning / populist", geo: "National. heartland & rural" },
     visual: {
       aesthetic: "Raw, gritty, unpolished on purpose. Dark moody tones, bold red/white text overlays, documentary-style framing. Feels like leaked footage, not a branded post.",
       formats: ["Direct-to-camera rants", "Whiteboard breakdowns", "Screenshot exposés", "Story-time reels", "Data reveal carousels"],
@@ -90,7 +90,7 @@ const ACCOUNTS = [
   {
     name: "Energy & Your Wallet",
     handle: "@energyandyourwallet",
-    description: "Affordability & insurance — made simple, made fun.",
+    description: "Affordability & insurance. made simple, made fun.",
     icon: Wallet,
     avatar: {
       type: "AI Influencer",
@@ -99,24 +99,24 @@ const ACCOUNTS = [
     },
     categories: [
       { name: "Trending Male-Audience Content", desc: "Sports clips, guy humor, and trending formats that resonate with dads and young men" },
-      { name: "Savings & Home Hacks", desc: "Energy-saving tips, home efficiency tricks, money moves — practical and actionable" },
+      { name: "Savings & Home Hacks", desc: "Energy-saving tips, home efficiency tricks, money moves. practical and actionable" },
       { name: "Dad Jokes & Memes", desc: "Peak dad humor remixed with energy policy and cost-of-living commentary" },
       { name: "Content Remixes", desc: "Taking viral moments and reframing them through the energy / affordability lens" },
-      { name: "Conversational Explainers", desc: "\"That'd be like if...\" — metaphoric, down-to-earth breakdowns that make news simple" },
+      { name: "Conversational Explainers", desc: "\"That'd be like if...\". metaphoric, down-to-earth breakdowns that make news simple" },
       { name: "Wildcard / Experimentation", desc: "Sports watch parties, react content, and off-script moments" },
     ],
     tone: ["Conversational", "Down-to-earth", "Funny", "Metaphoric", "Dad-energy"],
     toneExample: '"That rate hike? That\'d be like if your fantasy league doubled the buy-in mid-season. Nobody asked for that."',
-    demographic: { primary: "Suburban Moderate — East Coast", age: "28-50", leaning: "Moderate / pragmatic", geo: "PA, VA, MD corridor" },
+    demographic: { primary: "Suburban Moderate. East Coast", age: "28-50", leaning: "Moderate / pragmatic", geo: "PA, VA, MD corridor" },
     visual: {
-      aesthetic: "Casual, backyard-BBQ energy. Well-lit but not overproduced. Think dad-fluencer meets financial advisor — polo shirts, not suits. Warm suburban tones.",
+      aesthetic: "Casual, backyard-BBQ energy. Well-lit but not overproduced. Think dad-fluencer meets financial advisor. polo shirts, not suits. Warm suburban tones.",
       formats: ["Talking-head explainers", "Duet / stitch reactions", "Meme remixes", "Hack-style tutorials", "Sports analogy reels"],
     },
   },
   {
     name: "How to Survive Until 2030",
     handle: "@surviveuntil2030",
-    description: "Long-game thinking — deep dives, reactions, and real talk.",
+    description: "Long-game thinking. deep dives, reactions, and real talk.",
     icon: Mic,
     avatar: {
       type: "AI Influencer",
@@ -125,15 +125,15 @@ const ACCOUNTS = [
     },
     categories: [
       { name: "Memes / Humor", desc: "Shareable, witty content that makes serious topics digestible and viral" },
-      { name: "News Story Reactions", desc: "Hot-take reactions to energy headlines — quick, opinionated, personality-driven" },
+      { name: "News Story Reactions", desc: "Hot-take reactions to energy headlines. quick, opinionated, personality-driven" },
       { name: "Long-Form Explainers / Deep Dives", desc: "Podcast clips, carousel breakdowns, and mini-documentaries that go beneath the surface" },
       { name: "Wildcard / Experimentation", desc: "Live Q&As, collab content, and audience-driven topics" },
     ],
     tone: ["Warm", "Editorial", "Curious", "Thoughtful", "Subtly urgent"],
     toneExample: '"Everyone\'s arguing about the price of gas. Nobody\'s asking why your electric bill tripled. Let\'s talk about it."',
-    demographic: { primary: "Suburban Women — Moderate", age: "28-45", leaning: "Moderate / pragmatic", geo: "US West — CA & CO" },
+    demographic: { primary: "Suburban Women. Moderate", age: "28-45", leaning: "Moderate / pragmatic", geo: "US West. CA & CO" },
     visual: {
-      aesthetic: "Warm editorial with podcast-studio vibes. Earth tones, soft lighting, clean serif typography. Feels like a curated magazine feed — intelligent, inviting, and elevated.",
+      aesthetic: "Warm editorial with podcast-studio vibes. Earth tones, soft lighting, clean serif typography. Feels like a curated magazine feed. intelligent, inviting, and elevated.",
       formats: ["Podcast clip reels", "Carousel deep dives", "Story reaction threads", "Quote card series", "Mini-documentary reels"],
     },
   },
@@ -279,7 +279,7 @@ export default function PotentialEnergyPage() {
           <span style={{ fontSize: 12, fontWeight: 700, color: C.textSec, textTransform: "uppercase", letterSpacing: "0.08em" }}>Energy Campaign</span>
         </div>
         <h1 style={{ ...hd, fontSize: 52, color: C.text, margin: "0 0 12px", lineHeight: 1.05 }}>Potential Energy</h1>
-        <p style={{ fontSize: 17, color: C.textSec, margin: 0, lineHeight: 1.6, maxWidth: 560 }}>5 Instagram accounts. One unified energy campaign. Each voice is unique — here's the breakdown.</p>
+        <p style={{ fontSize: 17, color: C.textSec, margin: 0, lineHeight: 1.6, maxWidth: 560 }}>5 Instagram accounts. One unified energy campaign. Each voice is unique. here's the breakdown.</p>
 
         {/* Quick Index */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 32 }}>

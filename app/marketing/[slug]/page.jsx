@@ -52,33 +52,14 @@ export default function ClientDashboardPage({ params }) {
     );
   }
 
-  if (state.error) {
-    return (
-      <div style={{
-        minHeight: "100vh", background: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        flexDirection: "column", gap: 12, padding: 32,
-        fontFamily: "'Inter', -apple-system, sans-serif",
-      }}>
-        <div style={{
-          fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 32, color: "#1D1D1F",
-        }}>Dashboard not found</div>
-        <div style={{ fontSize: 14, color: "#86868B", textAlign: "center", maxWidth: 400 }}>
-          This dashboard doesn't exist or may have been removed. {state.error}
-        </div>
-        <a href="/marketing" style={{
-          marginTop: 16, padding: "8px 20px", borderRadius: 980,
-          background: "#000", color: "#fff", textDecoration: "none",
-          fontSize: 14, fontWeight: 500,
-        }}>Upload new data</a>
-      </div>
-    );
-  }
+  // Always render the dashboard shell. If there's no data yet, the view shows
+  // an empty state and the user can hit "Add Product" to upload their first CSV.
+  const dashboardData = state.data || { headers: [], rows: [], fileName: "No data yet" };
 
   return (
     <>
       <MarketingDashboardView
-        data={state.data}
+        data={dashboardData}
         onAddProduct={() => setAddProductOpen(true)}
       />
       <AddProductModal

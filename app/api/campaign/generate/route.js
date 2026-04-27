@@ -37,12 +37,12 @@ async function generateScripts(request) {
 
     const prompt = `You are a top ad copywriter. Write 4 short, production-ready ad scripts.
 
-CONCEPT: ${concept.title} — ${concept.theme}
+CONCEPT: ${concept.title}. ${concept.theme}
 PRODUCT: ${analysis.heroProduct}
 TRANSFORMATION: ${analysis.desiredTransformation}
 TONE: ${analysis.websiteTone}
 DURATION: ${duration} seconds
-WORD COUNT: Each fullScript must be approximately ${wordCount} spoken words — no more, no less. This is critical for timing.
+WORD COUNT: Each fullScript must be approximately ${wordCount} spoken words. no more, no less. This is critical for timing.
 ${avoidBlock}
 
 Rules:
@@ -74,7 +74,7 @@ async function generateDirections(request) {
 
     const prompt = `Generate 4 distinct visual directions for this ad campaign.
 
-CONCEPT: ${concept.title} — ${concept.visualUniverse}
+CONCEPT: ${concept.title}. ${concept.visualUniverse}
 TONE: ${analysis.websiteTone}
 
 Each direction = different film. All fields max 10 words each.
@@ -101,7 +101,7 @@ async function generateAvatarPrompts(request) {
     const { concept, direction, analysis } = await request.json()
 
     // Lock in a single consistent portrait style for all 4 avatars
-    const sharedStyle = `Editorial portrait photography. ${direction.colorWorld} color grading. ${direction.lighting} lighting. Shallow depth of field, softly blurred neutral background. Same camera setup and color treatment across all 4 — only the person changes.`
+    const sharedStyle = `Editorial portrait photography. ${direction.colorWorld} color grading. ${direction.lighting} lighting. Shallow depth of field, softly blurred neutral background. Same camera setup and color treatment across all 4. only the person changes.`
 
     const prompt = `Generate 4 avatar character portrait prompts for an ad campaign.
 
@@ -114,7 +114,7 @@ CRITICAL RULES:
 - Every prompt MUST be a tight chest-up portrait, direct or slight angle to camera
 - All 4 share THE EXACT SAME lighting, color grading, background treatment, and camera setup
 - The ONLY difference between the 4 is the person themselves
-- Show face clearly, hair, skin, outfit, expression — like choosing a character in a game
+- Show face clearly, hair, skin, outfit, expression. like choosing a character in a game
 - 4 completely different people: vary age, ethnicity, gender expression, style, energy
 - Each imagePrompt starts with the shared style, then describes the specific person
 
@@ -140,26 +140,26 @@ async function generateShotList(request) {
     const { script, duration, concept, direction, avatarLabel, hasProduct, aspectRatio } = await request.json()
 
     const sceneCount = Math.round(duration / 2.5)
-    const formatNote = aspectRatio === '9:16' ? 'Vertical format (9:16) — compose shots for mobile/portrait viewing' : 'Horizontal format (16:9) — compose shots for widescreen/landscape viewing'
+    const formatNote = aspectRatio === '9:16' ? 'Vertical format (9:16). compose shots for mobile/portrait viewing' : 'Horizontal format (16:9). compose shots for widescreen/landscape viewing'
 
     const prompt = `You are a film director creating a shot list for a ${duration}-second commercial.
 
-CAMPAIGN: ${concept.title} — ${concept.theme}
-VISUAL DIRECTION: ${direction.title} — ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}
+CAMPAIGN: ${concept.title}. ${concept.theme}
+VISUAL DIRECTION: ${direction.title}. ${direction.colorWorld}, ${direction.lighting}, ${direction.environment}
 CHARACTER: ${avatarLabel}
 FORMAT: ${formatNote}
-${hasProduct ? 'PRODUCT: The client product will appear in some scenes — plan INSERT and CU shots that feature the product naturally.' : ''}
+${hasProduct ? 'PRODUCT: The client product will appear in some scenes. plan INSERT and CU shots that feature the product naturally.' : ''}
 FULL SCRIPT: "${script.fullScript}"
 
 Create exactly ${sceneCount} shots covering this script like a professional commercial director.
 
-SHOT VARIETY — use all of these throughout, varying like a real film:
-- ECU: extreme close up — eyes, hands, skin texture, product detail
-- CU: close up — face, emotional reaction, character moment
-- MCU: medium close up — chest up, character speaking or reacting
-- MS: medium shot — waist up, character active in environment  
-- WS: wide shot — full environment, character visible but not dominant
-- EWS: extreme wide — establishing shot, character tiny or absent, world-building
+SHOT VARIETY. use all of these throughout, varying like a real film:
+- ECU: extreme close up. eyes, hands, skin texture, product detail
+- CU: close up. face, emotional reaction, character moment
+- MCU: medium close up. chest up, character speaking or reacting
+- MS: medium shot. waist up, character active in environment  
+- WS: wide shot. full environment, character visible but not dominant
+- EWS: extreme wide. establishing shot, character tiny or absent, world-building
 - POV: character's point of view, immersive
 - INSERT: tight shot of product, object, or key detail
 - CUTAWAY: atmospheric environment detail, texture, mood shot
@@ -177,7 +177,7 @@ Return JSON array of exactly ${sceneCount} objects, no markdown:
   "cameraMove": "static / slow push in / pull back / handheld / pan / tilt",
   "mood": "emotional tone",
   "isProductShot": false,
-  "imagePrompt": "Complete cinematic image generation prompt, 70-90 words. Describe the scene fully — character, action, environment, lighting, camera angle, color grade. Cinematic, photorealistic, no text, no watermarks."
+  "imagePrompt": "Complete cinematic image generation prompt, 70-90 words. Describe the scene fully. character, action, environment, lighting, camera angle, color grade. Cinematic, photorealistic, no text, no watermarks."
 }]`
 
     const message = await client.messages.create({

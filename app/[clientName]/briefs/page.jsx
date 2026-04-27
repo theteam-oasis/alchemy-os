@@ -270,7 +270,7 @@ export default function BriefPage({ params }) {
               const dc={approved:'#111111',revisions:'#888888',declined:'#cccccc',pending:'#dddddd'}
               return(
                 <button key={camp.id} className={`tab${active===i?' a':''}`} onClick={()=>{setActive(i);window.scrollTo({top:0,behavior:'smooth'})}}>
-                  {`Concept ${i+1} — ${camp.concept_title||camp.chosen_concept?.title||'Untitled'}`}
+                  {`Concept ${i+1}. ${camp.concept_title||camp.chosen_concept?.title||'Untitled'}`}
                   <span className="tdot" style={{background:dc[st]||dc.pending}}/>
                 </button>
               )
@@ -306,7 +306,7 @@ export default function BriefPage({ params }) {
       {/* STORYBOARD */}
       {scenes.length>0&&(
         <div className="storyboard-section">
-          <p className="section-label">Storyboard — {scenes.length} Scenes</p>
+          <p className="section-label">Storyboard. {scenes.length} Scenes</p>
           <div className={`sb-grid ${isP?'portrait':'landscape'}`}>
             {scenes.map((scene,i)=>(
               <div key={i} className="sb-tile" onClick={()=>scene?.imageUrl&&setLightbox({src:scene.imageUrl,index:i})}>
@@ -329,7 +329,7 @@ export default function BriefPage({ params }) {
       {/* SCRIPT */}
       {script&&(
         <div className="script-section">
-          <p className="section-label">Script — 30 Seconds</p>
+          <p className="section-label">Script. 30 Seconds</p>
           <div className="script-inner">
             <p className="script-hook">"{script.hook}"</p>
             <p className="script-full">{script.fullScript}</p>
@@ -350,7 +350,7 @@ export default function BriefPage({ params }) {
           <div className="two-col">
             {dir&&(
               <div className="info-card">
-                <p className="info-card-label">Visual Direction — {dir.title}</p>
+                <p className="info-card-label">Visual Direction. {dir.title}</p>
                 {[
                   ['Color World',dir.colorWorld],
                   ['Lighting',dir.lighting],
@@ -409,7 +409,7 @@ export default function BriefPage({ params }) {
           <h2 className="action-title">What do you think?</h2>
           <p className="action-sub">
             {campaigns.length>1
-              ?`You're reviewing Concept ${active+1} — ${c.concept_title||''}. Use the tabs above to review each concept, then submit your feedback below.`
+              ?`You're reviewing Concept ${active+1}. ${c.concept_title||''}. Use the tabs above to review each concept, then submit your feedback below.`
               :'Let us know how you want to move forward.'}
           </p>
 
@@ -449,7 +449,7 @@ export default function BriefPage({ params }) {
           <div className="footer-lm">A</div>
           <span className="footer-name">Alchemy Agency</span>
         </div>
-        <p className="footer-note">Confidential — prepared exclusively for {client.name}.</p>
+        <p className="footer-note">Confidential. prepared exclusively for {client.name}.</p>
       </div>
     </div>
   </>)

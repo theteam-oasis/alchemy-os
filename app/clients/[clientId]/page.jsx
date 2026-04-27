@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { FileText, Palette, BarChart3, MessageSquare, Sparkles, ExternalLink, Copy, Check, Plus, ArrowRight } from 'lucide-react'
+import DashboardChat from '../../../components/DashboardChat'
 const S={approved:{l:'Approved',c:'#111111',bg:'#f8f8f8',b:'#111111',i:'✓'},revisions:{l:'Revisions',c:'#888888',bg:'#f8f8f8',b:'#cccccc',i:'✎'},declined:{l:'Declined',c:'#cccccc',bg:'#f8f8f8',b:'#eeeeee',i:'✕'},pending:{l:'Awaiting',c:'#aaaaaa',bg:'#f8f8f8',b:'#eeeeee',i:'○'}}
 
 export default function ClientProfilePage({ params }) {
@@ -10,7 +11,7 @@ export default function ClientProfilePage({ params }) {
   const [campaigns,setCampaigns]=useState([])
   const [intake,setIntake]=useState(null)
   const [loading,setLoading]=useState(true)
-  const [tab,setTab]=useState('briefs')
+  const [tab,setTab]=useState('marketing')
   const [portal,setPortal]=useState(null)
   const [portalLoading,setPortalLoading]=useState(false)
   const [linkMode,setLinkMode]=useState(false)
@@ -169,9 +170,16 @@ export default function ClientProfilePage({ params }) {
     <div className="shell">
       <nav className="nav">
         <a href="/" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
-        <div className="nav-links">
-          <a href="/clients" className="nl">← Clients</a>
-          <a href={`/brief/${clientId}`} target="_blank" className="nl">View Brief ↗</a>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'4px 10px',background:'#111',color:'#fff',borderRadius:980,fontSize:10,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:'#22c55e'}}></span>
+            Team View
+          </span>
+          <div className="nav-links">
+            <a href="/dashboard" className="nl">← Dashboard</a>
+            <a href={`/client/${clientSlug}`} target="_blank" className="nl">Client View ↗</a>
+            <a href={`/brief/${clientId}`} target="_blank" className="nl">View Brief ↗</a>
+          </div>
         </div>
       </nav>
       <div className="con">
@@ -223,14 +231,14 @@ export default function ClientProfilePage({ params }) {
             <span className="tool-hub-title">Linked Tools</span>
           </div>
           <div className="tool-grid">
-            {/* Feedback Portal card */}
+            {/* Creatives card */}
             <div className={`tool-card${tab==='portal'?' active':''}${!portal?' empty-state':''}`} onClick={()=>setTab('portal')}>
               <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
                 <div className="tool-icon-wrap"><MessageSquare size={18}/></div>
                 <div className="tool-card-arrow"><ArrowRight size={12}/></div>
               </div>
               <div>
-                <p className="tool-card-name">Feedback Portal</p>
+                <p className="tool-card-name">Creatives</p>
                 <p className="tool-card-desc">{portal?'Asset review & approval':'Set up client review workflow'}</p>
               </div>
               <div className="tool-card-stat">
@@ -263,14 +271,14 @@ export default function ClientProfilePage({ params }) {
               </div>
             </div>
 
-            {/* Marketing Dashboard card */}
+            {/* Analytics card */}
             <div className={`tool-card${tab==='marketing'?' active':''}${dashboards.length===0?' empty-state':''}`} onClick={()=>setTab('marketing')}>
               <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
                 <div className="tool-icon-wrap"><BarChart3 size={18}/></div>
                 <div className="tool-card-arrow"><ArrowRight size={12}/></div>
               </div>
               <div>
-                <p className="tool-card-name">Marketing Dashboard</p>
+                <p className="tool-card-name">Analytics</p>
                 <p className="tool-card-desc">{dashboards.length>0?'Performance analytics & Oracle AI':'Upload data for live BI'}</p>
               </div>
               <div className="tool-card-stat">
@@ -306,7 +314,7 @@ export default function ClientProfilePage({ params }) {
         </div>
 
         <div className="tabs">
-          {[['briefs',`Briefs (${campaigns.length})`],['brand','Brand Info'],['portal','Feedback Portal'],['marketing',`Marketing${dashboards.length?` (${dashboards.length})`:''}`]].map(([k,lbl])=>(
+          {[['briefs',`Briefs (${campaigns.length})`],['brand','Brand Info'],['portal','Creatives'],['marketing',`Marketing${dashboards.length?` (${dashboards.length})`:''}`]].map(([k,lbl])=>(
             <button key={k} className={`tab${tab===k?' a':''}`} onClick={()=>setTab(k)}>{lbl}</button>
           ))}
         </div>
@@ -337,18 +345,44 @@ export default function ClientProfilePage({ params }) {
             })}
           </div>
         ))}
-        {tab==='brand'&&(!intake?<div className="empty">No brand data found.</div>:(
-          <div className="ig">
-            <div className="ic"><p className="it">Brand Details</p>{[['Brand','brand_name'],['Website','website'],['Industry','industry'],['Location','location']].filter(([,k])=>intake[k]).map(([l,k])=>(<div key={l} className="ir"><span className="ik">{l}</span><span className="iv">{intake[k]}</span></div>))}</div>
-            <div className="ic"><p className="it">Campaign Context</p>{[['Target','target_audience'],['Goals','campaign_goals'],['Budget','budget'],['Timeline','timeline']].filter(([,k])=>intake[k]).map(([l,k])=>(<div key={l} className="ir"><span className="ik">{l}</span><span className="iv">{intake[k]}</span></div>))}</div>
-            {intake.product_image_urls?.length>0&&<div className="ic" style={{gridColumn:'1/-1'}}><p className="it">Product Images</p><div className="pimgs">{intake.product_image_urls.map((u,i)=><img key={i} src={u} alt="" className="pimg"/>)}</div></div>}
+        {tab==='brand'&&(!intake?(
+          <div className="cc" style={{textAlign:'center',padding:'40px 22px'}}>
+            <div style={{width:48,height:48,borderRadius:'50%',background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:20,border:'1px solid #eee'}}>🎨</div>
+            <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>No Brand Guidelines Yet</p>
+            <p style={{fontSize:12,color:'#aaa',fontWeight:300,marginBottom:24,maxWidth:400,margin:'0 auto 24px'}}>Generate brand guidelines for this client. Use Express Mode to auto-fill from their website, or fill out the form manually.</p>
+            <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+              <a href={`/brand-intake?clientId=${clientId}&express=1`} className="bp" style={{textDecoration:'none',fontSize:13,display:'inline-flex',alignItems:'center',gap:6,background:'#000',color:'#fff'}}>
+                <Sparkles size={13}/> Express Mode (auto-fill)
+              </a>
+              <a href={`/brand-intake?clientId=${clientId}`} className="bs" style={{textDecoration:'none',fontSize:13}}>Fill Manually</a>
+            </div>
+          </div>
+        ):(
+          <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div>
+                <p style={{fontSize:14,fontWeight:500,color:'#111',marginBottom:2}}>Brand Guidelines</p>
+                <p style={{fontSize:12,color:'#aaa',fontWeight:300}}>Foundation for everything we create</p>
+              </div>
+              <div style={{display:'flex',gap:6}}>
+                {intake.website&&<a href={intake.website.startsWith('http')?intake.website:`https://${intake.website}`} target="_blank" rel="noreferrer" className="bs" style={{fontSize:11,padding:'5px 11px'}}>Visit Site ↗</a>}
+                <a href={`/brand-intake?clientId=${clientId}`} className="bs" style={{fontSize:11,padding:'5px 11px'}}>Edit</a>
+              </div>
+            </div>
+            <div className="ig">
+              <div className="ic"><p className="it">Brand Details</p>{[['Brand','brand_name'],['Website','website'],['Industry','industry'],['Location','location'],['Tagline','tagline']].filter(([,k])=>intake[k]).map(([l,k])=>(<div key={l} className="ir"><span className="ik">{l}</span><span className="iv">{intake[k]}</span></div>))}</div>
+              <div className="ic"><p className="it">Campaign Context</p>{[['Target','target_audience'],['Goals','campaign_goals'],['Budget','budget'],['Timeline','timeline'],['Objective','objective']].filter(([,k])=>intake[k]).map(([l,k])=>(<div key={l} className="ir"><span className="ik">{l}</span><span className="iv">{intake[k]}</span></div>))}</div>
+              {intake.brand_colors&&<div className="ic"><p className="it">Brand Colors</p><div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:8}}>{String(intake.brand_colors).split(/[,\s]+/).filter(c=>/^#?[0-9A-Fa-f]{3,8}$/.test(c)).map((c,i)=>{const hex=c.startsWith('#')?c:`#${c}`;return(<div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><div style={{width:36,height:36,borderRadius:8,background:hex,border:'1px solid #eee'}}/><span style={{fontSize:9,color:'#aaa',fontFamily:'monospace'}}>{hex}</span></div>);})}</div></div>}
+              {intake.personality_tags?.length>0&&<div className="ic"><p className="it">Personality</p><div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8}}>{intake.personality_tags.map((t,i)=><span key={i} style={{fontSize:11,padding:'4px 10px',background:'#f5f5f5',borderRadius:980,color:'#666'}}>{t}</span>)}</div></div>}
+              {intake.product_image_urls?.length>0&&<div className="ic" style={{gridColumn:'1/-1'}}><p className="it">Product Images</p><div className="pimgs">{intake.product_image_urls.map((u,i)=><img key={i} src={u} alt="" className="pimg"/>)}</div></div>}
+            </div>
           </div>
         ))}
         {tab==='marketing'&&(
           <div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
               <div>
-                <p style={{fontSize:14,fontWeight:500,color:'#111',marginBottom:2}}>Marketing Dashboards</p>
+                <p style={{fontSize:14,fontWeight:500,color:'#111',marginBottom:2}}>Analytics</p>
                 <p style={{fontSize:12,color:'#aaa',fontWeight:300}}>Private, data-driven dashboards with AI analysis</p>
               </div>
               <a href={`/marketing/create?clientId=${clientId}`} className="bp" style={{textDecoration:'none',fontSize:13}}>+ New Dashboard</a>
@@ -403,7 +437,7 @@ export default function ClientProfilePage({ params }) {
             ):(
               <div className="cc" style={{textAlign:'center',padding:'40px 22px'}}>
                 <div style={{width:48,height:48,borderRadius:'50%',background:'#f8f8f8',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:20,border:'1px solid #eee'}}>📋</div>
-                <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>No Feedback Portal Yet</p>
+                <p style={{fontSize:16,fontWeight:500,color:'#111',marginBottom:4}}>No Creatives Yet</p>
                 <p style={{fontSize:12,color:'#aaa',fontWeight:300,marginBottom:24}}>Generate a portal to upload assets and collect client feedback</p>
                 <div style={{display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
                   <button onClick={generatePortal} disabled={portalLoading} className="bp" style={{fontSize:13,opacity:portalLoading?0.5:1}}>
@@ -439,5 +473,7 @@ export default function ClientProfilePage({ params }) {
         )}
       </div>
     </div>
+    {/* Floating team chat (unified inbox across all client portals) */}
+    <DashboardChat />
   </>)
 }

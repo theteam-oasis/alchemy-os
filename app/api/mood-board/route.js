@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 const IMAGES_TABLE = 'mood_board_images';
 const BOARDS_TABLE = 'mood_boards';
 
-/* GET — fetch board metadata + images by slug */
+/* GET. fetch board metadata + images by slug */
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get('slug') || searchParams.get('board');
@@ -22,7 +22,7 @@ export async function GET(request) {
   return NextResponse.json({ success: true, board, images });
 }
 
-/* POST — upload image to a slot (FormData: file, slot, board/slug) */
+/* POST. upload image to a slot (FormData: file, slot, board/slug) */
 export async function POST(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
@@ -61,7 +61,7 @@ export async function POST(request) {
   return NextResponse.json({ success: true, url: publicUrl });
 }
 
-/* PUT — create or update board metadata (JSON: slug, brand_name, location fields) */
+/* PUT. create or update board metadata (JSON: slug, brand_name, location fields) */
 export async function PUT(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
@@ -91,7 +91,7 @@ export async function PUT(request) {
   return NextResponse.json({ success: true, board: data });
 }
 
-/* PATCH — swap two image slots */
+/* PATCH. swap two image slots */
 export async function PATCH(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 
@@ -121,7 +121,7 @@ export async function PATCH(request) {
   return NextResponse.json({ success: true });
 }
 
-/* DELETE — remove image from slot */
+/* DELETE. remove image from slot */
 export async function DELETE(request) {
   if (!supabase) return NextResponse.json({ success: false, error: 'No database' });
 

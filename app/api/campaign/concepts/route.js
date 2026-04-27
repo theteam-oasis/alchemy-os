@@ -17,7 +17,7 @@ export async function POST(request) {
     const previousVisuals = previousConcepts.map(c => c.visualUniverse).join(', ')
 
     const avoidBlock = previousConcepts.length > 0 ? `
-PREVIOUSLY GENERATED — DO NOT REPEAT:
+PREVIOUSLY GENERATED. DO NOT REPEAT:
 - Titles: ${previousTitles}
 - Themes: ${previousThemes}
 - Metaphors: ${previousMetaphors}
@@ -59,11 +59,11 @@ ${keywordsBlock}
 ${avoidBlock}
 
 RULES:
-1. Each concept must come from a COMPLETELY DIFFERENT creative territory — different emotional frame, visual world, metaphor. No overlap.
+1. Each concept must come from a COMPLETELY DIFFERENT creative territory. different emotional frame, visual world, metaphor. No overlap.
 2. Every concept must be DEEPLY SPECIFIC to this brand. No generic ad ideas. If someone read the concept without the brand name, they should still be able to guess what category this is.
-3. The visualUniverse must describe a specific aesthetic world — reference real directors, photographers, or visual movements (e.g. "Nan Goldin documentary intimacy", "Wes Anderson symmetry", "90s health magazine editorial"). Be specific.
-4. The theme must articulate a tension, transformation, or insight that is TRUE for this brand's customer — not a tagline, a real human truth.
-5. The emotionalFrame must describe the specific feeling we want the viewer to have at the END of the video — not during it.
+3. The visualUniverse must describe a specific aesthetic world. reference real directors, photographers, or visual movements (e.g. "Nan Goldin documentary intimacy", "Wes Anderson symmetry", "90s health magazine editorial"). Be specific.
+4. The theme must articulate a tension, transformation, or insight that is TRUE for this brand's customer. not a tagline, a real human truth.
+5. The emotionalFrame must describe the specific feeling we want the viewer to have at the END of the video. not during it.
 6. Return EXACTLY ${count} concepts.
 
 Respond ONLY with a valid JSON array. No markdown, no backticks, no preamble:

@@ -86,7 +86,7 @@ export default function MoodBoardClient({ board, images: imageRows }) {
           <h1 style={{ ...font.display, color: K.offWhite, fontSize: 56, lineHeight: 1, marginBottom: 6 }}>
             {brandName.toUpperCase()}
           </h1>
-          <p style={{ ...font.label, color: K.stone, fontSize: 10, marginBottom: 32 }}>mood board — 2026</p>
+          <p style={{ ...font.label, color: K.stone, fontSize: 10, marginBottom: 32 }}>mood board. 2026</p>
         </Reveal>
 
         {/* ── Info bar: location + weather + shoot time + mood words ── */}

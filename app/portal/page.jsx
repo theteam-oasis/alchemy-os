@@ -85,7 +85,7 @@ export default function PortalHome() {
             </div>
             <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em", ...mono }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Productions</span></span>
           </a>
-          <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Feedback Portal</span>
+          <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Creatives</span>
         </nav>
 
         {/* Header */}
@@ -95,7 +95,7 @@ export default function PortalHome() {
             <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Internal Tool</span>
           </div>
           <h1 style={{ ...hd, fontSize: 52, color: G.text, lineHeight: 1.1, marginBottom: 16 }}>Client <span style={{ fontStyle: "italic" }}>Feedback</span> Portal</h1>
-          <p style={{ color: G.textSec, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto", ...mono }}>Manage creative assets, collect client approvals, and track feedback — all in one place.</p>
+          <p style={{ color: G.textSec, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto", ...mono }}>Manage creative assets, collect client approvals, and track feedback. all in one place.</p>
         </section>
 
         {/* View Tabs */}
@@ -291,7 +291,7 @@ export default function PortalHome() {
               </div>
               <span style={{ fontSize: 13, color: G.textTer, ...mono }}>Alchemy Productions</span>
             </div>
-            <span style={{ fontSize: 12, color: G.textTer, ...mono }}>Feedback Portal</span>
+            <span style={{ fontSize: 12, color: G.textTer, ...mono }}>Creatives</span>
           </div>
           <span style={{ fontSize: 11, color: G.textTer, ...mono }}>&copy; 2026 Alchemy Productions LLC. All rights reserved.</span>
         </footer>

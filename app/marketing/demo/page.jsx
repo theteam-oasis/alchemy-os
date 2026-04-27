@@ -66,7 +66,7 @@ function generateDummyData() {
     ],
     rows,
     fileName: "Meta Ads - Q1 2026.csv",
-    title: "Meta Ads — Q1 2026 Performance",
+    title: "Meta Ads. Q1 2026 Performance",
     clientName: "Demo Client",
   };
 }
@@ -104,7 +104,7 @@ const demoBadge = (
 );
 
 export default function MarketingDemo() {
-  // Synchronous initializer — dashboard mounts instantly, AI prefetch starts first paint
+  // Synchronous initializer. dashboard mounts instantly, AI prefetch starts first paint
   const [data] = useState(() => generateDummyData());
 
   return (

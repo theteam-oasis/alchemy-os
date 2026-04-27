@@ -44,8 +44,8 @@ function LoginForm() {
         </div>
 
         <div style={{ textAlign: "center" }}>
-          <h1 style={{ ...hd, fontSize: 24, color: G.text, margin: 0, marginBottom: 8 }}>Feedback Portal</h1>
-          <p style={{ ...mono, fontSize: 14, color: G.textSec, margin: 0 }}>Enter password to continue</p>
+          <h1 style={{ ...hd, fontSize: 24, color: G.text, margin: 0, marginBottom: 8 }}>Alchemy Team</h1>
+          <p style={{ ...mono, fontSize: 14, color: G.textSec, margin: 0 }}>Enter the team password to continue</p>
         </div>
 
         <input type="password" value={password}

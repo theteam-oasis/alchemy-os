@@ -42,7 +42,7 @@ function CreateDashboardInner() {
     }
     // Load clients from CRM
     fetch("/api/clients-list").catch(() => null); // try a summary endpoint if exists
-    // Fallback to direct supabase query via a simpler route would need auth — use existing portal endpoint pattern
+    // Fallback to direct supabase query via a simpler route would need auth. use existing portal endpoint pattern
   }, []);
 
   useEffect(() => {
@@ -148,7 +148,7 @@ function CreateDashboardInner() {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <a href="/" style={{ ...hd, fontSize: 22, color: C.text, textDecoration: "none" }}>Alchemy</a>
           <div style={{ width: 1, height: 24, background: C.borderLight }} />
-          <div style={{ fontSize: 14, color: C.textSec, fontWeight: 500 }}>Create Marketing Dashboard</div>
+          <div style={{ fontSize: 14, color: C.textSec, fontWeight: 500 }}>Create Analytics</div>
         </div>
         {presetClientId && (
           <a href={`/clients/${presetClientId}`} style={{
@@ -246,7 +246,7 @@ function CreateDashboardInner() {
             Description <span style={{ color: C.textTer, fontWeight: 400 }}>(optional)</span>
           </label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-            placeholder="Brief notes about this dataset — date range, campaign context, etc."
+            placeholder="Brief notes about this dataset. date range, campaign context, etc."
             rows={2}
             style={{
               width: "100%", padding: "12px 16px", borderRadius: 12,

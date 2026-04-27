@@ -219,7 +219,7 @@ export default function SamplesPage() {
 
               <div style={{ display: "grid", gap: 12, width: "100%", maxWidth: 560 }}>
                 {[
-                  { step: "1", title: "Paste the brand URL", desc: "e.g. /samples raoptics.com — describe the product" },
+                  { step: "1", title: "Paste the brand URL", desc: "e.g. /samples raoptics.com. describe the product" },
                   { step: "2", title: "Get 6 prompts instantly", desc: "Bold Claim, Product Hero, Social Proof, Editorial, Offer, Lifestyle" },
                   { step: "3", title: "Copy & generate", desc: "Paste each prompt into Nano Banana 2 with the product reference image" },
                 ].map((s, i) => (
@@ -238,7 +238,7 @@ export default function SamplesPage() {
               <div style={{ marginTop: 32, padding: "14px 20px", borderRadius: 10, background: "#C5960A0A", border: `1px solid ${G.goldBorder}`, maxWidth: 560, width: "100%" }}>
                 <p style={{ fontSize: 12, color: G.gold, fontWeight: 600, marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>Example prompt</p>
                 <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5, ...mono }}>
-                  /samples raoptics.com — their Ra Optics Potion daylight glasses, black acetate frame with amber lenses, gold Ra logo on temple
+                  /samples raoptics.com. their Ra Optics Potion daylight glasses, black acetate frame with amber lenses, gold Ra logo on temple
                 </p>
               </div>
             </div>
@@ -281,7 +281,7 @@ export default function SamplesPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="/samples brandurl.com — describe the product..."
+                placeholder="/samples brandurl.com. describe the product..."
                 rows={1}
                 style={{
                   width: "100%", resize: "none", padding: "14px 18px", borderRadius: 14,

@@ -4,8 +4,10 @@ import { useParams } from "next/navigation";
 import {
   Sparkles, MessageSquare, Palette, BarChart3, FileText, ArrowRight,
   ExternalLink, Check, RefreshCw, X, Image as ImageIcon, Globe, Users,
-  Target, Calendar, TrendingUp, Activity, ChevronRight, Briefcase
+  Target, Calendar, TrendingUp, Activity, ChevronRight, Briefcase,
+  LogOut, Menu, ChevronLeft, Loader2,
 } from "lucide-react";
+import PortalChat from "@/components/PortalChat";
 
 const G = {
   bg: "#FFFFFF", card: "#FFFFFF", cardBorder: "#E8E8ED",
@@ -14,6 +16,7 @@ const G = {
   text: "#1D1D1F", textSec: "#86868B", textTer: "#AEAEB2",
   border: "#E8E8ED", success: "#34C759", info: "#007AFF",
   approve: "#30A46C", reject: "#E5484D", revision: "#3E8ED0",
+  sidebar: "#FAFAFA",
 };
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 const mono = { fontFamily: "'Inter', -apple-system, sans-serif" };
@@ -26,20 +29,62 @@ export default function ClientHubPage() {
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState(false);
+  const [section, setSection] = useState("analytics"); // analytics | creatives | brand
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile
 
-  // Check session auth
+  // Session auth
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem(`client_hub_auth_${slug}`);
+      const stored = localStorage.getItem(`client_hub_auth_${slug}`);
       if (stored === "true") setAuthed(true);
     }
   }, [slug]);
 
+  // Fetch hub data + auto-provision a dashboard if none + auto-auth linked portals
   useEffect(() => {
     if (!slug || !authed) return;
     fetch(`/api/client-portal/${slug}`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(setData)
+      .then(async d => {
+        setData(d);
+        if (typeof window !== "undefined" && d?.portals) {
+          for (const p of d.portals) {
+            if (p.id) localStorage.setItem(`portal_auth_${p.id}`, "true");
+            if (p.slug) localStorage.setItem(`portal_auth_${p.slug}`, "true");
+          }
+        }
+        if (d?.client?.id && (!d.dashboards || d.dashboards.length === 0)) {
+          try {
+            const res = await fetch("/api/marketing-dashboards", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clientId: d.client.id,
+                clientName: d.client.name,
+                title: `${d.client.name} Analytics`,
+                fileName: "placeholder.csv",
+                headers: ["Date", "Spend", "Revenue", "Impressions", "Clicks"],
+                rows: [],
+              }),
+            });
+            if (res.ok) {
+              const created = await res.json();
+              if (created?.success && created.dashboard) {
+                setData(prev => ({
+                  ...prev,
+                  dashboards: [{
+                    id: created.dashboard.id,
+                    slug: created.dashboard.slug,
+                    title: created.dashboard.title,
+                    fileName: created.dashboard.file_name,
+                    rowCount: 0, columnCount: 5,
+                    createdAt: created.dashboard.created_at || new Date().toISOString(),
+                  }],
+                }));
+              }
+            }
+          } catch (e) { console.error("auto-provision dashboard:", e); }
+        }
+      })
       .catch(() => setNotFound(true));
   }, [slug, authed]);
 
@@ -49,10 +94,17 @@ export default function ClientHubPage() {
     if (password.trim().toLowerCase() === expected.toLowerCase()) {
       setAuthed(true);
       setAuthError(false);
-      sessionStorage.setItem(`client_hub_auth_${slug}`, "true");
+      localStorage.setItem(`client_hub_auth_${slug}`, "true");
     } else {
       setAuthError(true);
     }
+  };
+
+  const signOut = () => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(`client_hub_auth_${slug}`);
+    setAuthed(false);
+    setData(null);
   };
 
   if (notFound) return (
@@ -72,7 +124,7 @@ export default function ClientHubPage() {
           <span style={{ fontSize: 20, fontWeight: 700, color: G.text, letterSpacing: "0.05em" }}>ALCHEMY</span>
         </div>
         <h2 style={{ ...hd, fontSize: 36, color: G.text, marginBottom: 8 }}>Welcome</h2>
-        <p style={{ fontSize: 14, color: G.textSec, marginBottom: 32 }}>Enter your password to access your client hub</p>
+        <p style={{ fontSize: 14, color: G.textSec, marginBottom: 32 }}>Enter your password to access your workspace</p>
         <form onSubmit={handleLogin}>
           <input
             type="password" autoFocus value={password}
@@ -82,7 +134,7 @@ export default function ClientHubPage() {
           />
           {authError && <p style={{ fontSize: 13, color: G.reject, marginTop: 8 }}>Incorrect password</p>}
           <button type="submit" style={{ width: "100%", padding: "14px 0", marginTop: 16, fontSize: 15, fontWeight: 600, background: G.ink, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", fontFamily: "inherit" }}>
-            Enter Hub
+            Enter Workspace
           </button>
         </form>
       </div>
@@ -91,285 +143,415 @@ export default function ClientHubPage() {
 
   if (!data) return (
     <div style={{ ...mono, minHeight: "100vh", background: G.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <p style={{ color: G.textTer }}>Loading...</p>
+      <Loader2 size={20} style={{ animation: "spinKf 1s linear infinite" }} color={G.textTer} />
+      <style>{`@keyframes spinKf { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 
   const { client, intake, portals, dashboards, campaigns, feedback } = data;
-  const portal = portals[0] || null; // primary portal (most clients have one)
-  const totalAssets = portals.reduce((sum, p) => sum + (p.images?.length || 0) + (p.heroScripts?.length || 0) + (p.ugcScripts?.length || 0), 0);
-  const totalDashboardRows = dashboards.reduce((sum, d) => sum + (d.rowCount || 0), 0);
+  const portal = portals[0] || null;
+  const totalAssets = portal ? (portal.images?.length || 0) + (portal.heroScripts?.length || 0) + (portal.ugcScripts?.length || 0) : 0;
+  const pendingCount = totalAssets - (feedback.approved + feedback.revision + feedback.rejected);
+
+  const sections = [
+    { k: "analytics", lbl: "Analytics", icon: <BarChart3 size={16} /> },
+    { k: "creatives", lbl: "Creatives", icon: <MessageSquare size={16} />, badge: pendingCount > 0 ? pendingCount : null },
+    { k: "brand", lbl: "Brand Guidelines", icon: <Palette size={16} /> },
+  ];
+
+  // Brand initial avatar
+  const initial = client.name?.[0]?.toUpperCase() || "•";
 
   return (
     <div style={{ ...mono, minHeight: "100vh", background: G.bg, color: G.text }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px" }}>
+      <style>{`
+        @keyframes spinKf { to { transform: rotate(360deg); } }
+        .ch-shell { display: flex; min-height: 100vh; }
+        .ch-side { width: 240px; flex-shrink: 0; background: ${G.sidebar}; border-right: 1px solid ${G.border}; display: flex; flex-direction: column; padding: 22px 16px; position: sticky; top: 0; height: 100vh; }
+        .ch-main { flex: 1; min-width: 0; min-height: 100vh; }
+        .ch-mobile-bar { display: none; }
+        @media (max-width: 880px) {
+          .ch-side { position: fixed; left: ${sidebarOpen ? "0" : "-260px"}; top: 0; bottom: 0; z-index: 100; transition: left 0.25s ease; box-shadow: ${sidebarOpen ? "4px 0 24px rgba(0,0,0,0.12)" : "none"}; }
+          .ch-mobile-bar { display: flex; }
+          .ch-overlay { display: ${sidebarOpen ? "block" : "none"}; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+        }
+        .ch-nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 13px; font-weight: 500; color: ${G.textSec}; cursor: pointer; border: none; background: transparent; text-align: left; width: 100%; transition: all 0.15s; font-family: inherit; }
+        .ch-nav-item:hover { background: ${G.bg}; color: ${G.text}; }
+        .ch-nav-item.active { background: ${G.ink}; color: #fff; font-weight: 600; }
+        .ch-nav-item .badge { margin-left: auto; background: ${G.reject}; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 980px; min-width: 18px; text-align: center; }
+        .ch-nav-item.active .badge { background: rgba(255,255,255,0.25); }
+      `}</style>
 
-        {/* Nav */}
-        <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "24px 0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${G.ink}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Sparkles size={14} style={{ color: G.ink }} />
+      <div className="ch-shell">
+        {/* Mobile overlay */}
+        <div className="ch-overlay" onClick={() => setSidebarOpen(false)}></div>
+
+        {/* Sidebar */}
+        <aside className="ch-side">
+          {/* Brand identity at top */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", marginBottom: 28 }}>
+            <div style={{ width: 30, height: 30, borderRadius: "50%", border: `2px solid ${G.ink}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Sparkles size={13} style={{ color: G.ink }} />
             </div>
-            <span style={{ fontSize: 18, fontWeight: 700, color: G.text, letterSpacing: "0.05em" }}>ALCHEMY <span style={{ fontWeight: 400, color: G.textSec }}>Productions</span></span>
-          </div>
-          <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{client.name}</span>
-        </nav>
-
-        {/* Hero */}
-        <section style={{ padding: "48px 0 32px", textAlign: "center" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.inkBorder}`, background: G.inkSoft, marginBottom: 20 }}>
-            <Briefcase size={14} style={{ color: G.ink }} />
-            <span style={{ color: G.ink, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>Client Hub</span>
-          </div>
-          <h1 style={{ ...hd, fontSize: 56, color: G.text, lineHeight: 1.05, marginBottom: 12 }}>
-            Welcome, <span style={{ fontStyle: "italic" }}>{client.name}</span>
-          </h1>
-          <p style={{ fontSize: 16, color: G.textSec, maxWidth: 560, margin: "0 auto", lineHeight: 1.6 }}>
-            Your single hub for everything we&apos;re building together — feedback, brand, analytics, and creative briefs in one place.
-          </p>
-        </section>
-
-        {/* KPI Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 48 }}>
-          {[
-            { label: "Assets in Review", value: totalAssets, sub: portal ? `Across ${portals.length} project${portals.length === 1 ? "" : "s"}` : "No portal yet" },
-            { label: "Approved", value: feedback.approved, sub: "Items signed off", color: G.approve },
-            { label: "Active Dashboards", value: dashboards.length, sub: `${totalDashboardRows.toLocaleString()} data points`, color: G.info },
-            { label: "Creative Briefs", value: campaigns.length, sub: "Generated to date" },
-          ].map((s, i) => (
-            <div key={i} style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: "22px 24px" }}>
-              <p style={{ color: G.textSec, fontSize: 12, fontWeight: 500, marginBottom: 6, letterSpacing: "0.04em", textTransform: "uppercase" }}>{s.label}</p>
-              <p style={{ ...hd, fontSize: 40, color: s.color || G.text, lineHeight: 1, marginBottom: 6 }}>{s.value}</p>
-              <p style={{ fontSize: 12, color: G.textTer }}>{s.sub}</p>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.05em", lineHeight: 1.1 }}>ALCHEMY</p>
+              <p style={{ fontSize: 10, color: G.textTer, fontWeight: 400, lineHeight: 1.1, marginTop: 1 }}>Productions</p>
             </div>
-          ))}
+          </div>
+
+          {/* Client identity card */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", background: G.bg, border: `1px solid ${G.border}`, borderRadius: 12, marginBottom: 22 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: G.ink, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>{initial}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: G.text, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{client.name}</p>
+              <p style={{ fontSize: 10, color: G.textTer, marginTop: 2 }}>Client workspace</p>
+            </div>
+          </div>
+
+          {/* Section nav */}
+          <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, padding: "6px 12px", marginBottom: 4 }}>Workspace</p>
+            {sections.map(s => (
+              <button key={s.k} className={`ch-nav-item${section === s.k ? " active" : ""}`} onClick={() => { setSection(s.k); setSidebarOpen(false); }}>
+                {s.icon}
+                <span>{s.lbl}</span>
+                {s.badge && <span className="badge">{s.badge}</span>}
+              </button>
+            ))}
+          </nav>
+
+          {/* Sign out at bottom */}
+          <div style={{ marginTop: "auto", paddingTop: 16, borderTop: `1px solid ${G.border}`, display: "flex", flexDirection: "column", gap: 4 }}>
+            <button className="ch-nav-item" onClick={signOut}>
+              <LogOut size={16} />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="ch-main">
+          {/* Mobile top bar */}
+          <div className="ch-mobile-bar" style={{ alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: `1px solid ${G.border}`, background: G.bg, position: "sticky", top: 0, zIndex: 50 }}>
+            <button onClick={() => setSidebarOpen(true)} style={{ background: "transparent", border: "none", padding: 6, cursor: "pointer", color: G.text }}><Menu size={20} /></button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: G.text }}>{sections.find(s => s.k === section)?.lbl}</span>
+            <span style={{ width: 32 }} />
+          </div>
+
+          {/* Section content */}
+          {section === "analytics" && (
+            <AnalyticsSection
+              client={client}
+              dashboard={dashboards[0]}
+              dashboards={dashboards}
+              campaigns={campaigns}
+              feedback={feedback}
+              totalAssets={totalAssets}
+            />
+          )}
+
+          {section === "creatives" && (
+            <CreativesSection portal={portal} feedback={feedback} clientName={client.name} />
+          )}
+
+          {section === "brand" && (
+            <BrandSection intake={intake} clientName={client.name} />
+          )}
+        </main>
+      </div>
+
+      {/* Floating chat - always available */}
+      {portal && <PortalChat projectId={portal.id} sender="client" brandName={client?.name || ""} />}
+    </div>
+  );
+}
+
+// ───────────────────────────── Sections ─────────────────────────────
+
+function AnalyticsSection({ client, dashboard, dashboards, campaigns, feedback, totalAssets }) {
+  return (
+    <div style={{ padding: "32px 40px 80px", maxWidth: 1280, margin: "0 auto" }}>
+      <SectionHeader title="Analytics" subtitle="Live performance data, KPIs and Oracle AI insights." />
+
+      {/* Inline iframe of the marketing dashboard (full functionality) */}
+      {dashboard ? (
+        <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", minHeight: 800 }}>
+          <iframe
+            src={`/marketing/${dashboard.slug}?embed=1`}
+            title={`${client.name} Analytics`}
+            style={{ width: "100%", height: "calc(100vh - 180px)", minHeight: 720, border: "none", display: "block" }}
+            allow="clipboard-write"
+          />
         </div>
-
-        {/* Tools Section */}
-        <div style={{ marginBottom: 60 }}>
-          <h2 style={{ ...hd, fontSize: 32, color: G.text, marginBottom: 4 }}>Your Tools</h2>
-          <p style={{ fontSize: 14, color: G.textSec, marginBottom: 24 }}>Click any card to open the full tool</p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-
-            {/* Feedback Portal */}
-            {portal ? (
-              <a href={`/portal/${portal.slug}`} target="_blank" rel="noreferrer"
-                style={toolCardStyle({ active: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.ink, "#fff")}><MessageSquare size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <span style={pillStyle(G.approve)}>● Live</span>
-                    </div>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Feedback Portal</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Review draft assets, approve or request revisions, and chat with the team.
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: "12px 0", borderTop: `1px solid ${G.border}`, borderBottom: `1px solid ${G.border}`, marginBottom: 14 }}>
-                  <div style={{ textAlign: "center" }}><p style={{ ...hd, fontSize: 22, color: G.text }}>{portal.images?.length || 0}</p><p style={{ fontSize: 10, color: G.textTer, letterSpacing: "0.05em", textTransform: "uppercase" }}>Images</p></div>
-                  <div style={{ textAlign: "center" }}><p style={{ ...hd, fontSize: 22, color: G.text }}>{portal.heroScripts?.length || 0}</p><p style={{ fontSize: 10, color: G.textTer, letterSpacing: "0.05em", textTransform: "uppercase" }}>Hero</p></div>
-                  <div style={{ textAlign: "center" }}><p style={{ ...hd, fontSize: 22, color: G.text }}>{portal.ugcScripts?.length || 0}</p><p style={{ fontSize: 10, color: G.textTer, letterSpacing: "0.05em", textTransform: "uppercase" }}>UGC</p></div>
-                </div>
-                <div style={ctaRowStyle}>
-                  <span>Open Portal</span>
-                  <ArrowRight size={16} />
-                </div>
-              </a>
-            ) : (
-              <div style={toolCardStyle({ empty: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.bg, G.textTer, true)}><MessageSquare size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <span style={pillStyle(G.textTer)}>○ Coming soon</span>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4, marginTop: 4 }}>Feedback Portal</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Once your team uploads draft assets, you&apos;ll review them here.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Brand Kit */}
-            {intake ? (
-              <a href={`#brand-kit`} onClick={(e) => { e.preventDefault(); document.getElementById("brand-kit")?.scrollIntoView({ behavior: "smooth" }); }}
-                style={toolCardStyle({ active: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.ink, "#fff")}><Palette size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <span style={pillStyle(G.approve)}>● Complete</span>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4, marginTop: 4 }}>Brand Kit</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Your brand foundation — voice, audience, goals, and visual references.
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-                  {[intake.brand_name, intake.industry, intake.location].filter(Boolean).slice(0, 3).map((t, i) => (
-                    <span key={i} style={tagStyle}>{t}</span>
-                  ))}
-                </div>
-                <div style={ctaRowStyle}>
-                  <span>View Brand</span>
-                  <ArrowRight size={16} />
-                </div>
-              </a>
-            ) : (
-              <div style={toolCardStyle({ empty: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.bg, G.textTer, true)}><Palette size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <span style={pillStyle(G.textTer)}>○ Coming soon</span>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4, marginTop: 4 }}>Brand Kit</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Your brand identity will appear here once we capture it.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Marketing Dashboards */}
-            {dashboards.length > 0 ? (
-              <a href={`/marketing/${dashboards[0].slug}`} target="_blank" rel="noreferrer"
-                style={toolCardStyle({ active: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.ink, "#fff")}><BarChart3 size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <span style={pillStyle(G.info)}>● Active</span>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4, marginTop: 4 }}>Marketing BI</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Live performance analytics with the Oracle AI copilot.
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "12px 0", borderTop: `1px solid ${G.border}`, borderBottom: `1px solid ${G.border}`, marginBottom: 14 }}>
-                  <div style={{ textAlign: "center" }}><p style={{ ...hd, fontSize: 22, color: G.text }}>{dashboards.length}</p><p style={{ fontSize: 10, color: G.textTer, letterSpacing: "0.05em", textTransform: "uppercase" }}>Dashboards</p></div>
-                  <div style={{ textAlign: "center" }}><p style={{ ...hd, fontSize: 22, color: G.text }}>{totalDashboardRows.toLocaleString()}</p><p style={{ fontSize: 10, color: G.textTer, letterSpacing: "0.05em", textTransform: "uppercase" }}>Data Points</p></div>
-                </div>
-                <div style={ctaRowStyle}>
-                  <span>Open Dashboard</span>
-                  <ArrowRight size={16} />
-                </div>
-              </a>
-            ) : (
-              <div style={toolCardStyle({ empty: true })}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                  <div style={iconWrapStyle(G.bg, G.textTer, true)}><BarChart3 size={20} /></div>
-                  <div style={{ flex: 1 }}>
-                    <span style={pillStyle(G.textTer)}>○ Coming soon</span>
-                    <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4, marginTop: 4 }}>Marketing BI</p>
-                    <p style={{ fontSize: 13, color: G.textSec, lineHeight: 1.5 }}>
-                      Performance analytics & AI insights will live here.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          </div>
+      ) : (
+        <div style={{ padding: 40, background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, textAlign: "center" }}>
+          <Loader2 size={24} style={{ animation: "spinKf 1s linear infinite" }} color={G.textTer} />
+          <p style={{ fontSize: 13, color: G.textSec, marginTop: 10 }}>Setting up your analytics workspace...</p>
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* All marketing dashboards (if more than one) */}
-        {dashboards.length > 1 && (
-          <div style={{ marginBottom: 60 }}>
-            <h3 style={{ ...hd, fontSize: 24, color: G.text, marginBottom: 16 }}>All Dashboards</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {dashboards.map(d => (
-                <a key={d.id} href={`/marketing/${d.slug}`} target="_blank" rel="noreferrer"
-                  style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", background: G.card, border: `1px solid ${G.cardBorder}`, borderRadius: 14, textDecoration: "none", color: "inherit", transition: "all 0.2s", boxShadow: G.cardShadow }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = G.ink; e.currentTarget.style.transform = "translateX(2px)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = G.cardBorder; e.currentTarget.style.transform = "translateX(0)"; }}>
-                  <div style={iconWrapStyle("#F5F5F7", G.ink)}><BarChart3 size={18} /></div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: G.text, marginBottom: 2 }}>{d.title}</p>
-                    <p style={{ fontSize: 12, color: G.textTer }}>{d.rowCount.toLocaleString()} rows · {new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
-                  </div>
-                  <ChevronRight size={16} color={G.textTer} />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Brand Kit Preview Section */}
-        {intake && (
-          <div id="brand-kit" style={{ marginBottom: 60, scrollMarginTop: 32 }}>
-            <h3 style={{ ...hd, fontSize: 32, color: G.text, marginBottom: 4 }}>Brand Kit</h3>
-            <p style={{ fontSize: 14, color: G.textSec, marginBottom: 24 }}>The foundation for everything we create together.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-              <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, marginBottom: 14 }}>Brand Details</p>
-                {[["Brand", intake.brand_name], ["Website", intake.website], ["Industry", intake.industry], ["Location", intake.location]].filter(([, v]) => v).map(([k, v]) => (
-                  <div key={k} style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 12, padding: "8px 0", borderBottom: `1px solid ${G.border}` }}>
-                    <span style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{k}</span>
-                    <span style={{ fontSize: 13, color: G.text, lineHeight: 1.5 }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, marginBottom: 14 }}>Campaign Context</p>
-                {[["Audience", intake.target_audience], ["Goals", intake.campaign_goals], ["Budget", intake.budget], ["Timeline", intake.timeline]].filter(([, v]) => v).map(([k, v]) => (
-                  <div key={k} style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: 12, padding: "8px 0", borderBottom: `1px solid ${G.border}` }}>
-                    <span style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{k}</span>
-                    <span style={{ fontSize: 13, color: G.text, lineHeight: 1.5 }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              {intake.product_image_urls?.length > 0 && (
-                <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, gridColumn: "1 / -1" }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, marginBottom: 14 }}>Product Imagery</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {intake.product_image_urls.map((u, i) => (
-                      <img key={i} src={u} alt="" style={{ width: 88, height: 88, borderRadius: 10, objectFit: "cover", border: `1px solid ${G.border}` }} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <footer style={{ borderTop: `1px solid ${G.border}`, padding: "32px 0", marginTop: 60, marginBottom: 40, textAlign: "center" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", border: `1.5px solid ${G.inkBorder}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Sparkles size={10} style={{ color: G.textTer }} />
-            </div>
-            <span style={{ fontSize: 13, color: G.textTer }}>Alchemy Productions</span>
-          </div>
-          <p style={{ fontSize: 11, color: G.textTer }}>&copy; {new Date().getFullYear()} Alchemy Productions LLC. All rights reserved.</p>
-        </footer>
+function CreativesSection({ portal, feedback, clientName }) {
+  if (!portal) {
+    return (
+      <div style={{ padding: "32px 40px 80px", maxWidth: 1280, margin: "0 auto" }}>
+        <SectionHeader title="Creatives" subtitle="Review draft assets and approve or request revisions." />
+        <div style={{ padding: 60, background: G.card, border: `1px dashed ${G.border}`, borderRadius: 18, textAlign: "center" }}>
+          <MessageSquare size={36} color={G.textTer} style={{ marginBottom: 12 }} />
+          <h3 style={{ ...hd, fontSize: 24, color: G.text, marginBottom: 6 }}>No creatives yet</h3>
+          <p style={{ fontSize: 13, color: G.textSec, maxWidth: 460, margin: "0 auto" }}>Once your team uploads draft assets, they&apos;ll appear here for your review and approval.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
+      <SectionHeader
+        title="Creatives"
+        subtitle={`Review and approve assets. ${feedback.approved} approved · ${feedback.revision} revisions · ${feedback.rejected} rejected.`}
+      />
+      <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", minHeight: 800 }}>
+        <iframe
+          src={`/portal/${portal.slug}?embed=1`}
+          title={`${clientName} Creatives`}
+          style={{ width: "100%", height: "calc(100vh - 180px)", minHeight: 720, border: "none", display: "block" }}
+          allow="clipboard-write"
+        />
       </div>
     </div>
   );
 }
 
-// ── Inline style helpers ──
-function toolCardStyle({ active, empty }) {
-  return {
-    display: "flex", flexDirection: "column", padding: 24,
-    background: G.card, border: `1px solid ${empty ? G.border : G.cardBorder}`,
-    borderStyle: empty ? "dashed" : "solid",
-    boxShadow: empty ? "none" : G.cardShadow,
-    borderRadius: 20, transition: "all 0.25s ease",
-    textDecoration: "none", color: "inherit",
-    cursor: empty ? "default" : "pointer",
-    opacity: empty ? 0.7 : 1,
-    minHeight: 240,
-    fontFamily: "inherit",
-    onMouseEnter: undefined, onMouseLeave: undefined,
-    // Hover handled via CSS-in-JS would need state; using subtle base style instead
-  };
+function BrandSection({ intake, clientName }) {
+  if (!intake) {
+    return (
+      <div style={{ padding: "32px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
+        <SectionHeader title="Brand Guidelines" subtitle="Your brand foundation - voice, audience, visual references." />
+        <div style={{ padding: 60, background: G.card, border: `1px dashed ${G.border}`, borderRadius: 18, textAlign: "center" }}>
+          <Palette size={36} color={G.textTer} style={{ marginBottom: 12 }} />
+          <h3 style={{ ...hd, fontSize: 24, color: G.text, marginBottom: 6 }}>Brand Guidelines coming soon</h3>
+          <p style={{ fontSize: 13, color: G.textSec, maxWidth: 460, margin: "0 auto" }}>Your brand identity will live here once we capture it together.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ padding: "32px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
+      <SectionHeader title="Brand Guidelines" subtitle={`The foundation for everything we create for ${clientName}.`} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        {(intake.tagline || intake.story) && (
+          <BrandCard fullWidth title="Brand Story">
+            {intake.tagline && <p style={{ ...hd, fontSize: 26, color: G.text, marginBottom: 12, lineHeight: 1.25, fontStyle: "italic" }}>&ldquo;{intake.tagline}&rdquo;</p>}
+            {intake.story && <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{intake.story}</p>}
+          </BrandCard>
+        )}
+
+        <BrandCard title="Brand Details">
+          {[["Brand", intake.brand_name], ["Website", intake.website], ["Industry", intake.industry], ["Location", intake.location]].filter(([, v]) => v).map(([k, v]) => (
+            <BrandRow key={k} label={k} value={k === "Website" ? <a href={v.startsWith("http") ? v : `https://${v}`} target="_blank" rel="noreferrer" style={{ color: G.ink, textDecoration: "none", borderBottom: `1px solid ${G.inkBorder}` }}>{v}</a> : v} />
+          ))}
+        </BrandCard>
+
+        {(intake.personality_tags?.length > 0 || typeof intake.tone_formality === "number") && (
+          <BrandCard title="Personality & Tone">
+            {intake.personality_tags?.length > 0 && (
+              <div style={{ marginBottom: typeof intake.tone_formality === "number" ? 16 : 0 }}>
+                <p style={brandLabelStyle}>Personality</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {intake.personality_tags.map((t, i) => <span key={i} style={tagStyle}>{t}</span>)}
+                </div>
+              </div>
+            )}
+            {[["Formality", intake.tone_formality, "Casual", "Formal"], ["Mood", intake.tone_mood, "Serious", "Playful"], ["Intensity", intake.tone_intensity, "Calm", "Bold"]].filter(([, v]) => typeof v === "number").map(([k, v, lo, hi]) => (
+              <div key={k} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ ...brandLabelStyle, marginBottom: 0 }}>{k}</span>
+                  <span style={{ fontSize: 11, color: G.textTer }}>{lo} ↔ {hi}</span>
+                </div>
+                <div style={{ position: "relative", height: 6, background: "#F5F5F7", borderRadius: 999 }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${v}%`, background: G.ink, borderRadius: 999 }} />
+                </div>
+              </div>
+            ))}
+          </BrandCard>
+        )}
+
+        {intake.brand_colors && (
+          <BrandCard title="Brand Colors">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {String(intake.brand_colors).split(/[,\s]+/).filter(c => /^#?[0-9A-Fa-f]{3,8}$/.test(c)).map((c, i) => {
+                const hex = c.startsWith("#") ? c : `#${c}`;
+                return (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 12, background: hex, border: `1px solid ${G.border}` }} />
+                    <span style={{ fontSize: 10, color: G.textTer, fontFamily: "monospace" }}>{hex}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </BrandCard>
+        )}
+
+        {(intake.audience_description || intake.age_range || intake.competitors || intake.deepest_fears || intake.deepest_desires) && (
+          <BrandCard fullWidth title="Audience & Market">
+            {intake.age_range && <BrandRow label="Age Range" value={intake.age_range} />}
+            {intake.audience_description && <BrandLongRow label="Audience" value={intake.audience_description} />}
+            {intake.competitors && <BrandLongRow label="Competitors" value={intake.competitors} />}
+            {intake.deepest_fears && <BrandLongRow label="Deep Fears" value={intake.deepest_fears} />}
+            {intake.deepest_desires && <BrandLongRow label="Deep Desires" value={intake.deepest_desires} />}
+          </BrandCard>
+        )}
+
+        {(intake.influencer_age || intake.influencer_gender || intake.influencer_style || intake.influencer_personality || intake.influencer_notes) && (
+          <BrandCard fullWidth title="Spokesperson Profile">
+            {[
+              ["Age", intake.influencer_age],
+              ["Gender", intake.influencer_gender],
+              ["Ethnicity", intake.influencer_ethnicity],
+              ["Body Type", intake.influencer_body_type],
+              ["Hair", [intake.influencer_hair_color, intake.influencer_hair_style].filter(Boolean).join(", ")],
+              ["Style", intake.influencer_style],
+              ["Personality", intake.influencer_personality],
+              ["Notes", intake.influencer_notes],
+            ].filter(([, v]) => v).map(([k, v]) => (
+              String(v).length > 90 ? <BrandLongRow key={k} label={k} value={v} /> : <BrandRow key={k} label={k} value={v} />
+            ))}
+          </BrandCard>
+        )}
+
+        {(intake.voice_style?.length > 0 || intake.voice_gender || intake.voice_age || intake.voice_notes) && (
+          <BrandCard title="Voice">
+            {intake.voice_style?.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={brandLabelStyle}>Style</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{intake.voice_style.map((t, i) => <span key={i} style={tagStyle}>{t}</span>)}</div>
+              </div>
+            )}
+            {intake.voice_gender && <BrandRow label="Gender" value={intake.voice_gender} />}
+            {intake.voice_age && <BrandRow label="Age" value={intake.voice_age} />}
+            {intake.voice_notes && <BrandLongRow label="Notes" value={intake.voice_notes} />}
+          </BrandCard>
+        )}
+
+        {(intake.music_mood?.length > 0 || intake.music_genres?.length > 0 || intake.music_notes) && (
+          <BrandCard title="Music">
+            {intake.music_mood?.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={brandLabelStyle}>Mood</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{intake.music_mood.map((t, i) => <span key={i} style={tagStyle}>{t}</span>)}</div>
+              </div>
+            )}
+            {intake.music_genres?.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={brandLabelStyle}>Genres</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{intake.music_genres.map((t, i) => <span key={i} style={tagStyle}>{t}</span>)}</div>
+              </div>
+            )}
+            {intake.music_notes && <BrandLongRow label="Notes" value={intake.music_notes} />}
+          </BrandCard>
+        )}
+
+        {(typeof intake.video_pace === "number" || intake.video_transitions || intake.video_notes) && (
+          <BrandCard title="Video Direction">
+            {[["Pace", intake.video_pace, "Slow", "Fast"], ["Energy", intake.video_energy, "Calm", "Hyped"]].filter(([, v]) => typeof v === "number").map(([k, v, lo, hi]) => (
+              <div key={k} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ ...brandLabelStyle, marginBottom: 0 }}>{k}</span>
+                  <span style={{ fontSize: 11, color: G.textTer }}>{lo} ↔ {hi}</span>
+                </div>
+                <div style={{ position: "relative", height: 6, background: "#F5F5F7", borderRadius: 999 }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${v}%`, background: G.ink, borderRadius: 999 }} />
+                </div>
+              </div>
+            ))}
+            {intake.video_transitions && <BrandRow label="Transitions" value={intake.video_transitions} />}
+            {intake.video_cuts && <BrandRow label="Cuts" value={intake.video_cuts} />}
+            {intake.video_notes && <BrandLongRow label="Notes" value={intake.video_notes} />}
+          </BrandCard>
+        )}
+
+        {(intake.objective || intake.key_message || intake.target_audience || intake.campaign_goals) && (
+          <BrandCard fullWidth title="Strategy">
+            {[["Objective", intake.objective], ["Audience", intake.target_audience], ["Goals", intake.campaign_goals], ["Budget", intake.budget], ["Timeline", intake.timeline]].filter(([, v]) => v).map(([k, v]) => (
+              String(v).length > 90 ? <BrandLongRow key={k} label={k} value={v} /> : <BrandRow key={k} label={k} value={v} />
+            ))}
+            {intake.key_message && <BrandLongRow label="Key Message" value={intake.key_message} />}
+          </BrandCard>
+        )}
+
+        {intake.unique_features?.length > 0 && (
+          <BrandCard fullWidth title="Unique Features">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {intake.unique_features.map((f, i) => (
+                <div key={i} style={{ padding: "10px 14px", background: "#F5F5F7", borderRadius: 10, fontSize: 13, color: G.text, lineHeight: 1.6 }}>{f}</div>
+              ))}
+            </div>
+          </BrandCard>
+        )}
+
+        {intake.testimonials?.length > 0 && (
+          <BrandCard fullWidth title="Testimonials">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
+              {intake.testimonials.map((t, i) => (
+                <div key={i} style={{ padding: 14, background: "#F5F5F7", borderRadius: 10, fontSize: 13, color: G.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{t}</div>
+              ))}
+            </div>
+          </BrandCard>
+        )}
+
+        {intake.product_image_urls?.length > 0 && (
+          <BrandCard fullWidth title="Product Imagery">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {intake.product_image_urls.map((u, i) => (
+                <img key={i} src={u} alt="" style={{ width: 110, height: 110, borderRadius: 12, objectFit: "cover", border: `1px solid ${G.border}` }} />
+              ))}
+            </div>
+          </BrandCard>
+        )}
+      </div>
+    </div>
+  );
 }
-function iconWrapStyle(bg, color, soft = false) {
-  return { width: 44, height: 44, borderRadius: 12, background: bg, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: soft ? `1px solid ${G.border}` : "none" };
+
+function SectionHeader({ title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h1 style={{ ...hd, fontSize: 36, color: G.text, marginBottom: 4 }}>{title}</h1>
+      <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.5 }}>{subtitle}</p>
+    </div>
+  );
 }
-function pillStyle(color) {
-  return { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color, padding: "3px 10px", borderRadius: 980, background: color + "15" };
-}
+
+// ── Inline style helpers (for BrandCard etc.) ──
 const tagStyle = { fontSize: 11, fontWeight: 500, color: G.textSec, padding: "4px 10px", background: "#F5F5F7", borderRadius: 980, border: `1px solid ${G.border}` };
-const ctaRowStyle = { marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, color: G.ink, paddingTop: 4 };
+const brandLabelStyle = { fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: G.textTer, marginBottom: 6 };
+
+function BrandCard({ title, children, fullWidth }) {
+  return (
+    <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, gridColumn: fullWidth ? "1 / -1" : "auto" }}>
+      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, marginBottom: 14 }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function BrandRow({ label, value }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, padding: "8px 0", borderBottom: `1px solid ${G.border}`, alignItems: "start" }}>
+      <span style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</span>
+      <span style={{ fontSize: 13, color: G.text, lineHeight: 1.5 }}>{value}</span>
+    </div>
+  );
+}
+
+function BrandLongRow({ label, value }) {
+  return (
+    <div style={{ padding: "10px 0", borderBottom: `1px solid ${G.border}` }}>
+      <p style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontSize: 13, color: G.text, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{value}</p>
+    </div>
+  );
+}

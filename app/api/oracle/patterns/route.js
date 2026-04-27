@@ -11,9 +11,9 @@ export async function POST(req) {
 ${dataContext}
 
 Look for performance patterns across:
-- Asset Type (Video, Image, Carousel, UGC) — which formats win?
-- Hook angle (Testimonial, Demo, Founder Story, Promo, Before/After) — which messaging works?
-- Placement (Reels, Feed, Stories, Advantage+) — where does each format perform best?
+- Asset Type (Video, Image, Carousel, UGC). which formats win?
+- Hook angle (Testimonial, Demo, Founder Story, Promo, Before/After). which messaging works?
+- Placement (Reels, Feed, Stories, Advantage+). where does each format perform best?
 
 STRICT RULES:
 - Each insight must reference SPECIFIC categorical values from the data with 2+ numbers

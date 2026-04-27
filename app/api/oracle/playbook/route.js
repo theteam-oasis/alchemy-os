@@ -13,7 +13,7 @@ ${dataContext}
 STRICT RULES:
 - Every "title" must name a SPECIFIC ad set / placement from the data
 - Every "why" must cite 2+ specific numbers
-- No "industry benchmarks" — only compare items in this dataset
+- No "industry benchmarks". only compare items in this dataset
 
 Return exactly:
 {

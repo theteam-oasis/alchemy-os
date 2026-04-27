@@ -16,7 +16,7 @@ export async function POST(request) {
 
     console.log('Generating | size:', imageSize || '2K', '| aspect:', aspectRatio || '16:9', '| avatar url:', !!avatarImageUrl, '| product url:', !!productImageUrl)
 
-    // Build parts — text first, then fetch reference images by URL server-side
+    // Build parts. text first, then fetch reference images by URL server-side
     const parts = [{ text: prompt }]
 
     // Fetch avatar reference image from URL (avoids huge base64 in request body)

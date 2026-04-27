@@ -11,13 +11,13 @@ const BORDER = '#1c1c1e'
 
 const SCENES = [
   {
-    id: 1, time: '0:00–0:06', title: 'Night Before — Packing',
+    id: 1, time: '0:00–0:06', title: 'Night Before. Packing',
     vo: '"Every trip starts the same way."',
     left: 'Sitting on a suitcase trying to force it shut. Clothes everywhere. Stressed.',
     right: 'Schedules a Stowic pickup on their phone. Bag already packed and waiting by the door. Pours a glass of wine.'
   },
   {
-    id: 2, time: '0:06–0:14', title: 'Morning — Leaving for the Airport',
+    id: 2, time: '0:06–0:14', title: 'Morning. Leaving for the Airport',
     vo: '"One person carries the weight of the journey. The other just... goes."',
     left: 'Lugging two heavy bags into a taxi, sweating, knocking into things.',
     right: 'Steps out the door with just a small bag over one shoulder. Unhurried. Composed.'
@@ -30,7 +30,7 @@ const SCENES = [
   },
   {
     id: 4, time: '0:22–0:30', title: 'On the Plane / Landing',
-    vo: '"And when you land — the wait isn\'t over."',
+    vo: '"And when you land. the wait isn\'t over."',
     left: 'Standing at baggage claim. Watching. Waiting. Bag comes out last, zipper broken.',
     right: 'Already in a cab. Phone shows a notification: "Your Stowic delivery has arrived." Smiles.'
   },
@@ -42,7 +42,7 @@ const SCENES = [
   },
   {
     id: 6, time: '0:38–0:45', title: 'Logo Card',
-    vo: '"Stowic. Door to door luggage shipping. So the only thing you carry — is the moment."',
+    vo: '"Stowic. Door to door luggage shipping. So the only thing you carry. is the moment."',
     left: null, right: 'stowic.com'
   },
 ]
@@ -199,7 +199,7 @@ export default function StowicVideoBrief() {
     const ok = await saveToBin(data)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
-    if (!ok) console.warn('Supabase save failed — saved to localStorage only')
+    if (!ok) console.warn('Supabase save failed. saved to localStorage only')
   }
 
   async function handleUpload(file, key, setter, nameSetter) {
@@ -275,7 +275,7 @@ export default function StowicVideoBrief() {
     {isAdmin && (
       <div style={{position:'sticky',top:0,zIndex:100,background:G,padding:'10px 32px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.12em',textTransform:'uppercase',color:'#000'}}>
-          ⚡ Admin Mode {uploading ? `— uploading...` : '— all uploads auto-save'}
+          ⚡ Admin Mode {uploading ? `- uploading...` : '- all uploads auto-save'}
         </span>
         <div style={{display:'flex',gap:8}}>
           <button onClick={handleSave} style={{background:'#000',color:G,border:'none',padding:'7px 20px',fontSize:11,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',borderRadius:6}}>
@@ -320,7 +320,7 @@ export default function StowicVideoBrief() {
         The Old Way<br/><span style={{color:G}}>vs.</span><br/>The Stowic Way
       </h1>
       <p style={{fontSize:16,color:'#666',fontWeight:300,maxWidth:520,lineHeight:1.7,marginBottom:52}}>
-        A split-screen 45-second ad showing the contrast between carrying your luggage the old way and the Stowic experience — door to door.
+        A split-screen 45-second ad showing the contrast between carrying your luggage the old way and the Stowic experience. door to door.
       </p>
       <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
         {['45 Seconds','Split-Screen','16:9 Landscape','Door to Door'].map(t=>(
@@ -344,7 +344,7 @@ export default function StowicVideoBrief() {
             <div style={{width:8,height:8,borderRadius:'50%',background:'#ef4444'}}/>
             <span style={{fontFamily:'DM Mono',fontSize:10,color:'#ef4444',letterSpacing:'0.1em',textTransform:'uppercase'}}>The Old Way</span>
           </div>
-          <ImgSlot src={avatarOld} aspect="3/4" placeholder="Avatar — Old Way"/>
+          <ImgSlot src={avatarOld} aspect="3/4" placeholder="Avatar. Old Way"/>
           {isAdmin && <div style={{padding:'10px 14px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>trigger(rAvatarOld)} color="#ef4444">{uploading==='avatarOld'?'Uploading...':avatarOld?'Replace Avatar':'Upload Avatar'}</Btn></div>}
           <div style={{padding:'20px 24px'}}>
             <p style={{fontSize:13,color:'#555',lineHeight:1.7,fontWeight:300}}>Stressed. Overpacked. Always rushing. Pays baggage fees, waits at baggage claim, arrives exhausted.</p>
@@ -356,10 +356,10 @@ export default function StowicVideoBrief() {
             <div style={{width:8,height:8,borderRadius:'50%',background:G}}/>
             <span style={{fontFamily:'DM Mono',fontSize:10,color:G,letterSpacing:'0.1em',textTransform:'uppercase'}}>The Stowic Way</span>
           </div>
-          <ImgSlot src={avatarNew} aspect="3/4" placeholder="Avatar — Stowic Way"/>
+          <ImgSlot src={avatarNew} aspect="3/4" placeholder="Avatar. Stowic Way"/>
           {isAdmin && <div style={{padding:'10px 14px',borderTop:`1px solid #2a2518`}}><Btn onClick={()=>trigger(rAvatarNew)}>{uploading==='avatarNew'?'Uploading...':avatarNew?'Replace Avatar':'Upload Avatar'}</Btn></div>}
           <div style={{padding:'20px 24px'}}>
-            <p style={{fontSize:13,color:'#666',lineHeight:1.7,fontWeight:300}}>Composed. Unhurried. Already won. Stowic ships the bag door to door — she just shows up.</p>
+            <p style={{fontSize:13,color:'#666',lineHeight:1.7,fontWeight:300}}>Composed. Unhurried. Already won. Stowic ships the bag door to door. she just shows up.</p>
           </div>
         </div>
       </div>
@@ -398,7 +398,7 @@ export default function StowicVideoBrief() {
                 </div>
 
                 {isLogoCard ? (
-                  /* Logo card — just text, no image upload */
+                  /* Logo card. just text, no image upload */
                   <div style={{padding:'32px 24px',textAlign:'center'}}>
                     <p style={{fontFamily:'Bebas Neue',fontSize:48,letterSpacing:'0.08em',color:'#1a1a1a',marginBottom:8}}>STOWIC</p>
                     <p style={{fontFamily:'DM Mono',fontSize:13,color:'#2a2a2a',letterSpacing:'0.1em'}}>stowic.com</p>
@@ -406,7 +406,7 @@ export default function StowicVideoBrief() {
                 ) : (
                   /* Split screen */
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr'}}>
-                    {/* Left — Old Way */}
+                    {/* Left. Old Way */}
                     <div style={{borderRight:`1px solid ${BORDER}`}}>
                       <ImgSlot src={sceneImages[lk]} aspect="9/16" placeholder="Old Way"/>
                       {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>sceneRefs[lk]?.current?.click()} color="#ef4444">{uploading===lk?'Uploading...':'↑ Old Way'}</Btn></div>}
@@ -418,7 +418,7 @@ export default function StowicVideoBrief() {
                         <p style={{fontSize:13,color:'#555',lineHeight:1.65,fontWeight:300}}>{scene.left}</p>
                       </div>
                     </div>
-                    {/* Right — Stowic Way */}
+                    {/* Right. Stowic Way */}
                     <div>
                       <ImgSlot src={sceneImages[rk]} aspect="9/16" placeholder="Stowic Way"/>
                       {isAdmin && <div style={{padding:'8px 12px',borderTop:`1px solid ${BORDER}`}}><Btn onClick={()=>sceneRefs[rk]?.current?.click()}>{uploading===rk?'Uploading...':'↑ Stowic Way'}</Btn></div>}

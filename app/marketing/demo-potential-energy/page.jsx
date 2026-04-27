@@ -194,7 +194,7 @@ function buildAccountDataset(account) {
     ],
     rows: generateAccountRows(account, false),
     fileName: `${account.handle} - Q1 2026.csv`,
-    title: `${account.name} — Q1 2026`,
+    title: `${account.name}. Q1 2026`,
     clientName: "Potential Energy",
   };
 }
@@ -212,7 +212,7 @@ function buildCombinedDataset() {
     ],
     rows: allRows,
     fileName: "Potential Energy - All Accounts Q1 2026.csv",
-    title: "Potential Energy — All Accounts Q1 2026",
+    title: "Potential Energy. All Accounts Q1 2026",
     clientName: "Potential Energy",
   };
 }
@@ -384,7 +384,7 @@ function CombinedInfoCard() {
           }}>🌐</div>
           <div style={{ flex: 1 }}>
             <h2 style={{ ...hd, fontSize: 24, color: C.text, lineHeight: 1.1, marginBottom: 4 }}>
-              All Accounts — Combined View
+              All Accounts. Combined View
             </h2>
             <p style={{ ...body, fontSize: 13, color: C.textSec, lineHeight: 1.5 }}>
               Aggregated performance across all 5 Potential Energy AI influencer accounts. Use the "Account" breakdown to compare.

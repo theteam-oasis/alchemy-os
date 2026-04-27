@@ -13,7 +13,7 @@ ${dataContext}
 STRICT RULES:
 - Every headline/title must name a SPECIFIC ad set / placement / metric from the data
 - Every detail must cite 2+ specific numbers ($ or %)
-- No "industry benchmarks" — only compare items in this dataset
+- No "industry benchmarks". only compare items in this dataset
 - Be willing to call out specific underperformers by name
 
 Return exactly this shape:

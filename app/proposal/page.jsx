@@ -386,7 +386,7 @@ export default function ProposalPage() {
             <span style={{ color: G.gold, fontSize: 12, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", ...mono }}>Proven Results</span>
           </BlurReveal>
           <ScrollBlurText as="h2" style={{ ...hd, fontSize: 44, color: G.text, lineHeight: 1.2, maxWidth: 700, margin: "0 auto", justifyContent: "center" }}>{"Over $12M Generated With Our Ads"}</ScrollBlurText>
-          <BlurReveal as="p" style={{ ...hd, fontSize: 22, color: G.textSec, lineHeight: 1.5, maxWidth: 560, margin: "20px auto 0", justifyContent: "center" }}>Across 40+ DTC brands — from skincare to supplements and everything in between.</BlurReveal>
+          <BlurReveal as="p" style={{ ...hd, fontSize: 22, color: G.textSec, lineHeight: 1.5, maxWidth: 560, margin: "20px auto 0", justifyContent: "center" }}>Across 40+ DTC brands. from skincare to supplements and everything in between.</BlurReveal>
         </section>
 
         {/* ── Packages ── */}

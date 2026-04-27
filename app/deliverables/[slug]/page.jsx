@@ -37,7 +37,7 @@ export async function generateMetadata({ params }) {
 
   const clientName = deliverable.client_name;
   const firstImage = (deliverable.static_urls || [])[0] || null;
-  const title = `${clientName} — Creative Deliverables`;
+  const title = `${clientName}. Creative Deliverables`;
   const description = `Creative deliverables for ${clientName} by Alchemy Productions. High-quality images and videos ready for deployment.`;
 
   return {

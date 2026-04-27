@@ -17,10 +17,10 @@ const body = { fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe U
  * AddProductModal
  *
  * Props:
- * - open: boolean — show/hide
+ * - open: boolean. show/hide
  * - onClose: () => void
- * - slug: string — dashboard slug to add product to
- * - onSuccess: (resultJson) => void — called after API success
+ * - slug: string. dashboard slug to add product to
+ * - onSuccess: (resultJson) => void. called after API success
  */
 export default function AddProductModal({ open, onClose, slug, onSuccess }) {
   const [productName, setProductName] = useState("");

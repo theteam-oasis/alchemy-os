@@ -50,13 +50,13 @@ async function generateImage(prompt, options = {}) {
   const apiKey = process.env.GOOGLE_API_KEY
   const parts = [{ text: prompt }]
 
-  // Avatar reference — character consistency
+  // Avatar reference. character consistency
   if (avatarUrl) {
     const img = await fetchImageAsBase64(avatarUrl)
     if (img) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
   }
 
-  // Product reference — product consistency
+  // Product reference. product consistency
   if (productUrl) {
     const img = await fetchImageAsBase64(productUrl)
     if (img) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } })
@@ -114,7 +114,7 @@ function slugify(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-// Handles ONE concept per call — called 2x in parallel from frontend
+// Handles ONE concept per call. called 2x in parallel from frontend
 export async function POST(request) {
   try {
     const { clientId: incomingClientId, clientName: incomingClientName, analysis, concept, conceptIdx, websiteUrl, productName, offerNotes, aspectRatio = '16:9', productImageUrl, productPageUrl } = await request.json()
@@ -122,7 +122,7 @@ export async function POST(request) {
     console.log(`Sample concept ${conceptIdx + 1}: ${concept.title}`)
 
     // Auto-create client if none provided
-    // Only concept 0 creates — concept 1 waits 3s then finds it
+    // Only concept 0 creates. concept 1 waits 3s then finds it
     let clientId = incomingClientId
     let clientName = incomingClientName || analysis.brandName || 'Brand'
 
@@ -157,7 +157,7 @@ export async function POST(request) {
       }
     }
 
-    // Script — fully grounded in brand analysis + concept
+    // Script. fully grounded in brand analysis + concept
     const script = parseJSON(await claude(`30-second commercial voiceover script.
 Brand: ${analysis.brandName}. Product: ${analysis.heroProduct}. Tone: ${analysis.websiteTone}.
 Theme: ${concept.theme}. Emotion: ${concept.emotionalFrame}.
@@ -165,11 +165,11 @@ Transformation: ${analysis.desiredTransformation}.
 70 words. Sound like this brand. No medical claims.
 ONLY JSON: {"title":"","hook":"","body":"","cta":"","fullScript":"","mood":""}`, 1000))
 
-    // Visual direction — grounded in brand's actual visual world
+    // Visual direction. grounded in brand's actual visual world
     const direction = parseJSON(await claude(`Visual direction for a commercial. Brand: ${analysis.brandName}. Tone: ${analysis.websiteTone}. Customer: ${analysis.targetCustomer}. Visual cues: ${analysis.visualCues}. Concept: ${concept.visualUniverse}.
 ONLY JSON: {"title":"","colorWorld":"","lighting":"","lensAndCamera":"","environment":"","cinematicReference":"","customerArchetype":"","summary":""}`, 800))
 
-    // Avatar — built from the actual target customer description
+    // Avatar. built from the actual target customer description
     const avatarClaudePrompt = await claude(`Portrait photo prompt for a commercial character.
 Brand: ${analysis.brandName}. Customer: ${direction.customerArchetype || analysis.targetCustomer}. Style: ${direction.colorWorld}, ${direction.lighting}.
 Chest-up portrait, on-brand, mainstream advertising safe. No ethnicities, no medical.
@@ -199,7 +199,7 @@ ONLY JSON: {"label":"4-word archetype","imagePrompt":"30-word portrait photo pro
       console.log(`Avatar generation failed, continuing without: ${e.message}`)
     }
 
-    // Shot list — grounded in brand's world, character, and concept
+    // Shot list. grounded in brand's world, character, and concept
     const SCENE_COUNT = 6
     const shotPrompt = `Shot list for 30s commercial. Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}.
 imagePrompt max 10 words. action max 4 words. ONLY JSON array, no markdown:
@@ -220,8 +220,8 @@ imagePrompt max 10 words. action max 4 words. ONLY JSON array, no markdown:
     const buildScene = async (shot, i) => {
       const isProduct = shot.isProductShot && productImageUrl
       const prompt = `${shot.imagePrompt}
-Character: ${avatarPrompt.label}${avatarUrl ? ' — match reference portrait exactly' : ''}.
-${isProduct ? 'Feature product prominently — match reference image exactly.' : ''}
+Character: ${avatarPrompt.label}${avatarUrl ? '. match reference portrait exactly' : ''}.
+${isProduct ? 'Feature product prominently. match reference image exactly.' : ''}
 Shot: ${shot.shotType}. ${direction.colorWorld}. ${direction.lighting}. ${direction.environment}.
 Cinematic, photorealistic, editorial quality. No text or logos.`
       const imageUrl = await generateImage(prompt, {

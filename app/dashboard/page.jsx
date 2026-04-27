@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Check, Sparkles, ArrowRight, RefreshCw, Lock, X, Loader2, ChevronRight, MessageSquare, Plus, Home, Copy, ChevronLeft, Edit3, Send, Download, Image } from "lucide-react";
+import { Check, Sparkles, ArrowRight, RefreshCw, Lock, X, Loader2, ChevronRight, MessageSquare, Plus, Home, Copy, ChevronLeft, Edit3, Send, Download, Image, Trash2, AlertTriangle } from "lucide-react";
 import { jsPDF } from "jspdf";
-import { supabase, createClient_db, getClients, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, deleteNote, uploadProductImage, getBrandIntake, getBrandHub } from "../../lib/supabase";
+import { supabase, createClient_db, getClients, updateClient_db, deleteClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, addNote, getNotes, deleteNote, uploadProductImage, getBrandIntake, getBrandHub } from "../../lib/supabase";
 import DashboardChat from "../../components/DashboardChat";
 
 const A = "#000";
@@ -53,6 +53,32 @@ function Btn({ children, onClick, primary, disabled, small, icon }) {
   return <button style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: small ? "8px 18px" : "12px 28px", borderRadius: 980, border: primary ? "none" : `1px solid ${C.border}`, cursor: disabled ? "not-allowed" : "pointer", background: primary ? C.accent : C.bg, color: primary ? "#fff" : C.text, fontSize: small ? 13 : 15, fontWeight: 500, fontFamily: "'Inter', -apple-system, sans-serif", transition: "all 0.2s", opacity: disabled ? 0.35 : 1 }} onClick={disabled ? undefined : onClick}>{icon}{children}</button>;
 }
 
+// Compact tool status pill used in the dashboard client rows. Click jumps directly to the
+// relevant tool (existing or create-new flow). Green = setup, gray = not yet.
+function DashToolPill({ icon, label, active, count, href }) {
+  const handleClick = (e) => { e.stopPropagation(); };
+  return (
+    <a href={href} onClick={handleClick} title={`${label}: ${active ? `${count || "active"}` : "not setup"}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "4px 8px", fontSize: 10, fontWeight: 600,
+        borderRadius: 6,
+        border: `1px solid ${active ? C.success + "40" : C.borderLight}`,
+        background: active ? C.success + "10" : C.bgSoft,
+        color: active ? C.success : C.textTer,
+        textDecoration: "none", fontFamily: "'Inter', sans-serif",
+        transition: "all 0.15s", whiteSpace: "nowrap",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = active ? C.success : C.accent; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? C.success + "40" : C.borderLight; }}
+    >
+      {icon}
+      <span>{label}</span>
+      {active && count > 0 && <span style={{ fontFamily: "monospace", fontSize: 10 }}>{count}</span>}
+    </a>
+  );
+}
+
 async function callClaude(prompt) {
   try {
     const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
@@ -63,7 +89,7 @@ async function callClaude(prompt) {
 }
 
 // ─── Agency Dashboard ───
-function Dashboard({ clients, onNew, onSelect }) {
+function Dashboard({ clients, onNew, onSelect, onDelete }) {
   const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
   const [dashTab, setDashTab] = useState("clients");
   const [conversations, setConversations] = useState([]);
@@ -71,6 +97,30 @@ function Dashboard({ clients, onNew, onSelect }) {
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [msgLoading, setMsgLoading] = useState(false);
+  const [toolOverview, setToolOverview] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  // Two-step delete: opens a modal that requires the team to type DELETE in caps
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  // Fetch unified tool overview for every client (portals, brand kits, dashboards, etc.)
+  useEffect(() => {
+    fetch("/api/team/overview").then(r => r.json()).then(setToolOverview).catch(() => {});
+  }, []);
+
+  const copyHubLink = (slug, id) => {
+    if (typeof window === "undefined") return;
+    navigator.clipboard.writeText(`${window.location.origin}/client/${slug}`);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  // Map clients by name (slugified) for quick lookup of tool status
+  const toolByName = {};
+  if (toolOverview?.clients) {
+    for (const c of toolOverview.clients) toolByName[c.name?.toLowerCase()] = c;
+  }
 
   const loadConversations = async () => {
     try {
@@ -137,26 +187,65 @@ function Dashboard({ clients, onNew, onSelect }) {
       {/* Clients tab */}
       {dashTab === "clients" && (
         <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
-          <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.5 }}>Stage</span><span style={{ flex: 1 }}>Progress</span><span style={{ flex: 0.8 }}>Status</span><span style={{ flex: 0.5 }}>Date</span><span style={{ flex: 0.3 }}></span>
+          <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", alignItems: "center" }}>
+            <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.4 }}>Tools</span><span style={{ flex: 1 }}>Stage</span><span style={{ flex: 0.9 }}>Progress</span><span style={{ flex: 1.1, textAlign: "right", paddingRight: 8 }}>Hub</span>
           </div>
-          {clients.map((c, i) => (
-            <div key={c.id} onClick={() => onSelect(c)} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <div style={{ flex: 2, display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600 }}>{c.name[0]}</div>
-                <span style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{c.name}</span>
+          {clients.map((c, i) => {
+            const t = toolByName[c.name?.toLowerCase()];
+            return (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                {/* Client */}
+                <div onClick={() => onSelect(c)} style={{ flex: 2, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{c.name[0]}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ color: C.text, fontWeight: 600, fontSize: 15, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</p>
+                    <p style={{ color: C.textTer, fontSize: 11 }}>{c.date}</p>
+                  </div>
+                </div>
+                {/* Tool badges */}
+                <div style={{ flex: 1.4, display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  <DashToolPill icon={<MessageSquare size={10} />} label="Portal" active={!!t?.hasPortal} count={t?.portal?.images || 0} href={t?.portal ? `/portal/create?id=${t.portal.id}` : `/portal/create?clientId=${c.id}&clientName=${encodeURIComponent(c.name)}`} />
+                  <DashToolPill icon={<Sparkles size={10} />} label="Brand" active={!!t?.hasBrandKit} href={`/brand-intake?clientId=${c.id}`} />
+                  <DashToolPill icon={<Image size={10} />} label="BI" active={(t?.dashboards?.length || 0) > 0} count={t?.dashboards?.length || 0} href={t?.dashboards?.[0] ? `/marketing/${t.dashboards[0].slug}` : `/marketing/create?clientId=${c.id}`} />
+                  <DashToolPill icon={<Edit3 size={10} />} label="Briefs" active={(t?.campaignCount || 0) > 0} count={t?.campaignCount || 0} href={t?.slug ? `/team/${t.slug}` : `/clients/${c.id}`} />
+                </div>
+                {/* Stage */}
+                <span onClick={() => onSelect(c)} style={{ flex: 1, color: C.textSec, fontSize: 13, cursor: "pointer" }}>{c.stage}</span>
+                {/* Progress */}
+                <div onClick={() => onSelect(c)} style={{ flex: 0.9, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <div style={{ flex: 1, height: 4, borderRadius: 2, background: C.bgSoft, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 2, background: sc[c.status] || C.info, width: `${c.progress}%` }} /></div>
+                  <span style={{ color: C.textTer, fontSize: 11, minWidth: 28 }}>{c.progress}%</span>
+                </div>
+                {/* Hub actions */}
+                <div style={{ flex: 1.1, display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
+                  {t?.slug && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); copyHubLink(t.slug, c.id); }}
+                        title="Copy client hub link"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", fontSize: 11, fontWeight: 600, border: `1px solid ${C.borderLight}`, background: C.bg, color: C.textSec, borderRadius: 6, cursor: "pointer", fontFamily: "inherit" }}>
+                        {copiedId === c.id ? <Check size={11} color={C.success} /> : <Copy size={11} />}
+                        {copiedId === c.id ? "Copied" : "Link"}
+                      </button>
+                      <a href={`/client/${t.slug}`} target="_blank" rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        title="Open client hub"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", fontSize: 11, fontWeight: 600, background: C.accent, color: "#fff", borderRadius: 6, textDecoration: "none" }}>
+                        <ArrowRight size={11} /> Open
+                      </a>
+                    </>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: c.id, name: c.name }); setDeleteInput(""); }}
+                    title="Delete client"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, border: `1px solid ${C.borderLight}`, background: C.bg, color: C.textTer, borderRadius: 6, cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.danger; e.currentTarget.style.color = C.danger; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.borderLight; e.currentTarget.style.color = C.textTer; }}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
-              <span style={{ flex: 1.5, color: C.textSec, fontSize: 14 }}>{c.stage}</span>
-              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: C.bgSoft, overflow: "hidden" }}><div style={{ height: "100%", borderRadius: 2, background: sc[c.status] || C.info, width: `${c.progress}%` }} /></div>
-                <span style={{ color: C.textTer, fontSize: 12, minWidth: 28 }}>{c.progress}%</span>
-              </div>
-              <div style={{ flex: 0.8 }}><span style={{ padding: "4px 12px", borderRadius: 980, fontSize: 12, fontWeight: 500, background: (sc[c.status] || C.info) + "12", color: sc[c.status] || C.info }}>{c.status}</span></div>
-              <span style={{ flex: 0.5, color: C.textTer, fontSize: 13 }}>{c.date}</span>
-              <div style={{ flex: 0.3, textAlign: "right" }}><ChevronRight size={16} style={{ color: C.textTer }} /></div>
-            </div>
-          ))}
+            );
+          })}
           {clients.length === 0 && <div style={{ padding: 48, textAlign: "center", color: C.textSec }}><p style={{ marginBottom: 16, fontSize: 15 }}>No clients yet.</p><Btn small primary onClick={onNew} icon={<Plus size={14} />}>Add Your First Client</Btn></div>}
         </div>
       )}
@@ -268,6 +357,55 @@ function Dashboard({ clients, onNew, onSelect }) {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal: requires team to type DELETE in caps */}
+      {deleteTarget && (
+        <div onClick={(e) => { if (e.target === e.currentTarget && !deleting) { setDeleteTarget(null); setDeleteInput(""); } }}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: C.card, borderRadius: 18, padding: 28, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.danger + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <AlertTriangle size={20} color={C.danger} />
+              </div>
+              <h3 style={{ ...hd, fontSize: 22, color: C.text, margin: 0 }}>Delete client?</h3>
+            </div>
+            <p style={{ fontSize: 14, color: C.textSec, lineHeight: 1.55, marginBottom: 14 }}>
+              You are about to permanently delete <strong style={{ color: C.text }}>{deleteTarget.name}</strong> and ALL of their linked data: brand kit, creatives, marketing dashboards, and creative briefs. This cannot be undone.
+            </p>
+            <p style={{ fontSize: 13, color: C.text, marginBottom: 8, fontWeight: 500 }}>
+              Type <span style={{ fontFamily: "monospace", fontWeight: 700, background: C.bgSoft, padding: "1px 8px", borderRadius: 4 }}>DELETE</span> to confirm:
+            </p>
+            <input
+              autoFocus
+              value={deleteInput}
+              onChange={e => setDeleteInput(e.target.value)}
+              disabled={deleting}
+              placeholder="DELETE"
+              style={{ width: "100%", padding: "11px 14px", fontSize: 15, fontFamily: "monospace", letterSpacing: "0.1em", border: `1px solid ${deleteInput === "DELETE" ? C.danger : C.borderLight}`, borderRadius: 10, outline: "none", background: C.bg, color: C.text, boxSizing: "border-box", marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => { if (!deleting) { setDeleteTarget(null); setDeleteInput(""); } }}
+                disabled={deleting}
+                style={{ padding: "9px 18px", borderRadius: 980, fontSize: 13, fontWeight: 600, border: `1px solid ${C.borderLight}`, background: "transparent", color: C.textSec, cursor: deleting ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: deleting ? 0.5 : 1 }}>
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (deleteInput !== "DELETE" || deleting) return;
+                  setDeleting(true);
+                  const ok = await onDelete(deleteTarget.id);
+                  setDeleting(false);
+                  if (ok) { setDeleteTarget(null); setDeleteInput(""); }
+                  else alert("Failed to delete client. See console for details.");
+                }}
+                disabled={deleteInput !== "DELETE" || deleting}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 980, fontSize: 13, fontWeight: 600, border: "none", background: C.danger, color: "#fff", cursor: deleteInput === "DELETE" && !deleting ? "pointer" : "not-allowed", fontFamily: "inherit", opacity: deleteInput === "DELETE" && !deleting ? 1 : 0.4 }}>
+                <Trash2 size={13} /> {deleting ? "Deleting..." : "Delete forever"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -292,7 +430,7 @@ function downloadClientPDF(client) {
   doc.setFontSize(26); doc.setFont("helvetica", "bold"); doc.setTextColor(29, 29, 31);
   doc.text(client.name, margin, y); y += 14;
   doc.setFontSize(11); doc.setFont("helvetica", "normal"); doc.setTextColor(134, 134, 139);
-  doc.text("Brand Brief — Generated by ALCHEMY Productions", margin, y); y += 10;
+  doc.text("Brand Brief. Generated by ALCHEMY Productions", margin, y); y += 10;
   doc.setDrawColor(210, 210, 215); doc.line(margin, y, pw - margin, y); y += 24;
 
   const fd = client.formData;
@@ -437,7 +575,7 @@ function downloadClientPDF(client) {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(174, 174, 178);
-    doc.text(`${client.name} — Brand Brief | Page ${i} of ${pageCount}`, margin, doc.internal.pageSize.getHeight() - 30);
+    doc.text(`${client.name}. Brand Brief | Page ${i} of ${pageCount}`, margin, doc.internal.pageSize.getHeight() - 30);
     doc.text("ALCHEMY Productions", pw - margin - doc.getTextWidth("ALCHEMY Productions"), doc.internal.pageSize.getHeight() - 30);
   }
 
@@ -547,13 +685,13 @@ function ClientDetail({ client, onBack, onUpdate }) {
         {portal ? (
           <a href={`/portal/create?id=${portal.id}`} target="_blank" style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, textDecoration: "none", transition: "box-shadow 0.2s" }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = C.cardShadow}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "#5856D6" + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><MessageSquare size={18} style={{ color: "#5856D6" }} /></div>
-            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Feedback Portal</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>{portal.images?.length || 0} images · /portal/{portal.slug}</p></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Creatives</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>{portal.images?.length || 0} images · /portal/{portal.slug}</p></div>
             <ChevronRight size={16} style={{ color: C.textTer, marginLeft: "auto" }} />
           </a>
         ) : (
           <div onClick={generatePortal} style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: C.card, boxShadow: C.cardShadow, borderRadius: 16, cursor: "pointer", transition: "box-shadow 0.2s" }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = C.cardShadow}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: "#5856D6" + "15", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={18} style={{ color: "#5856D6" }} /></div>
-            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>{portalLoading ? "Creating..." : "Generate Feedback Portal"}</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>Upload assets for client review</p></div>
+            <div><p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>{portalLoading ? "Creating..." : "Generate Creatives"}</p><p style={{ fontSize: 12, color: C.textSec, margin: 0 }}>Upload assets for client review</p></div>
           </div>
         )}
         {portal ? (
@@ -624,9 +762,9 @@ function ClientDetail({ client, onBack, onUpdate }) {
         {notes.length > 0 ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{notes.map(n => <div key={n.id} style={{ padding: "14px 16px", background: C.bgSoft, borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}><div style={{ flex: 1 }}><p style={{ color: C.text, fontSize: 14, lineHeight: 1.5 }}>{n.text}</p><p style={{ color: C.textTer, fontSize: 12, marginTop: 6 }}>{n.date}</p></div><button onClick={async () => { await deleteNote(n.id); setNotes(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", cursor: "pointer", color: C.textTer, padding: 4, borderRadius: 6, flexShrink: 0, transition: "color 0.15s" }} onMouseEnter={e => e.currentTarget.style.color = C.danger} onMouseLeave={e => e.currentTarget.style.color = C.textTer}><X size={14} /></button></div>)}</div> : <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>No notes yet.</p>}
       </div>
 
-      {/* Feedback Portal */}
+      {/* Creatives */}
       <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: 16, padding: 28, marginTop: 20 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16 }}>Feedback Portal</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16 }}>Creatives</h3>
         {!portalChecked ? (
           <p style={{ color: C.textTer, fontSize: 14, textAlign: "center", padding: 20 }}>Checking...</p>
         ) : portal ? (
@@ -648,7 +786,7 @@ function ClientDetail({ client, onBack, onUpdate }) {
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <p style={{ color: C.textSec, fontSize: 14, marginBottom: 16 }}>No feedback portal yet. Generate one to upload assets and collect client feedback.</p>
+            <p style={{ color: C.textSec, fontSize: 14, marginBottom: 16 }}>No creatives yet. Generate one to upload assets and collect client feedback.</p>
             <button onClick={generatePortal} disabled={portalLoading} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 980, background: C.accent, color: "#fff", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "'Inter', sans-serif", opacity: portalLoading ? 0.5 : 1 }}>
               <Plus size={14} /> {portalLoading ? "Creating..." : "Generate Portal"}
             </button>
@@ -718,7 +856,7 @@ function IntakeForm({ onSubmit }) {
 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto" }}>
-      <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Brand Intake</h1>
+      <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Brand Guidelines</h1>
       <p style={{ color: C.textSec, marginBottom: 48, fontSize: 16, lineHeight: 1.6 }}>Tell us about your brand. The more detail you provide, the sharper your generated guidelines will be.</p>
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>Brand Identity</h3><div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}><Input half label="Brand Name" value={f.brandName} onChange={v => u("brandName", v)} placeholder="e.g. Koko Swimwear" /><Input half label="Tagline" value={f.tagline} onChange={v => u("tagline", v)} placeholder="e.g. Made for the water" /></div><div style={{ marginTop: 16 }}><Input textarea label="Brand Story" value={f.story} onChange={v => u("story", v)} placeholder="Tell us your brand's origin, mission, and what makes it unique..." /></div><div style={{ marginTop: 20 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Brand Personality (pick 2-5)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{TAGS.map(t => <button key={t} onClick={() => toggle(t)} style={chip(f.personality.includes(t))}>{t}</button>)}</div></div></div>
@@ -733,7 +871,7 @@ function IntakeForm({ onSubmit }) {
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Customer Testimonials</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Paste your best customer quotes.</p><div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>{(f.testimonials || []).map((test, i) => <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: C.bgSoft, borderRadius: 10 }}><span style={{ color: "#5856D6", fontSize: 18, lineHeight: 1, marginTop: 2 }}>"</span><textarea value={test} onChange={e => { const nt = [...f.testimonials]; nt[i] = e.target.value; u("testimonials", nt); }} style={{ flex: 1, background: "transparent", border: "none", color: C.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", resize: "none", minHeight: 40, lineHeight: 1.5 }} placeholder="Paste a review..." /><button onClick={() => u("testimonials", f.testimonials.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.textTer, cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button></div>)}</div>{(f.testimonials || []).length < 10 && <button onClick={() => u("testimonials", [...(f.testimonials || []), ""])} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.textSec, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}><Plus size={14} /> Add testimonial</button>}</div>
 
-      <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Product Images</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Upload up to 5 high-quality product photos — <span style={{ color: C.text, fontWeight: 600 }}>quality matters</span>.</p><div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{f.productImages.map((img, i) => <div key={i} style={{ width: 120, height: 120, borderRadius: 12, overflow: "hidden", position: "relative", border: `1px solid ${C.borderLight}` }}><img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={() => u("productImages", f.productImages.filter((_, j) => j !== i))} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, padding: 0 }}>✕</button></div>)}{f.productImages.length < 5 && <label style={{ width: 120, height: 120, borderRadius: 12, border: `2px dashed ${C.border}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: C.bgSoft }}><div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accent + "08", display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, fontSize: 18 }}>+</div><span style={{ fontSize: 12, color: C.textTer }}>{f.productImages.length === 0 ? "Add photos" : `${5 - f.productImages.length} left`}</span><input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { const files = Array.from(e.target.files || []); const toAdd = files.slice(0, 5 - f.productImages.length).map(file => ({ name: file.name, url: URL.createObjectURL(file), file })); u("productImages", [...f.productImages, ...toAdd]); e.target.value = ""; }} /></label>}</div></div>
+      <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Product Images</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Upload up to 5 high-quality product photos. <span style={{ color: C.text, fontWeight: 600 }}>quality matters</span>.</p><div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{f.productImages.map((img, i) => <div key={i} style={{ width: 120, height: 120, borderRadius: 12, overflow: "hidden", position: "relative", border: `1px solid ${C.borderLight}` }}><img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={() => u("productImages", f.productImages.filter((_, j) => j !== i))} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, padding: 0 }}>✕</button></div>)}{f.productImages.length < 5 && <label style={{ width: 120, height: 120, borderRadius: 12, border: `2px dashed ${C.border}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: C.bgSoft }}><div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accent + "08", display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, fontSize: 18 }}>+</div><span style={{ fontSize: 12, color: C.textTer }}>{f.productImages.length === 0 ? "Add photos" : `${5 - f.productImages.length} left`}</span><input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { const files = Array.from(e.target.files || []); const toAdd = files.slice(0, 5 - f.productImages.length).map(file => ({ name: file.name, url: URL.createObjectURL(file), file })); u("productImages", [...f.productImages, ...toAdd]); e.target.value = ""; }} /></label>}</div></div>
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Audio & Voice</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>Define the voice and sound of your brand.</p><div style={{ marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Avatar Voice Style (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{VOICE_STYLES.map(v => { const active = (f.voiceStyle || []).includes(v); return <button key={v} onClick={() => u("voiceStyle", active ? f.voiceStyle.filter(x => x !== v) : [...(f.voiceStyle || []), v].slice(0, 3))} style={chip(active)}>{v}</button>; })}</div></div><div style={{ display: "flex", gap: 16, marginBottom: 16 }}><div style={{ flex: "1 1 48%" }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>Voice Gender</label><select value={f.voiceGender || ""} onChange={e => u("voiceGender", e.target.value)} style={{ width: "100%", background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 16px", color: C.text, fontSize: 15, fontFamily: "'Inter', sans-serif" }}>{VOICE_GENDERS.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div style={{ flex: "1 1 48%" }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>Voice Age</label><select value={f.voiceAge || ""} onChange={e => u("voiceAge", e.target.value)} style={{ width: "100%", background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 16px", color: C.text, fontSize: 15, fontFamily: "'Inter', sans-serif" }}>{VOICE_AGES.map(a => <option key={a} value={a}>{a}</option>)}</select></div></div><Input textarea label="Voice Notes" value={f.voiceNotes || ""} onChange={v => u("voiceNotes", v)} placeholder="Describe the vibe of the voice." /><div style={{ marginTop: 20, marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Music Mood (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{MUSIC_MOODS.map(m => { const active = (f.musicMood || []).includes(m); return <button key={m} onClick={() => u("musicMood", active ? f.musicMood.filter(x => x !== m) : [...(f.musicMood || []), m].slice(0, 3))} style={chip(active, "#5856D6")}>{m}</button>; })}</div></div><div style={{ marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Music Genre (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{MUSIC_GENRES.map(g => { const active = (f.musicGenres || []).includes(g); return <button key={g} onClick={() => u("musicGenres", active ? f.musicGenres.filter(x => x !== g) : [...(f.musicGenres || []), g].slice(0, 3))} style={chip(active, C.info)}>{g}</button>; })}</div></div><Input textarea label="Music Notes" value={f.musicNotes || ""} onChange={v => u("musicNotes", v)} placeholder="Describe the sound." /></div>
 
@@ -792,16 +930,16 @@ export default function AlchemyOS() {
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [currentClientId, setCurrentClientId] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
+  // Middleware now gates the entire /dashboard route with the team cookie,
+  // so we default to authenticated/admin and skip the second password prompt.
+  const [isAdmin, setIsAdmin] = useState(true);
+  const [authenticated, setAuthenticated] = useState(true);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState(false);
 
   // Hydration-safe mount
   useEffect(() => {
     setMounted(true);
-    const saved = typeof window !== "undefined" && sessionStorage.getItem("alchemy_auth");
-    if (saved === "true") { setAuthenticated(true); setIsAdmin(true); setView("dashboard"); }
   }, []);
 
   useEffect(() => {
@@ -846,7 +984,7 @@ CURRENT ${SECTION_LABELS[key].toUpperCase()}: ${JSON.stringify(currentData, null
 
 CLIENT FEEDBACK: "${feedbacks[key]}"
 
-CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
+CRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
     if (r) {
       const unwrapped = (r && typeof r === 'object' && r[key] !== undefined) ? r[key] : r;
       setGuidelines(p => ({ ...p, [key]: unwrapped }));
@@ -865,14 +1003,52 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
   const updateClient = async (updated) => { setClients(p => p.map(c => c.id === updated.id ? updated : c)); setSelectedClient(updated); await updateClient_db(updated.id, { status: updated.status, stage: updated.stage, progress: updated.progress }); };
 
   const selectClient = async (c) => {
-    const intake = await getBrandIntake(c.id);
-    const hub = await getBrandHub(c.id);
-    const clientNotes = await getNotes(c.id);
-    setSelectedClient({ ...c, formData: intake || null, guidelines: hub?.guidelines || null, notes: (clientNotes || []).map(n => ({ id: n.id, text: n.note_text, date: new Date(n.created_at).toLocaleString() })) });
-    setView("detail");
+    // Use a clean slug URL like /team/muze instead of /clients/uuid-mess
+    if (typeof window !== "undefined") {
+      const slug = c.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      window.location.href = slug ? `/team/${slug}` : `/clients/${c.id}`;
+    }
   };
 
-  const newClient = () => { window.location.href = "/brand-intake"; };
+  const [newClientModal, setNewClientModal] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientWebsite, setNewClientWebsite] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
+  const newClient = () => setNewClientModal(true);
+  const submitNewClient = async () => {
+    if (!newClientName.trim() || creatingClient) return;
+    setCreatingClient(true);
+    try {
+      const created = await createClient_db(newClientName.trim());
+      if (created) {
+        // Save email + website to brand_intake row so they're available later
+        if (newClientEmail.trim() || newClientWebsite.trim()) {
+          await supabase.from('brand_intake').insert({
+            client_id: created.id,
+            brand_name: newClientName.trim(),
+            website: newClientWebsite.trim() || null,
+            contact_email: newClientEmail.trim() || null,
+          });
+        }
+        if (newClientEmail.trim()) {
+          await updateClient_db(created.id, { email: newClientEmail.trim() });
+        }
+        // Refresh list
+        const dbClients = await getClients();
+        if (dbClients) setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' })));
+        setNewClientModal(false);
+        setNewClientName(""); setNewClientEmail(""); setNewClientWebsite("");
+      }
+    } finally {
+      setCreatingClient(false);
+    }
+  };
+  const deleteClient = async (clientId) => {
+    const ok = await deleteClient_db(clientId);
+    if (ok) setClients(p => p.filter(c => c.id !== clientId));
+    return ok;
+  };
 
   const handleLogin = () => {
     if (password === "alchemy2024") {
@@ -913,7 +1089,7 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
       </div>
 
       <div style={{ maxWidth: view === "dashboard" || view === "detail" ? 960 : 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
-        {view === "dashboard" && <Dashboard clients={clients} onNew={newClient} onSelect={selectClient} />}
+        {view === "dashboard" && <Dashboard clients={clients} onNew={newClient} onSelect={selectClient} onDelete={deleteClient} />}
         {view === "detail" && selectedClient && <ClientDetail client={selectedClient} onBack={() => { setView("dashboard"); setSelectedClient(null); }} onUpdate={updateClient} />}
         {view === "client" && <>
           {error && <div style={{ background: "#FFF2F2", border: `1px solid ${C.danger}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, color: C.danger, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><X size={16} /> {error}</div>}
@@ -930,6 +1106,50 @@ CRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the
         </>}
       </div>
       {isAdmin && (view === "dashboard" || view === "detail") && <DashboardChat />}
+      {/* Quick Add Client Modal - skips brand intake form, brand guidelines can be filled later */}
+      {newClientModal && (
+        <div onClick={(e) => { if (e.target === e.currentTarget && !creatingClient) setNewClientModal(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: C.card, borderRadius: 18, padding: 28, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", fontFamily: "'Inter', -apple-system, sans-serif" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.accent + "12", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Plus size={20} color={C.accent} />
+              </div>
+              <h3 style={{ ...hd, fontSize: 24, color: C.text, margin: 0 }}>New Client</h3>
+            </div>
+            <p style={{ fontSize: 13, color: C.textSec, lineHeight: 1.5, marginBottom: 16 }}>
+              Just the basics. Brand guidelines can be filled in later from inside their portal.
+            </p>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.textSec, marginBottom: 6, letterSpacing: "0.04em", textTransform: "uppercase" }}>Client / Brand Name *</label>
+            <input autoFocus value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="Big O Socks"
+              onKeyDown={e => { if (e.key === "Enter" && newClientName.trim()) submitNewClient(); }}
+              style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: `1px solid ${C.borderLight}`, borderRadius: 10, outline: "none", background: C.bg, color: C.text, boxSizing: "border-box", marginBottom: 14, fontFamily: "inherit" }}
+            />
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.textSec, marginBottom: 6, letterSpacing: "0.04em", textTransform: "uppercase" }}>Contact Email <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+            <input value={newClientEmail} onChange={e => setNewClientEmail(e.target.value)} placeholder="contact@brand.com"
+              style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: `1px solid ${C.borderLight}`, borderRadius: 10, outline: "none", background: C.bg, color: C.text, boxSizing: "border-box", marginBottom: 14, fontFamily: "inherit" }}
+            />
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.textSec, marginBottom: 6, letterSpacing: "0.04em", textTransform: "uppercase" }}>Website <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(optional)</span></label>
+            <input value={newClientWebsite} onChange={e => setNewClientWebsite(e.target.value)} placeholder="https://brand.com"
+              style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: `1px solid ${C.borderLight}`, borderRadius: 10, outline: "none", background: C.bg, color: C.text, boxSizing: "border-box", marginBottom: 18, fontFamily: "inherit" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => { if (!creatingClient) setNewClientModal(false); }}
+                disabled={creatingClient}
+                style={{ padding: "9px 18px", borderRadius: 980, fontSize: 13, fontWeight: 600, border: `1px solid ${C.borderLight}`, background: "transparent", color: C.textSec, cursor: creatingClient ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: creatingClient ? 0.5 : 1 }}>
+                Cancel
+              </button>
+              <button onClick={submitNewClient} disabled={!newClientName.trim() || creatingClient}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 980, fontSize: 13, fontWeight: 600, border: "none", background: C.accent, color: "#fff", cursor: newClientName.trim() && !creatingClient ? "pointer" : "not-allowed", fontFamily: "inherit", opacity: newClientName.trim() && !creatingClient ? 1 : 0.4 }}>
+                <Plus size={13} /> {creatingClient ? "Creating..." : "Create Client"}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: C.textTer, marginTop: 14, textAlign: "center" }}>
+              Or <a href="/brand-intake" style={{ color: C.accent, textDecoration: "none", borderBottom: `1px solid ${C.accent}40` }}>fill out full brand guidelines now</a>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

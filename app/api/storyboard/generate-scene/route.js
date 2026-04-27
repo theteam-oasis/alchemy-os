@@ -78,11 +78,11 @@ export async function POST(request) {
 
     if (avatarImage) {
       refs.push(avatarImage)
-      refLines.push(`CHARACTER: Use the provided portrait EXACTLY — same face, hair, outfit, skin. This is ${avatarDescription || 'the main character'}.`)
+      refLines.push(`CHARACTER: Use the provided portrait EXACTLY. same face, hair, outfit, skin. This is ${avatarDescription || 'the main character'}.`)
     }
     if (envImage) {
       refs.push(envImage)
-      refLines.push(`ENVIRONMENT: Use the provided image as the setting — ${envDescription || 'the environment'}.`)
+      refLines.push(`ENVIRONMENT: Use the provided image as the setting. ${envDescription || 'the environment'}.`)
     }
     if (productImage) {
       refs.push(productImage)
@@ -94,12 +94,12 @@ export async function POST(request) {
       `SCENE ACTION: ${scene.imagePrompt}`,
       ...refLines,
       `STYLE: Photorealistic, 2K quality, cinematic lighting, high production value.`,
-      `CRITICAL: The character must look IDENTICAL to the reference portrait — same person throughout the campaign. No text or watermarks.`,
+      `CRITICAL: The character must look IDENTICAL to the reference portrait. same person throughout the campaign. No text or watermarks.`,
     ].join(' ')
 
     const altPrompt = [
       `Cinematic ${aspectRatio === '9:16' ? '9:16 vertical' : '16:9 widescreen'} ad scene, alternative composition.`,
-      `SCENE ACTION: ${scene.imagePrompt} — slightly different angle or framing.`,
+      `SCENE ACTION: ${scene.imagePrompt}. slightly different angle or framing.`,
       ...refLines,
       `STYLE: Photorealistic, 2K quality, cinematic lighting.`,
       `CRITICAL: Same character as reference portrait, identical appearance. No text or watermarks.`,

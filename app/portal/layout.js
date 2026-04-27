@@ -1,7 +1,7 @@
 import './portal.css'
 
 export const metadata = {
-  title: 'Alchemy — Feedback Portal',
+  title: 'Alchemy. Creatives',
   description: 'Client feedback and approval portal',
 }
 

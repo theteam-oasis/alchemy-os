@@ -73,7 +73,7 @@ export async function POST(request) {
 
     const productImages = extractImages(scraped.html, productPageUrl)
 
-    // Fast path — just return images
+    // Fast path. just return images
     if (extractImagesOnly) {
       return Response.json({ success: true, productImages })
     }
@@ -94,7 +94,7 @@ Respond ONLY with valid JSON, no markdown:
   "brandName": "The brand name",
   "coreOffer": "What this brand sells",
   "heroProduct": "The specific product on this page",
-  "targetCustomer": "Who this is for — be specific",
+  "targetCustomer": "Who this is for. be specific",
   "corePainPoint": "The core problem this solves",
   "desiredTransformation": "What changes after using this",
   "differentiators": ["what makes this unique"],

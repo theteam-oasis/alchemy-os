@@ -67,10 +67,81 @@ function IntakeForm({ onSubmit }) {
   const pc = parseColors(f.colors);
   const chip = (active, color = C.accent) => ({ padding: "8px 18px", borderRadius: 980, border: `1px solid ${active ? color : C.borderLight}`, background: active ? color + "08" : "transparent", color: active ? color : C.textSec, fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "'Inter', sans-serif", transition: "all 0.15s" });
 
+  // Express auto-fill from a website URL
+  const [expressUrl, setExpressUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState("");
+  const [scrapeSuccess, setScrapeSuccess] = useState(false);
+
+  const runExpress = async () => {
+    if (!expressUrl.trim() || scraping) return;
+    setScraping(true); setScrapeError(""); setScrapeSuccess(false);
+    try {
+      const res = await fetch("/api/brand-intake/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: expressUrl.trim() }) });
+      const data = await res.json();
+      if (!res.ok || data.error) { setScrapeError(data.error || "Could not scrape that site."); return; }
+      const d = data.data || {};
+      setF(p => ({
+        ...p,
+        brandName: d.brand_name || p.brandName,
+        tagline: d.tagline || p.tagline,
+        story: d.story || p.story,
+        personality: Array.isArray(d.personality_tags) && d.personality_tags.length ? d.personality_tags.filter(t => TAGS.includes(t)) : p.personality,
+        audience: d.audience_description || p.audience,
+        ageRange: d.age_range || p.ageRange,
+        competitors: d.competitors || p.competitors,
+        deepestFears: d.deepest_fears || p.deepestFears,
+        deepestDesires: d.deepest_desires || p.deepestDesires,
+        uniqueFeatures: Array.isArray(d.unique_features) && d.unique_features.length ? d.unique_features : p.uniqueFeatures,
+        voiceStyle: Array.isArray(d.voice_style) ? d.voice_style.filter(v => VOICE_STYLES.includes(v)) : p.voiceStyle,
+        musicMood: Array.isArray(d.music_mood) ? d.music_mood.filter(v => MUSIC_MOODS.includes(v)) : p.musicMood,
+        musicGenres: Array.isArray(d.music_genres) ? d.music_genres.filter(v => MUSIC_GENRES.includes(v)) : p.musicGenres,
+        colors: d.brand_colors || p.colors,
+        objective: OBJECTIVES.includes(d.objective) ? d.objective : p.objective,
+        keyMessage: d.key_message || p.keyMessage,
+        website: d.website || expressUrl.trim(),
+        formality: typeof d.tone_formality === "number" ? d.tone_formality : p.formality,
+        mood: typeof d.tone_mood === "number" ? d.tone_mood : p.mood,
+        intensity: typeof d.tone_intensity === "number" ? d.tone_intensity : p.intensity,
+      }));
+      setScrapeSuccess(true);
+    } catch (e) {
+      setScrapeError("Network error. Try again.");
+    } finally {
+      setScraping(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 680, margin: "0 auto" }}>
-      <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Brand Intake</h1>
-      <p style={{ color: C.textSec, marginBottom: 48, fontSize: 16, lineHeight: 1.6 }}>Tell us about your brand. The more detail you provide, the sharper your generated guidelines will be.</p>
+      <h1 style={{ ...hd, fontSize: 44, color: C.text, marginBottom: 8 }}>Brand Guidelines</h1>
+      <p style={{ color: C.textSec, marginBottom: 24, fontSize: 16, lineHeight: 1.6 }}>Tell us about your brand. The more detail you provide, the sharper your generated guidelines will be.</p>
+
+      {/* Express auto-fill banner */}
+      <div style={{ background: "linear-gradient(135deg, #000 0%, #1a1a1a 100%)", color: "#fff", borderRadius: 16, padding: 22, marginBottom: 36, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Sparkles size={16} color="#fff" />
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>Express Mode</span>
+        </div>
+        <p style={{ fontSize: 14, color: "rgba(255,255,255,0.85)", lineHeight: 1.55, marginBottom: 14 }}>
+          Drop in a website URL and we&apos;ll auto-fill the entire form by scraping the brand&apos;s site. You&apos;ll still upload your own product photos so they stay HQ.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            value={expressUrl} onChange={e => { setExpressUrl(e.target.value); setScrapeError(""); }}
+            onKeyDown={e => { if (e.key === "Enter") runExpress(); }}
+            placeholder="https://yourbrand.com" disabled={scraping}
+            style={{ flex: "1 1 240px", padding: "11px 14px", fontSize: 14, border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, outline: "none", background: "rgba(255,255,255,0.08)", color: "#fff", fontFamily: "'Inter', sans-serif" }}
+          />
+          <button onClick={runExpress} disabled={!expressUrl.trim() || scraping}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "11px 20px", fontSize: 13, fontWeight: 600, background: "#fff", color: "#000", border: "none", borderRadius: 980, cursor: expressUrl.trim() && !scraping ? "pointer" : "not-allowed", opacity: expressUrl.trim() && !scraping ? 1 : 0.5, fontFamily: "'Inter', sans-serif" }}>
+            {scraping ? <><Loader2 size={14} className="spin" /> Scraping...</> : <><Sparkles size={14} /> Auto-fill</>}
+          </button>
+        </div>
+        {scrapeError && <p style={{ fontSize: 12, color: "#FF8A85", marginTop: 10 }}>{scrapeError}</p>}
+        {scrapeSuccess && <p style={{ fontSize: 12, color: "#5DD893", marginTop: 10 }}>✓ Form pre-filled. Review below and add product images.</p>}
+      </div>
+      <style>{`.spin { animation: spinKf 1s linear infinite; } @keyframes spinKf { to { transform: rotate(360deg); } }`}</style>
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>Brand Identity</h3><div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}><Input half label="Brand Name" value={f.brandName} onChange={v => u("brandName", v)} placeholder="e.g. Koko Swimwear" /><Input half label="Tagline" value={f.tagline} onChange={v => u("tagline", v)} placeholder="e.g. Made for the water" /></div><div style={{ marginTop: 16 }}><Input textarea label="Brand Story" value={f.story} onChange={v => u("story", v)} placeholder="Tell us your brand's origin, mission, and what makes it unique..." /></div><div style={{ marginTop: 20 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Brand Personality (pick 2-5)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{TAGS.map(t => <button key={t} onClick={() => toggle(t)} style={chip(f.personality.includes(t))}>{t}</button>)}</div></div></div>
 
@@ -84,7 +155,7 @@ function IntakeForm({ onSubmit }) {
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Customer Testimonials</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Paste your best customer quotes.</p><div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>{(f.testimonials || []).map((test, i) => <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", background: C.bgSoft, borderRadius: 10 }}><span style={{ color: "#5856D6", fontSize: 18, lineHeight: 1, marginTop: 2 }}>"</span><textarea value={test} onChange={e => { const nt = [...f.testimonials]; nt[i] = e.target.value; u("testimonials", nt); }} style={{ flex: 1, background: "transparent", border: "none", color: C.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: "none", resize: "none", minHeight: 40, lineHeight: 1.5 }} placeholder="Paste a review..." /><button onClick={() => u("testimonials", f.testimonials.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.textTer, cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button></div>)}</div>{(f.testimonials || []).length < 10 && <button onClick={() => u("testimonials", [...(f.testimonials || []), ""])} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.textSec, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}><Plus size={14} /> Add testimonial</button>}</div>
 
-      <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Product Images</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Upload up to 5 high-quality product photos — <span style={{ color: C.text, fontWeight: 600 }}>quality matters</span>.</p><div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{f.productImages.map((img, i) => <div key={i} style={{ width: 120, height: 120, borderRadius: 12, overflow: "hidden", position: "relative", border: `1px solid ${C.borderLight}` }}><img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={() => u("productImages", f.productImages.filter((_, j) => j !== i))} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, padding: 0 }}>✕</button></div>)}{f.productImages.length < 5 && <label style={{ width: 120, height: 120, borderRadius: 12, border: `2px dashed ${C.border}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: C.bgSoft }}><div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accent + "08", display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, fontSize: 18 }}>+</div><span style={{ fontSize: 12, color: C.textTer }}>{f.productImages.length === 0 ? "Add photos" : `${5 - f.productImages.length} left`}</span><input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { const files = Array.from(e.target.files || []); const toAdd = files.slice(0, 5 - f.productImages.length).map(file => ({ name: file.name, url: URL.createObjectURL(file), file })); u("productImages", [...f.productImages, ...toAdd]); e.target.value = ""; }} /></label>}</div></div>
+      <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Product Images</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>Upload up to 5 high-quality product photos. <span style={{ color: C.text, fontWeight: 600 }}>quality matters</span>.</p><div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>{f.productImages.map((img, i) => <div key={i} style={{ width: 120, height: 120, borderRadius: 12, overflow: "hidden", position: "relative", border: `1px solid ${C.borderLight}` }}><img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /><button onClick={() => u("productImages", f.productImages.filter((_, j) => j !== i))} style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, padding: 0 }}>✕</button></div>)}{f.productImages.length < 5 && <label style={{ width: 120, height: 120, borderRadius: 12, border: `2px dashed ${C.border}`, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: C.bgSoft }}><div style={{ width: 32, height: 32, borderRadius: "50%", background: C.accent + "08", display: "flex", alignItems: "center", justifyContent: "center", color: C.textSec, fontSize: 18 }}>+</div><span style={{ fontSize: 12, color: C.textTer }}>{f.productImages.length === 0 ? "Add photos" : `${5 - f.productImages.length} left`}</span><input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => { const files = Array.from(e.target.files || []); const toAdd = files.slice(0, 5 - f.productImages.length).map(file => ({ name: file.name, url: URL.createObjectURL(file), file })); u("productImages", [...f.productImages, ...toAdd]); e.target.value = ""; }} /></label>}</div></div>
 
       <div style={{ marginBottom: 40 }}><h3 style={{ fontSize: 13, color: C.textSec, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Audio & Voice</h3><p style={{ color: C.textTer, fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>Define the voice and sound of your brand.</p><div style={{ marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Avatar Voice Style (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{VOICE_STYLES.map(v => { const active = (f.voiceStyle || []).includes(v); return <button key={v} onClick={() => u("voiceStyle", active ? f.voiceStyle.filter(x => x !== v) : [...(f.voiceStyle || []), v].slice(0, 3))} style={chip(active)}>{v}</button>; })}</div></div><div style={{ display: "flex", gap: 16, marginBottom: 16 }}><div style={{ flex: "1 1 48%" }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>Voice Gender</label><select value={f.voiceGender || ""} onChange={e => u("voiceGender", e.target.value)} style={{ width: "100%", background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 16px", color: C.text, fontSize: 15, fontFamily: "'Inter', sans-serif" }}>{VOICE_GENDERS.map(g => <option key={g} value={g}>{g}</option>)}</select></div><div style={{ flex: "1 1 48%" }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 6 }}>Voice Age</label><select value={f.voiceAge || ""} onChange={e => u("voiceAge", e.target.value)} style={{ width: "100%", background: C.bgSoft, border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "12px 16px", color: C.text, fontSize: 15, fontFamily: "'Inter', sans-serif" }}>{VOICE_AGES.map(a => <option key={a} value={a}>{a}</option>)}</select></div></div><Input textarea label="Voice Notes" value={f.voiceNotes || ""} onChange={v => u("voiceNotes", v)} placeholder="Describe the vibe of the voice." /><div style={{ marginTop: 20, marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Music Mood (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{MUSIC_MOODS.map(m => { const active = (f.musicMood || []).includes(m); return <button key={m} onClick={() => u("musicMood", active ? f.musicMood.filter(x => x !== m) : [...(f.musicMood || []), m].slice(0, 3))} style={chip(active, "#5856D6")}>{m}</button>; })}</div></div><div style={{ marginBottom: 16 }}><label style={{ display: "block", fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Music Genre (pick 1-3)</label><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{MUSIC_GENRES.map(g => { const active = (f.musicGenres || []).includes(g); return <button key={g} onClick={() => u("musicGenres", active ? f.musicGenres.filter(x => x !== g) : [...(f.musicGenres || []), g].slice(0, 3))} style={chip(active, C.info)}>{g}</button>; })}</div></div><Input textarea label="Music Notes" value={f.musicNotes || ""} onChange={v => u("musicNotes", v)} placeholder="Describe the sound." /></div>
 
@@ -176,7 +247,7 @@ export default function BrandIntakePage() {
   const handleRegen = async (key) => {
     setRegen(p => ({ ...p, [key]: true }));
     const currentData = guidelines[key];
-    const r = await callClaude(`Regenerate ONLY the "${SECTION_LABELS[key]}" section based on client feedback.\n\nBRAND INTAKE: ${JSON.stringify(formData, null, 2)}\n\nCURRENT ${SECTION_LABELS[key].toUpperCase()}: ${JSON.stringify(currentData, null, 2)}\n\nCLIENT FEEDBACK: "${feedbacks[key]}"\n\nCRITICAL: Return ONLY the value — do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
+    const r = await callClaude(`Regenerate ONLY the "${SECTION_LABELS[key]}" section based on client feedback.\n\nBRAND INTAKE: ${JSON.stringify(formData, null, 2)}\n\nCURRENT ${SECTION_LABELS[key].toUpperCase()}: ${JSON.stringify(currentData, null, 2)}\n\nCLIENT FEEDBACK: "${feedbacks[key]}"\n\nCRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EXACT same JSON structure as CURRENT shown above. If current is a string, return a string. If current is an object with keys like description/doList/dontList, return that same object shape.`);
     if (r) {
       const unwrapped = (r && typeof r === 'object' && r[key] !== undefined) ? r[key] : r;
       setGuidelines(p => ({ ...p, [key]: unwrapped }));

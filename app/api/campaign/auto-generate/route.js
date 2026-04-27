@@ -186,7 +186,7 @@ ONLY JSON: {"label":"4-word character","imagePrompt":"25-word portrait photo pro
               avatarUrl = await uploadToStorage(avatarDataUrl, `auto-briefs/${clientId}/c${conceptIdx}-avatar`)
             } catch (e) { console.log(`Concept ${conceptIdx + 1} avatar failed: ${e.message}`) }
 
-            // Shots — one call per shot, all parallel per concept
+            // Shots. one call per shot, all parallel per concept
             sendEvent(controller, 'progress', { step: 'scenes', message: `Concept ${conceptIdx + 1}: Generating scenes...`, conceptIdx })
             const SHOT_TYPES = ['EWS', 'WS', 'MS', 'CU', 'ECU', 'INSERT']
             const ctx = `Brand: ${analysis.brandName}. Style: ${direction.colorWorld}, ${direction.lighting}. Concept: ${concept.theme}.`

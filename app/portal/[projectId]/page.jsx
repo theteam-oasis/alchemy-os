@@ -31,7 +31,7 @@ export async function generateMetadata({ params }) {
   const clientName = (project.client_name || '').replace(/\b\w/g, c => c.toUpperCase());
   const firstImage = (project.images || [])[0]?.url || null;
   const title = `Alchemy x ${clientName}`;
-  const description = `Review assets and provide feedback for ${clientName} — powered by Alchemy Productions.`;
+  const description = `Review assets and provide feedback for ${clientName}. powered by Alchemy Productions.`;
 
   return {
     metadataBase: new URL('https://scalewithalchemy.com'),

@@ -330,7 +330,7 @@ export default function CampaignBuilder() {
       const prompts = json.avatarPrompts
       setAvatarLabels(prompts.map(p => p.label))
 
-      // Generate all 4 avatars in parallel — portrait format, no product reference
+      // Generate all 4 avatars in parallel. portrait format, no product reference
       const results = await Promise.allSettled(
         prompts.map(p => generateImage(p.imagePrompt, { aspectRatio: '3:4', imageSize: '2K' }))
       )
@@ -401,9 +401,9 @@ export default function CampaignBuilder() {
           const globalIdx = i + batchIdx
           const fullPrompt = `${shot.imagePrompt}
 
-Character: ${avatarLabel} — maintain exact facial features, hair, skin tone, and outfit from the reference portrait.
+Character: ${avatarLabel}. maintain exact facial features, hair, skin tone, and outfit from the reference portrait.
 Shot type: ${shot.shotType}. Camera movement: ${shot.cameraMove}.
-${shot.isProductShot && productImageDataUrl ? 'Feature the product prominently in this shot — maintain exact product appearance from reference.' : ''}
+${shot.isProductShot && productImageDataUrl ? 'Feature the product prominently in this shot. maintain exact product appearance from reference.' : ''}
 Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.lighting}. No text, no watermarks.`
 
           const imgOptions = {
@@ -719,7 +719,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
 
                 {/* Product image picker */}
                 <div className="form-group full">
-                  <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional — up to 4, will appear in scenes)</span></label>
+                  <label className="form-label">Product Images <span style={{color:'#333',fontWeight:400}}>(optional. up to 4, will appear in scenes)</span></label>
 
                   <div className="product-picker">
                     {/* Client images from onboarding */}
@@ -931,7 +931,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
               </div>
               {chosenConcept && <div className="summary-strip"><div className="summary-chip"><strong>Concept:</strong> {chosenConcept.title}</div><div className="summary-chip"><strong>Direction:</strong> {chosenDirection?.title}</div></div>}
 
-              {/* Aspect ratio selector — set here before scene generation */}
+              {/* Aspect ratio selector. set here before scene generation */}
               {!avatarsLoading && (
                 <div className="form-group" style={{marginBottom:28}}>
                   <label className="form-label">Video Format</label>
@@ -986,7 +986,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                 <h1 className="step-title">Scene Builder</h1>
                 <p className="step-sub">
                   {scenesLoading
-                    ? `Building storyboard in ${aspectRatio} — ${scenesGenerated} of ${shotList.length} scenes complete`
+                    ? `Building storyboard in ${aspectRatio}. ${scenesGenerated} of ${shotList.length} scenes complete`
                     : `${scenes.length} scenes · ${aspectRatio} format · 2K resolution`}
                 </p>
               </div>
@@ -996,7 +996,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
                   <img src={lockedAvatarDataUrl} alt="Locked character" className="locked-portrait" />
                   <div className="locked-info">
                     <p className="locked-name">{avatarLabels[chosenAvatarIdx] || 'Character'}</p>
-                    <p className="locked-sub">Locked — reference image used in every scene</p>
+                    <p className="locked-sub">Locked. reference image used in every scene</p>
                   </div>
                   <span className="lock-badge">🔒 {aspectRatio}</span>
                 </div>
@@ -1107,7 +1107,7 @@ Photorealistic, cinematic, ${chosenDirection.colorWorld}, ${chosenDirection.ligh
               </div>
               {chosenScript && (
                 <div className="analysis-card">
-                  <p className="analysis-title">Script — {chosenScript.title}</p>
+                  <p className="analysis-title">Script. {chosenScript.title}</p>
                   <p style={{ fontSize:14, color:'#888', lineHeight:1.8, whiteSpace:'pre-wrap' }}>{chosenScript.fullScript}</p>
                 </div>
               )}

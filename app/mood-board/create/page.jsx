@@ -337,7 +337,7 @@ export default function MoodBoardCreate() {
 
         {/* Instruction */}
         <p style={{ ...font.caption, color: K.stone, marginBottom: 16, textTransform: "none", letterSpacing: "0.02em" }}>
-          click empty slots to upload — drag images to rearrange — hover to remove
+          click empty slots to upload. drag images to rearrange. hover to remove
         </p>
 
         {/* Image grid */}
@@ -385,7 +385,7 @@ export default function MoodBoardCreate() {
             </div>
             <div>
               <label style={{ ...font.label, color: K.stone, fontSize: 9, display: "block", marginBottom: 6 }}>shoot time</label>
-              <input type="text" placeholder="6:30am — golden hour" value={shootTime} onChange={(e) => setShootTime(e.target.value)} style={inputStyle} />
+              <input type="text" placeholder="6:30am. golden hour" value={shootTime} onChange={(e) => setShootTime(e.target.value)} style={inputStyle} />
             </div>
           </div>
         </div>
@@ -400,7 +400,7 @@ export default function MoodBoardCreate() {
           {created ? "saved" : "create mood board"}
         </button>
         <p style={{ ...font.caption, color: K.stone, textAlign: "center", textTransform: "none", marginBottom: 40 }}>
-          images save automatically — this creates the shareable link
+          images save automatically. this creates the shareable link
         </p>
       </div>
 
