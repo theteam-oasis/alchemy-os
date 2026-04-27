@@ -3220,6 +3220,46 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
               />
             )}
 
+            {/* Empty state when no data has been uploaded yet */}
+            {data.rows.length === 0 && (
+              <div style={{
+                padding: "60px 32px",
+                borderRadius: 18,
+                background: C.bgSoft,
+                border: `1px dashed ${C.border}`,
+                textAlign: "center",
+                marginBottom: 28,
+              }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 14,
+                  background: C.bg, margin: "0 auto 16px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                }}>
+                  <BarChart3 size={24} color={C.textSec} strokeWidth={1.6} />
+                </div>
+                <h3 style={{ ...hd, fontSize: 24, color: C.text, marginBottom: 6 }}>
+                  No data yet
+                </h3>
+                <p style={{ fontSize: 14, color: C.textSec, ...body, marginBottom: 20, maxWidth: 420, margin: "0 auto 20px" }}>
+                  Upload a CSV to start tracking performance. Once you add a product, charts, AI insights, and trend analysis will populate automatically.
+                </p>
+                {onAddProduct && (
+                  <button
+                    onClick={onAddProduct}
+                    style={{
+                      padding: "11px 22px", borderRadius: 980,
+                      background: C.accent, color: "#fff",
+                      border: "none", fontSize: 14, fontWeight: 500,
+                      cursor: "pointer", ...body,
+                    }}
+                  >
+                    + Add Your First Product
+                  </button>
+                )}
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap" }}>
               {dateCols.length > 0 && (
                 <select value={dateCol || ""} onChange={e => setDateCol(e.target.value || null)}
