@@ -345,7 +345,18 @@ export default function ClientReview({ projectId: serverProjectId }) {
   const applyStatus = async (itemId, val) => {
     setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], status: val } }));
     setExpandedItem(val === "revision" ? itemId : null);
-    await fetch("/api/portal/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId, itemId, status: val }) });
+    try {
+      const res = await fetch("/api/portal/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, itemId, status: val }),
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        console.error("[status] save failed", res.status, errBody);
+      }
+    } catch (e) {
+      console.error("[status] save threw", e);
+    }
   };
 
   const setItemStatus = async (itemId, newStatus) => {
@@ -365,15 +376,23 @@ export default function ClientReview({ projectId: serverProjectId }) {
     setRejectSubmitting(true);
     const itemId = rejectModal.itemId;
     const reason = rejectReason.trim();
+    // Apply status FIRST so the rejection persists even if the comment save fails.
+    // Run both in parallel and don't let one failure block the other.
+    const statusP = applyStatus(itemId, "rejected").catch(e => {
+      console.error("[reject] status save failed", e);
+    });
+    const commentP = fetch("/api/portal/feedback", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, itemId, addComment: reason, sender: "client" }),
+    }).then(r => r.json()).then(data => {
+      if (data?.comments) {
+        setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
+      }
+    }).catch(e => {
+      console.error("[reject] comment save failed", e);
+    });
     try {
-      // Save the rejection reason as a comment first, then set status to rejected
-      const res = await fetch("/api/portal/feedback", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, itemId, addComment: reason, sender: "client" }),
-      });
-      const data = await res.json();
-      setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
-      await applyStatus(itemId, "rejected");
+      await Promise.all([statusP, commentP]);
     } finally {
       setRejectSubmitting(false);
       setRejectModal(null);
