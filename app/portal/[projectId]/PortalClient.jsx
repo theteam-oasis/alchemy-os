@@ -142,6 +142,11 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
   const [duration, setDuration] = useState(0);
   const [draftText, setDraftText] = useState("");
   const [draftStamp, setDraftStamp] = useState(null);
+  // Separate draft state for general (non-timestamped) feedback so the client
+  // can leave overall thoughts on a video — pacing, hook, vibe, etc. — without
+  // having to attach it to a specific second.
+  const [generalDraft, setGeneralDraft] = useState("");
+  const [generalOpen, setGeneralOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -169,6 +174,12 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
   const videoComments = allComments
     .filter(c => typeof c.videoTimestamp === "number")
     .sort((a, b) => a.videoTimestamp - b.videoTimestamp);
+  // General comments = anything attached to this script that ISN'T a per-line
+  // script note (line) and ISN'T a video timestamp. We render these inside the
+  // video player so video feedback lives in one place visually.
+  const generalVideoComments = allComments
+    .filter(c => typeof c.videoTimestamp !== "number" && typeof c.line !== "number")
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
   const history = script.videoVersionHistory || [];
   const currentVersion = history.length + 1;
 
@@ -194,6 +205,15 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
     if (draftText.trim() && typeof draftStamp === "number") {
       onAddComment(scriptId, draftText.trim(), { videoTimestamp: Math.round(draftStamp * 100) / 100 });
       setDraftText(""); setDraftStamp(null);
+    }
+  };
+
+  const submitGeneral = () => {
+    if (generalDraft.trim()) {
+      // No meta -> stored as a plain comment (no line, no videoTimestamp)
+      onAddComment(scriptId, generalDraft.trim());
+      setGeneralDraft("");
+      setGeneralOpen(false);
     }
   };
 
@@ -281,14 +301,20 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
         </div>
       </div>
 
-      {/* Add a comment at the current playhead */}
+      {/* Add a comment at the current playhead OR leave general feedback on the cut. */}
       <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        {draftStamp === null ? (
-          <button onClick={startCommentHere}
-            style={{ ...mono, alignSelf: "flex-start", padding: "7px 14px", fontSize: 12, fontWeight: 600, background: clr.revision, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <MessageSquare size={12} /> Comment at {fmt(currentTime)}
-          </button>
-        ) : (
+        {draftStamp === null && !generalOpen ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button onClick={startCommentHere}
+              style={{ ...mono, padding: "7px 14px", fontSize: 12, fontWeight: 600, background: clr.revision, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <MessageSquare size={12} /> Comment at {fmt(currentTime)}
+            </button>
+            <button onClick={() => setGeneralOpen(true)}
+              style={{ ...mono, padding: "7px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <MessageSquare size={12} /> General feedback
+            </button>
+          </div>
+        ) : draftStamp !== null ? (
           <div style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 10, padding: 10 }}>
             <div style={{ ...mono, fontSize: 11, color: G.textSec, marginBottom: 6 }}>
               Commenting at <span style={{ fontWeight: 700, color: G.text }}>{fmt(draftStamp)}</span>
@@ -307,8 +333,56 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
               </button>
             </div>
           </div>
+        ) : (
+          // General-feedback form. Same pattern as the timestamped one minus the time stamp pill.
+          <div style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 10, padding: 10 }}>
+            <div style={{ ...mono, fontSize: 11, color: G.textSec, marginBottom: 6 }}>General feedback on this cut</div>
+            <textarea value={generalDraft} onChange={(e) => { setGeneralDraft(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+              autoFocus placeholder="Overall thoughts — pacing, hook, vibe, what's working, what's not..."
+              style={{ ...mono, width: "100%", padding: "8px 12px", fontSize: 13, border: `1px solid ${G.border}`, borderRadius: 8, outline: "none", background: "#fff", color: G.text, boxSizing: "border-box", resize: "none", minHeight: 72, lineHeight: 1.5, overflow: "hidden" }} />
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <button onClick={submitGeneral} disabled={!generalDraft.trim()}
+                style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: G.gold, color: "#fff", border: "none", borderRadius: 980, cursor: generalDraft.trim() ? "pointer" : "not-allowed", opacity: generalDraft.trim() ? 1 : 0.4 }}>
+                Submit
+              </button>
+              <button onClick={() => { setGeneralOpen(false); setGeneralDraft(""); }}
+                style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* General (non-timestamped) comments list. Rendered above the timestamp
+          list so the team sees overall thoughts first. */}
+      {generalVideoComments.length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+          {generalVideoComments.map((c, i) => {
+            const canDelete = onDeleteComment && (c.sender || "client") === viewerSender;
+            const who = c.senderName || (c.sender === "team" ? "Team" : "Client");
+            return (
+              <div key={`g-${i}`} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", background: "#fff", borderRadius: 8, border: `1px solid ${G.border}`, position: "relative" }}>
+                <span style={{ ...mono, padding: "3px 10px", fontSize: 11, fontWeight: 700, background: G.text, color: "#fff", borderRadius: 980, flexShrink: 0 }}>
+                  General
+                </span>
+                <div style={{ flex: 1, minWidth: 0, paddingRight: canDelete ? 24 : 0 }}>
+                  <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.5, margin: 0, whiteSpace: "pre-wrap" }}>{c.text}</p>
+                  <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
+                    {who} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                </div>
+                {canDelete && (
+                  <button onClick={() => onDeleteComment(scriptId, c.date)} title="Delete comment"
+                    style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "#fff", border: `1px solid ${G.border}`, color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <X size={11} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Timestamped comment list - newest at top of the timeline = lowest timestamp */}
       {videoComments.length > 0 && (
