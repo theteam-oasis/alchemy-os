@@ -66,7 +66,50 @@ export default function TeamWorkspacePage() {
     aspectRatio: "1:1",
     headlines: ["", "", "", "", ""],
     prompts: ["", "", "", "", ""],
+    jobId: null, // server-side job id; polling resumes any time we have one
   });
+
+  // Resume polling whenever we have an active jobId. This effect lives at the
+  // PARENT level so polling runs regardless of which sidebar section is active
+  // — the team can leave Static Studio mid-generation and progress still ticks
+  // forward in the background. Even better: the orchestrator runs entirely on
+  // Vercel via waitUntil(), so the job keeps generating even if the user closes
+  // the browser tab. Coming back later, we'd need to restore jobId from URL/db
+  // to resume the UI — for now polling continues for the lifetime of the page.
+  useEffect(() => {
+    if (!genState.jobId || !genState.generating) return;
+    let cancelled = false;
+    let timer = null;
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/static-generator/status?id=${genState.jobId}`);
+        const j = await r.json();
+        if (cancelled) return;
+        if (!r.ok) {
+          setGenState((s) => ({ ...s, generating: false, error: j?.error || `HTTP ${r.status}` }));
+          return;
+        }
+        setGenState((s) => ({
+          ...s,
+          progress: { done: (j.completed || 0) + (j.failed || 0), total: j.total || s.progress.total },
+          results: {
+            generated: j.completed || 0,
+            failed: j.failed || 0,
+            images: j.images || [],
+            failures: j.failures || [],
+            portalSlug: j.portalSlug,
+          },
+          generating: !j.done,
+          error: j.error || s.error,
+        }));
+        if (!j.done) timer = setTimeout(tick, 2500);
+      } catch (e) {
+        if (!cancelled) timer = setTimeout(tick, 4000);
+      }
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [genState.jobId, genState.generating]);
   const [loadingMsg, setLoadingMsg] = useState("Loading workspace...");
 
   // Step 1: Resolve slug → client + brand intake. Runs once when slug changes.
@@ -790,66 +833,49 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   const totalAds = effectiveHeadlines * effectivePrompts;
   const usingDefaults = validHeadlines.length === 0 && validPrompts.length === 0;
 
-  // Fire all chunks in PARALLEL. Each request is a fully independent server
-  // call that runs to completion regardless of UI navigation - so if the user
-  // clicks "View in Creatives" mid-generation, the remaining chunks keep
-  // saving to the DB. Each chunk also stays under Vercel's 60s timeout.
+  // Kick off a server-orchestrated job. The /start endpoint creates a job row,
+  // returns immediately, and uses Vercel's waitUntil() to fan out chunk work
+  // server-side. That means generation continues even if the team backgrounds
+  // the tab, switches tabs, or closes the browser entirely. The parent's
+  // polling effect (in TeamWorkspacePage) reads /status?id= every ~2.5s.
   const generate = async () => {
-    setGenerating(true);
-    setError("");
-    setResults({ generated: 0, failed: 0, images: [], failures: [] });
-    setProgress({ done: 0, total: totalAds });
-
-    // CHUNK=2 keeps each server invocation tiny (2 parallel Gemini calls,
-    // ~10-15s) so we never hit Vercel's 60s function timeout even when Gemini
-    // is slow or retries kick in. With 25 ads we fire ~13 parallel requests.
-    const CHUNK = 2;
-    const offsets = [];
-    for (let o = 0; o < totalAds; o += CHUNK) offsets.push(o);
-
-    const acc = { generated: 0, failed: 0, images: [], failures: [], portalSlug: null };
-
-    await Promise.all(offsets.map(async (offset) => {
-      try {
-        const res = await fetch("/api/static-generator", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId: client.id,
-            productId: activeProduct?.id || null,
-            headlines: validHeadlines,
-            imagePrompts: validPrompts,
-            aspectRatio,
-            offset,
-            limit: CHUNK,
-          }),
-        });
-        const text = await res.text();
-        let data;
-        try { data = JSON.parse(text); }
-        catch { data = { error: `Server returned non-JSON (HTTP ${res.status}).` }; }
-
-        if (!res.ok) {
-          acc.failed += CHUNK;
-          if (!acc.errorMsg) acc.errorMsg = data?.error || `HTTP ${res.status}`;
-        } else {
-          acc.generated += data.generated || 0;
-          acc.failed += data.failed || 0;
-          acc.images = [...acc.images, ...(data.images || [])];
-          acc.failures = [...acc.failures, ...(data.failures || [])];
-          acc.portalSlug = data.portalSlug;
-        }
-        setResults({ ...acc });
-        setProgress({ done: acc.generated + acc.failed, total: totalAds });
-      } catch (e) {
-        acc.failed += CHUNK;
-        if (!acc.errorMsg) acc.errorMsg = e?.message || "Network error";
-        setResults({ ...acc });
-      }
+    setGenState((s) => ({
+      ...s,
+      generating: true,
+      error: "",
+      results: { generated: 0, failed: 0, images: [], failures: [], portalSlug: null },
+      progress: { done: 0, total: totalAds },
+      jobId: null,
     }));
-
-    if (acc.errorMsg && acc.generated === 0) setError(acc.errorMsg);
-    setGenerating(false);
+    try {
+      const res = await fetch("/api/static-generator/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: client.id,
+          productId: activeProduct?.id || null,
+          headlines: validHeadlines,
+          imagePrompts: validPrompts,
+          aspectRatio,
+        }),
+      });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch { data = { error: `Server returned non-JSON (HTTP ${res.status}).` }; }
+      if (!res.ok || !data.jobId) {
+        setGenState((s) => ({ ...s, generating: false, error: data?.error || `HTTP ${res.status}` }));
+        return;
+      }
+      // Hand off to the polling effect by setting jobId.
+      setGenState((s) => ({
+        ...s,
+        jobId: data.jobId,
+        progress: { done: 0, total: data.total || totalAds },
+      }));
+    } catch (e) {
+      setGenState((s) => ({ ...s, generating: false, error: e.message || "Network error" }));
+    }
   };
 
   const inputBase = {

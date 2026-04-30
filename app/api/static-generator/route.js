@@ -237,6 +237,7 @@ export async function POST(req) {
 
     // Chunked processing: only handle a slice of `tasks` per request, so each
     // Vercel function invocation completes well under its timeout (60s).
+    const jobId = body.jobId || null;
     const offset = Number.isFinite(body.offset) ? Math.max(0, body.offset) : 0;
     // Cap at 3 so a single invocation never times out even if Gemini retries
     // multiple images. Client default is 2 (see StaticStudio CHUNK).
@@ -277,6 +278,26 @@ export async function POST(req) {
         .maybeSingle();
       const merged = [...((latest?.images) || (portalRow.images || [])), ...generated];
       await supabase.from("portal_projects").update({ images: merged }).eq("id", portalRow.id);
+    }
+
+    // If a jobId was provided (from the orchestrated /start endpoint), update
+    // the job row so the polling UI sees fresh progress + accumulated images.
+    // Re-fetch latest before merging to avoid clobbering parallel chunk writes.
+    if (jobId) {
+      const { data: job } = await supabase
+        .from("static_gen_jobs")
+        .select("completed, failed, images, failures")
+        .eq("id", jobId)
+        .maybeSingle();
+      const mergedImages = [...((job?.images) || []), ...generated];
+      const mergedFailures = [...((job?.failures) || []), ...failed];
+      await supabase.from("static_gen_jobs").update({
+        completed: (job?.completed || 0) + generated.length,
+        failed: (job?.failed || 0) + failed.length,
+        images: mergedImages,
+        failures: mergedFailures,
+        updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
     }
 
     const nextOffset = offset + slice.length;
