@@ -8,6 +8,7 @@
 // Returns: { generated: number, failed: number, images: [{url,name}] }
 
 import { supabase } from "@/lib/supabase";
+import { waitUntil } from "@vercel/functions";
 
 export const runtime = "nodejs";
 // Each call processes a small chunk (5 images). The UI loops to do all 25.
@@ -301,6 +302,53 @@ export async function POST(req) {
     }
 
     const nextOffset = offset + slice.length;
+
+    // Chain into the next chunk in this lane BEFORE returning. The /start
+    // orchestrator passes `chain: { stride, total }` — stride is LANES*CHUNK,
+    // so each lane skips ahead by that amount and we never duplicate work.
+    // Each chunk hand-off uses waitUntil to keep the dispatch alive past the
+    // function's response, so the next invocation always receives its request.
+    // When the lane runs out, we mark the job done iff we're the last chunk.
+    if (jobId && body.chain && Number.isFinite(body.chain.stride)) {
+      const { stride } = body.chain;
+      const laneNext = offset + stride;
+      if (laneNext < tasks.length) {
+        const baseUrl = new URL(req.url);
+        const chunkUrl = `${baseUrl.protocol}//${baseUrl.host}/api/static-generator`;
+        waitUntil(
+          fetch(chunkUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clientId, productId, headlines, imagePrompts, aspectRatio,
+              offset: laneNext, limit: limit,
+              jobId, chain: body.chain,
+            }),
+          }).catch((e) => console.error("[chunk] chain dispatch failed", e?.message))
+        );
+      } else {
+        // Last chunk in this lane. Check whether ALL tasks have settled and
+        // mark the job done if so. Done by checking job row counters — the
+        // chunk worker that observes total reached writes status='done'.
+        try {
+          const { data: latestJob } = await supabase
+            .from("static_gen_jobs")
+            .select("completed, failed, total, status")
+            .eq("id", jobId)
+            .maybeSingle();
+          if (latestJob && latestJob.status === "running" &&
+              (latestJob.completed || 0) + (latestJob.failed || 0) >= (latestJob.total || 0)) {
+            await supabase.from("static_gen_jobs").update({
+              status: "done",
+              portal_slug: portalRow.slug,
+              portal_id: portalRow.id,
+              updated_at: new Date().toISOString(),
+            }).eq("id", jobId);
+          }
+        } catch (e) { console.error("[chunk] final status update failed", e?.message); }
+      }
+    }
+
     return Response.json({
       generated: generated.length,
       failed: failed.length,
