@@ -755,9 +755,12 @@ export default function ClientReview({ projectId: serverProjectId }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [zipping, setZipping] = useState(null);
   const [zipProgress, setZipProgress] = useState("");
-  const [rejectModal, setRejectModal] = useState(null); // { itemId }
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  // One modal handles both Reject and Revision — both require the client to
+  // explain WHY before the status flips, so the team has actionable feedback.
+  // kind: "rejected" | "revision"
+  const [feedbackModal, setFeedbackModal] = useState(null); // { itemId, kind }
+  const [feedbackReason, setFeedbackReason] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -831,24 +834,27 @@ export default function ClientReview({ projectId: serverProjectId }) {
   const setItemStatus = async (itemId, newStatus) => {
     const current = feedback[itemId]?.status;
     const val = current === newStatus ? null : newStatus;
-    // If rejecting (not toggling off), require a reason
-    if (newStatus === "rejected" && val === "rejected") {
-      setRejectReason("");
-      setRejectModal({ itemId });
+    // Reject AND Revision both require a reason — the team can't act on a
+    // bare "send back" with no context. Toggling OFF (val === null) skips
+    // the modal and just clears the status.
+    if ((newStatus === "rejected" || newStatus === "revision") && val === newStatus) {
+      setFeedbackReason("");
+      setFeedbackModal({ itemId, kind: newStatus });
       return;
     }
     await applyStatus(itemId, val);
   };
 
-  const submitRejection = async () => {
-    if (!rejectModal || !rejectReason.trim()) return;
-    setRejectSubmitting(true);
-    const itemId = rejectModal.itemId;
-    const reason = rejectReason.trim();
-    // Apply status FIRST so the rejection persists even if the comment save fails.
-    // Run both in parallel and don't let one failure block the other.
-    const statusP = applyStatus(itemId, "rejected").catch(e => {
-      console.error("[reject] status save failed", e);
+  const submitFeedback = async () => {
+    if (!feedbackModal || !feedbackReason.trim()) return;
+    setFeedbackSubmitting(true);
+    const itemId = feedbackModal.itemId;
+    const kind = feedbackModal.kind; // "rejected" | "revision"
+    const reason = feedbackReason.trim();
+    // Apply status FIRST so the decision persists even if the comment save
+    // fails. Run both in parallel and don't let one failure block the other.
+    const statusP = applyStatus(itemId, kind).catch(e => {
+      console.error(`[${kind}] status save failed`, e);
     });
     const commentP = fetch("/api/portal/feedback", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -858,14 +864,14 @@ export default function ClientReview({ projectId: serverProjectId }) {
         setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
       }
     }).catch(e => {
-      console.error("[reject] comment save failed", e);
+      console.error(`[${kind}] comment save failed`, e);
     });
     try {
       await Promise.all([statusP, commentP]);
     } finally {
-      setRejectSubmitting(false);
-      setRejectModal(null);
-      setRejectReason("");
+      setFeedbackSubmitting(false);
+      setFeedbackModal(null);
+      setFeedbackReason("");
     }
   };
 
@@ -1435,48 +1441,60 @@ export default function ClientReview({ projectId: serverProjectId }) {
         <PortalChat projectId={projectId} sender="client" brandName={project?.clientName || ""} />
       )}
       {/* Rejection reason modal */}
-      {rejectModal && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget && !rejectSubmitting) { setRejectModal(null); setRejectReason(""); } }}
-          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
-        >
-          <div style={{ background: G.card, borderRadius: 20, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: clr.reject + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <X size={22} color={clr.reject} strokeWidth={3} />
+      {feedbackModal && (() => {
+        const isRevision = feedbackModal.kind === "revision";
+        const accent = isRevision ? clr.revision : clr.reject;
+        const ModalIcon = isRevision ? RefreshCw : X;
+        const title = isRevision ? "What needs to change?" : "Why are you rejecting this?";
+        const helper = isRevision
+          ? "Tell the team what to fix so they can ship a revision. A note is required to send back for revision."
+          : "Please share why this doesn't work so the team can adjust accordingly. A reason is required to reject.";
+        const placeholder = isRevision
+          ? "What should the team change? Be specific — copy, layout, color, image, etc..."
+          : "What's wrong with this asset? Be specific so the team can fix it...";
+        const cta = isRevision ? "Send for Revision" : "Confirm Rejection";
+        const ctaLoading = isRevision ? "Sending..." : "Rejecting...";
+        return (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget && !feedbackSubmitting) { setFeedbackModal(null); setFeedbackReason(""); } }}
+            style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          >
+            <div style={{ background: G.card, borderRadius: 20, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: accent + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ModalIcon size={22} color={accent} strokeWidth={3} />
+                </div>
+                <h3 style={{ ...hd, fontSize: 24, color: G.text, margin: 0 }}>{title}</h3>
               </div>
-              <h3 style={{ ...hd, fontSize: 24, color: G.text, margin: 0 }}>Why are you rejecting this?</h3>
-            </div>
-            <p style={{ ...mono, fontSize: 14, color: G.textSec, marginBottom: 16, lineHeight: 1.5 }}>
-              Please share why this doesn&apos;t work so the team can adjust accordingly. A reason is required to reject.
-            </p>
-            <textarea
-              autoFocus
-              value={rejectReason}
-              onChange={(e) => { setRejectReason(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-              placeholder="What's wrong with this asset? Be specific so the team can fix it..."
-              disabled={rejectSubmitting}
-              style={{ ...mono, width: "100%", padding: "12px 16px", fontSize: 14, border: `1px solid ${G.border}`, borderRadius: 10, outline: "none", background: G.bg, color: G.text, boxSizing: "border-box", resize: "none", minHeight: 96, lineHeight: 1.6, overflow: "hidden", marginBottom: 16 }}
-            />
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button
-                onClick={() => { if (!rejectSubmitting) { setRejectModal(null); setRejectReason(""); } }}
-                disabled={rejectSubmitting}
-                style={{ ...mono, padding: "10px 20px", borderRadius: 980, fontSize: 14, fontWeight: 600, cursor: rejectSubmitting ? "not-allowed" : "pointer", border: `1px solid ${G.border}`, background: "transparent", color: G.textSec, opacity: rejectSubmitting ? 0.5 : 1 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitRejection}
-                disabled={!rejectReason.trim() || rejectSubmitting}
-                style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 980, fontSize: 14, fontWeight: 600, cursor: rejectReason.trim() && !rejectSubmitting ? "pointer" : "not-allowed", border: "none", background: clr.reject, color: "#fff", opacity: rejectReason.trim() && !rejectSubmitting ? 1 : 0.5 }}
-              >
-                <X size={14} strokeWidth={3} /> {rejectSubmitting ? "Rejecting..." : "Confirm Rejection"}
-              </button>
+              <p style={{ ...mono, fontSize: 14, color: G.textSec, marginBottom: 16, lineHeight: 1.5 }}>{helper}</p>
+              <textarea
+                autoFocus
+                value={feedbackReason}
+                onChange={(e) => { setFeedbackReason(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                placeholder={placeholder}
+                disabled={feedbackSubmitting}
+                style={{ ...mono, width: "100%", padding: "12px 16px", fontSize: 14, border: `1px solid ${G.border}`, borderRadius: 10, outline: "none", background: G.bg, color: G.text, boxSizing: "border-box", resize: "none", minHeight: 96, lineHeight: 1.6, overflow: "hidden", marginBottom: 16 }}
+              />
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => { if (!feedbackSubmitting) { setFeedbackModal(null); setFeedbackReason(""); } }}
+                  disabled={feedbackSubmitting}
+                  style={{ ...mono, padding: "10px 20px", borderRadius: 980, fontSize: 14, fontWeight: 600, cursor: feedbackSubmitting ? "not-allowed" : "pointer", border: `1px solid ${G.border}`, background: "transparent", color: G.textSec, opacity: feedbackSubmitting ? 0.5 : 1 }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitFeedback}
+                  disabled={!feedbackReason.trim() || feedbackSubmitting}
+                  style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 980, fontSize: 14, fontWeight: 600, cursor: feedbackReason.trim() && !feedbackSubmitting ? "pointer" : "not-allowed", border: "none", background: accent, color: "#fff", opacity: feedbackReason.trim() && !feedbackSubmitting ? 1 : 0.5 }}
+                >
+                  <ModalIcon size={14} strokeWidth={3} /> {feedbackSubmitting ? ctaLoading : cta}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
