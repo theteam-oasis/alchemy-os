@@ -172,7 +172,7 @@ function StatCard({ label, value, change, icon: Icon, prefix, suffix, delay, act
         background: C.card, borderRadius: 14,
         boxShadow: active ? C.cardShadow : "none",
         padding: "12px 16px",
-        flex: "1 1 220px", minWidth: 200,
+        flex: "1 1 220px", minWidth: 200, minHeight: 76,
         border: `1px solid ${active ? "transparent" : C.borderLight}`,
         opacity: active ? 1 : 0.6,
         cursor: clickable ? "pointer" : "default",
@@ -203,7 +203,10 @@ function StatCard({ label, value, change, icon: Icon, prefix, suffix, delay, act
         <Icon size={17} color={active ? C.text : C.textTer} strokeWidth={1.7} />
       </div>
 
-      {/* Value + label stack. full value always visible */}
+      {/* Value + label stack. Long labels (e.g. "CPM (cost per 1,000
+          impressions)") wrap to a second line and clamp at 2 to keep the
+          card height consistent. Value stays on one line and ellipsises
+          if it ever exceeds the column width. */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
         <div style={{
           fontSize: 20, fontWeight: 700,
@@ -211,14 +214,21 @@ function StatCard({ label, value, change, icon: Icon, prefix, suffix, delay, act
           ...body, letterSpacing: "-0.02em",
           lineHeight: 1.1,
           whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         }}>
           {prefix}{typeof value === "number" ? fmt(value) : value}{suffix}
         </div>
         <div style={{
           fontSize: 11, color: C.textSec, fontWeight: 500, ...body,
           letterSpacing: "0.02em",
-          whiteSpace: "nowrap",
-        }}>{label}</div>
+          lineHeight: 1.3,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+          wordBreak: "break-word",
+        }} title={label}>{label}</div>
       </div>
 
       {/* Change badge on the right */}
