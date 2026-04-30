@@ -58,6 +58,12 @@ export default function TeamWorkspacePage() {
   // so it persists across sidebar navigation. If the team clicks away mid-batch,
   // the in-flight fetches keep saving to the DB AND when they come back to
   // Static Studio they still see the running progress + final result.
+  // Bumped after deleting the CSV so the dashboard-load effect re-runs and
+  // walks its "no dashboard found -> auto-create placeholder" branch, which
+  // gives the analytics view an empty row set that triggers the demo-data
+  // fallback in MarketingDashboardView.
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+
   const [genState, setGenState] = useState({
     generating: false,
     progress: { done: 0, total: 0 },
@@ -282,7 +288,7 @@ export default function TeamWorkspacePage() {
       if (dashRow) setDashboard(dashRow);
     })();
     return () => { cancelled = true; };
-  }, [client?.id, activeProduct?.id]);
+  }, [client?.id, activeProduct?.id, dashboardRefreshKey]);
 
   // Load this client's products. The API auto-creates a "Main" product if
   // none exist (legacy data), so the switcher always has at least one.
@@ -336,12 +342,13 @@ export default function TeamWorkspacePage() {
     }
   };
 
-  // Wipe the CSV-backed marketing dashboard for the active product, then
-  // immediately recreate an EMPTY placeholder dashboard so the analytics
-  // iframe falls back to its empty-state / example-data view instead of
-  // showing a perpetual loading spinner. The empty dashboard is what the
-  // /marketing/[slug] route uses to know "no data yet, show the upload CTA
-  // + dummy chart preview."
+  // Wipe the CSV-backed marketing dashboard for the active product. After
+  // delete we bump dashboardRefreshKey so the dashboard-load useEffect re-
+  // runs from scratch — its built-in "no dashboard found" branch will then
+  // auto-create an empty placeholder, which MarketingDashboardView falls
+  // back to demo/example data on. This reuses the same proven code path as
+  // brand-new product creation, so we never end up stuck on a loading
+  // spinner.
   const deleteDashboard = async () => {
     if (!dashboard?.slug) return;
     if (typeof window !== "undefined" && !window.confirm("Delete this dashboard's CSV data? You'll need to re-upload to see analytics again.")) return;
@@ -353,26 +360,7 @@ export default function TeamWorkspacePage() {
         return;
       }
       setDashboard(null);
-
-      // Auto-create a fresh empty dashboard so the iframe has something to
-      // load (empty-state UI instead of an infinite spinner).
-      try {
-        const r = await fetch("/api/marketing-dashboards", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId: client.id,
-            clientName: client.name,
-            productId: activeProduct?.id || null,
-            title: `${client.name}${activeProduct ? ` - ${activeProduct.name}` : ""} Analytics`,
-            fileName: "placeholder.csv",
-            headers: ["Date", "Spend", "Revenue", "Impressions", "Clicks"],
-            rows: [],
-          }),
-        });
-        const replaced = await r.json();
-        if (replaced?.success && replaced.dashboard) setDashboard(replaced.dashboard);
-      } catch (e) { console.error("recreate placeholder dashboard:", e); }
+      setDashboardRefreshKey((k) => k + 1);
     } catch (e) {
       alert(`Failed to delete: ${e.message}`);
     }
