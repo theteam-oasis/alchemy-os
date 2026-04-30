@@ -309,6 +309,52 @@ export default function TeamWorkspacePage() {
     setActiveProduct(newProduct);
   };
 
+  // Wipe a product. Removes the row in `products` and (because of CASCADE
+  // and our explicit delete chain) the linked portal_project, marketing
+  // dashboards, and brand_intake also go away. After delete we switch the
+  // user to whichever sibling product is left.
+  const deleteProduct = async (p) => {
+    if (!p?.id) return;
+    try {
+      const res = await fetch("/api/products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: p.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(`Failed to delete: ${j?.error || res.status}`);
+        return;
+      }
+      setProducts((prev) => {
+        const remaining = prev.filter((x) => x.id !== p.id);
+        if (activeProduct?.id === p.id) setActiveProduct(remaining[0] || null);
+        return remaining;
+      });
+    } catch (e) {
+      alert(`Failed to delete: ${e.message}`);
+    }
+  };
+
+  // Wipe the CSV-backed marketing dashboard for the active product. Used by
+  // the trash button in the Analytics section header. After delete the
+  // section will auto-show the empty-state CTA so the team can re-upload.
+  const deleteDashboard = async () => {
+    if (!dashboard?.slug) return;
+    if (typeof window !== "undefined" && !window.confirm("Delete this dashboard's CSV data? You'll need to re-upload to see analytics again.")) return;
+    try {
+      const res = await fetch(`/api/marketing-dashboards?slug=${encodeURIComponent(dashboard.slug)}`, { method: "DELETE" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.success) {
+        alert(`Failed to delete: ${j?.error || res.status}`);
+        return;
+      }
+      setDashboard(null);
+    } catch (e) {
+      alert(`Failed to delete: ${e.message}`);
+    }
+  };
+
   // Poll activity feed every 30s while the page is open. Track unread count
   // by comparing each item's createdAt to the last-viewed timestamp stored
   // locally. Opening the panel marks everything read.
@@ -436,6 +482,7 @@ export default function TeamWorkspacePage() {
             activeId={activeProduct?.id}
             onChange={setActiveProduct}
             onAdd={addProduct}
+            onDelete={deleteProduct}
             canAdd
             clientId={client?.id}
           />
@@ -488,6 +535,8 @@ export default function TeamWorkspacePage() {
               src={dashboard ? `/marketing/${dashboard.slug}?embed=1` : null}
               loadingMsg="Setting up analytics..."
               hubLink={clientHubUrl + "#analytics"}
+              onDelete={dashboard ? deleteDashboard : null}
+              deleteLabel="Delete CSV"
             />
           )}
 
@@ -1032,18 +1081,31 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   );
 }
 
-function SectionFrame({ title, subtitle, src, loadingMsg, hubLink }) {
+function SectionFrame({ title, subtitle, src, loadingMsg, hubLink, onDelete, deleteLabel }) {
   return (
     <div style={{ padding: "32px 40px 0", maxWidth: 1400, margin: "0 auto" }}>
       <SectionHeader
         title={title}
         subtitle={subtitle}
-        right={hubLink ? (
-          <a href={hubLink} target="_blank" rel="noreferrer"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 12, fontWeight: 600, color: G.text, background: "transparent", border: `1px solid ${G.border}`, borderRadius: 980, textDecoration: "none" }}>
-            <Eye size={13} /> Client View <ExternalLink size={11} />
-          </a>
-        ) : null}
+        right={(
+          <div style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+            {onDelete && (
+              <button onClick={onDelete}
+                title={deleteLabel || "Delete"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: G.reject, background: "transparent", border: `1px solid ${G.reject}40`, borderRadius: 980, cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = G.reject; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = G.reject; }}>
+                <Trash2 size={13} /> {deleteLabel || "Delete"}
+              </button>
+            )}
+            {hubLink && (
+              <a href={hubLink} target="_blank" rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 12, fontWeight: 600, color: G.text, background: "transparent", border: `1px solid ${G.border}`, borderRadius: 980, textDecoration: "none" }}>
+                <Eye size={13} /> Client View <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        )}
       />
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", marginBottom: 32 }}>
         {src ? (
