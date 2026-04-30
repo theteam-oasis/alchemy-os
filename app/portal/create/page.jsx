@@ -137,10 +137,10 @@ function ScriptVideo({ type, script, onUpload, onRemove, onSetRatio }) {
         </div>
       ) : (
         <div onClick={() => inputRef.current?.click()}
-          style={{ width: "100%", maxWidth, margin: ratio === "9/16" ? "0 auto" : "0", aspectRatio: ratio, borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, color: G.textTer, cursor: "pointer", background: "#FAFAFA" }}>
+          style={{ width: "100%", maxWidth, margin: ratio === "9/16" ? "0 auto" : "0", aspectRatio: ratio, borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, color: G.textTer, cursor: "pointer", background: "#FAFAFA", padding: 16, textAlign: "center", boxSizing: "border-box" }}>
           <Video size={22} />
-          <span style={{ ...mono, fontSize: 12 }}>Drop the rendered video here, or click to browse</span>
-          <span style={{ ...mono, fontSize: 10, color: G.textTer }}>MP4 / MOV / WebM · up to 5 GB · resumable</span>
+          <span style={{ ...mono, fontSize: 12, lineHeight: 1.35, maxWidth: 220 }}>Drop video here<br />or click to browse</span>
+          <span style={{ ...mono, fontSize: 10, color: G.textTer, lineHeight: 1.4, maxWidth: 220 }}>MP4 · MOV · WebM<br />up to 5 GB · resumable</span>
         </div>
       )}
     </div>
@@ -227,31 +227,38 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, onSetRatio, fe
         <input ref={inputRef} type="file" multiple={max > 1} accept="image/*" style={{ display: "none" }}
           onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
-        {moodBoard.map((img) => (
-          <div key={img.id} style={{ position: "relative", aspectRatio: ratio, maxWidth: max === 1 && ratio === "9/16" ? 280 : "100%" }}>
-            <div style={{ width: "100%", height: "100%", borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}`, position: "relative" }}>
-              <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-              {/* Download button — sits in the bottom-right of the frame so it's
-                  always reachable. Frosted black pill so it reads on any image. */}
-              <button onClick={(e) => { e.stopPropagation(); downloadImage(img.url, img.name || `frame.jpg`); }}
-                title="Download frame"
-                style={{ ...mono, position: "absolute", bottom: 6, right: 6, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", fontSize: 10, fontWeight: 700, background: "rgba(0,0,0,0.72)", color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
-                <Download size={11} /> Save
-              </button>
+      {/* Render exactly `max` slots — each slot is either filled (image) or empty
+          (upload box). Mirrors the client review layout but with placeholders
+          instead of a single giant drop zone. Frames are capped at ~120px so
+          they stay compact in the team workspace. */}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${max}, minmax(0, 120px))`, gap: 8 }}>
+        {Array.from({ length: max }).map((_, slotIdx) => {
+          const img = moodBoard[slotIdx];
+          if (img) {
+            return (
+              <div key={img.id} style={{ position: "relative", aspectRatio: ratio }}>
+                <div style={{ width: "100%", height: "100%", borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}`, position: "relative" }}>
+                  <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <button onClick={(e) => { e.stopPropagation(); downloadImage(img.url, img.name || `frame.jpg`); }}
+                    title="Download frame"
+                    style={{ ...mono, position: "absolute", bottom: 4, right: 4, display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 7px", fontSize: 9, fontWeight: 700, background: "rgba(0,0,0,0.72)", color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
+                    <Download size={9} /> Save
+                  </button>
+                </div>
+                <button onClick={() => onRemove(img.id)} style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#888", color: "#fff", border: `2px solid #fff`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.18)", zIndex: 5 }}>
+                  <X size={10} />
+                </button>
+              </div>
+            );
+          }
+          // Empty slot — compact upload placeholder
+          return (
+            <div key={`slot-${slotIdx}`} onClick={() => inputRef.current?.click()}
+              style={{ aspectRatio: ratio, borderRadius: 10, border: `1.5px dashed ${G.border}`, display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, cursor: "pointer", background: "#FAFAFA" }}>
+              <Upload size={14} />
             </div>
-            <button onClick={() => onRemove(img.id)} style={{ position: "absolute", top: -8, right: -8, width: 24, height: 24, borderRadius: "50%", background: "#888", color: "#fff", border: `2px solid #fff`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.18)", zIndex: 5 }}>
-              <X size={12} />
-            </button>
-          </div>
-        ))}
-        {moodBoard.length === 0 && (
-          <div style={{ aspectRatio: ratio, maxWidth: max === 1 && ratio === "9/16" ? 280 : "100%", borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: G.textTer, cursor: "pointer", gridColumn: max === 1 ? "auto" : "1 / -1" }}
-            onClick={() => inputRef.current?.click()}>
-            <Upload size={18} />
-            <span style={{ ...mono, fontSize: 11 }}>{max === 1 ? "Add 1 reference frame" : `Add up to ${max} frames`}</span>
-          </div>
-        )}
+          );
+        })}
       </div>
     </div>
   );
