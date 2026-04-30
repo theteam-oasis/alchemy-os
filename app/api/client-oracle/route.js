@@ -57,6 +57,98 @@ function summarizeDashboard(d) {
   return lines;
 }
 
+// For every text-ish column (Ad set name, Hook, Asset Type, Product,
+// Placement, Image Style, Campaign), group rows by value and report the
+// per-group totals so the Oracle can answer "which ad set is winning?"
+// without us having to ship the full CSV in the prompt.
+function breakdownByText(d) {
+  const headers = d.headers || [];
+  const rows = d.rows || [];
+  if (rows.length === 0) return null;
+
+  const findIdx = (...needles) => {
+    for (const needle of needles) {
+      const n = needle.toLowerCase();
+      const i = headers.findIndex((h) => {
+        const hl = String(h || "").toLowerCase().trim();
+        return hl === n || hl.startsWith(n + " (") || hl.endsWith(" " + n);
+      });
+      if (i >= 0) return i;
+    }
+    for (const needle of needles) {
+      const n = needle.toLowerCase();
+      const i = headers.findIndex((h) => String(h || "").toLowerCase().includes(n));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const num = (s) => {
+    if (s == null || s === "") return 0;
+    const v = Number(String(s).replace(/[$,€£%\s]/g, ""));
+    return Number.isFinite(v) ? v : 0;
+  };
+
+  const spendIdx = findIdx("amount spent", "spend", "cost");
+  const revIdx = findIdx("revenue", "sales", "purchase value", "conversion value");
+  const clicksIdx = findIdx("link clicks", "clicks (all)", "clicks");
+  const imprIdx = findIdx("impressions");
+  const resultsIdx = findIdx("results", "conversions", "purchases", "leads");
+
+  const TEXT_COLUMNS = [
+    { key: "Ad set", needles: ["ad set name", "ad set", "campaign name", "campaign"] },
+    { key: "Hook", needles: ["hook", "angle", "creative angle"] },
+    { key: "Asset Type", needles: ["asset type", "ad type", "creative type", "format"] },
+    { key: "Image Style", needles: ["image style", "visual style", "creative style"] },
+    { key: "Product", needles: ["product", "product name"] },
+    { key: "Placement", needles: ["placement"] },
+  ];
+
+  const lines = [];
+  for (const { key, needles } of TEXT_COLUMNS) {
+    const colIdx = findIdx(...needles);
+    if (colIdx < 0) continue;
+    const groups = new Map();
+    for (const r of rows) {
+      const label = String(r[colIdx] ?? "").trim();
+      if (!label) continue;
+      if (!groups.has(label)) groups.set(label, { spend: 0, rev: 0, clicks: 0, imps: 0, results: 0, count: 0 });
+      const g = groups.get(label);
+      g.spend += num(r[spendIdx]);
+      g.rev += num(r[revIdx]);
+      g.clicks += num(r[clicksIdx]);
+      g.imps += num(r[imprIdx]);
+      g.results += num(r[resultsIdx]);
+      g.count += 1;
+    }
+    if (groups.size < 2) continue;
+
+    // Sort by ROAS or CTR or spend.
+    const scored = [...groups.entries()].map(([label, g]) => {
+      const roas = g.spend > 0 && g.rev > 0 ? g.rev / g.spend : null;
+      const ctr = g.imps > 0 ? (g.clicks / g.imps) * 100 : null;
+      const cpc = g.clicks > 0 ? g.spend / g.clicks : null;
+      const cpa = g.results > 0 ? g.spend / g.results : null;
+      const score = roas ?? ctr ?? -g.spend; // higher is better; spend used as tiebreaker
+      return { label, g, roas, ctr, cpc, cpa, score };
+    }).sort((a, b) => b.score - a.score);
+
+    lines.push(`\n  Per-${key.toLowerCase()} breakdown (${scored.length} unique values; top 8 by performance):`);
+    for (const s of scored.slice(0, 8)) {
+      const parts = [];
+      if (s.g.spend > 0) parts.push(`$${s.g.spend.toFixed(2)} spent`);
+      if (s.g.imps > 0) parts.push(`${s.g.imps.toLocaleString()} imps`);
+      if (s.g.clicks > 0) parts.push(`${s.g.clicks.toLocaleString()} clicks`);
+      if (s.ctr != null) parts.push(`${s.ctr.toFixed(2)}% CTR`);
+      if (s.cpc != null) parts.push(`$${s.cpc.toFixed(2)} CPC`);
+      if (s.roas != null) parts.push(`${s.roas.toFixed(2)}x ROAS`);
+      if (s.cpa != null) parts.push(`$${s.cpa.toFixed(2)} CPA`);
+      if (s.g.results > 0) parts.push(`${s.g.results} results`);
+      lines.push(`  - ${s.label}: ${parts.join(", ")}`);
+    }
+  }
+  return lines.length > 0 ? lines : null;
+}
+
 function rel(date) {
   const ms = Date.now() - new Date(date).getTime();
   const m = Math.floor(ms / 60000);
@@ -131,15 +223,15 @@ async function buildClientContext(clientId) {
   // needs to see actual aggregates (totals, averages) so it can answer
   // "what's our spend?" without telling the user to upload data they
   // already uploaded.
-  const dashboardsWithData = (dashboards || []).filter(d => (d.rows?.length || 0) > 0);
   const dashboardsBlock = (dashboards || []).length > 0
-    ? `## Marketing dashboards (CSV data IS uploaded if any dashboard below has rows > 0; use the aggregates to answer performance questions)\n`
+    ? `## Marketing dashboards (CSV data IS uploaded if any dashboard below has rows > 0; use the aggregates AND row-level breakdowns to answer performance questions)\n`
       + dashboards.map(d => {
           const rowCount = d.rows?.length || 0;
           const head = `### "${d.title}" (${d.headers?.length || 0} columns, ${rowCount} rows, last updated ${rel(d.updated_at)})`;
           if (rowCount === 0) return `${head}\n  (placeholder, no CSV data yet)`;
           const summary = summarizeDashboard(d) || [];
-          return [head, ...summary].join("\n");
+          const breakdown = breakdownByText(d) || [];
+          return [head, `Headers: ${(d.headers || []).join(", ")}`, ...summary, ...breakdown].join("\n");
         }).join("\n\n")
     : "## Marketing dashboards\n(none yet)";
 
