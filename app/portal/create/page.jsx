@@ -219,11 +219,8 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, onSetRatio, fe
               ))}
             </div>
           )}
-          {remaining > 0 && (
-            <button onClick={() => inputRef.current?.click()} style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <Upload size={12} /> Upload {max === 1 ? "frame" : `${remaining} more`}
-            </button>
-          )}
+          {/* Upload button removed — the empty dashed slots already act as
+              click targets, so a redundant pill button just added noise. */}
         </div>
         <input ref={inputRef} type="file" multiple={max > 1} accept="image/*" style={{ display: "none" }}
           onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
