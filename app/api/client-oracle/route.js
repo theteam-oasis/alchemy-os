@@ -14,6 +14,49 @@ function safe(v) {
   return String(v).slice(0, 400);
 }
 
+// Walks dashboard rows and sums every numeric-looking column so the Oracle
+// has actual aggregates (total spend, total revenue, average CTR) rather
+// than a bare row count. Without this it tends to tell the user to upload
+// data even when the CSV is already loaded.
+function summarizeDashboard(d) {
+  const headers = d.headers || [];
+  const rows = d.rows || [];
+  if (rows.length === 0) return null;
+  const totals = {};
+  const hits = {};
+  for (const row of rows) {
+    headers.forEach((h, i) => {
+      if (!h) return;
+      const cell = row[i];
+      if (cell == null || cell === "") return;
+      // Strip currency, commas, percent signs
+      const cleaned = String(cell).replace(/[$,€£%\s]/g, "");
+      const n = Number(cleaned);
+      if (Number.isFinite(n)) {
+        totals[h] = (totals[h] || 0) + n;
+        hits[h] = (hits[h] || 0) + 1;
+      }
+    });
+  }
+  const lines = [];
+  for (const h of headers) {
+    if (hits[h] >= rows.length * 0.5) {
+      // Mostly-numeric column. Show total + average.
+      const avg = totals[h] / hits[h];
+      const total = totals[h];
+      // Heuristic: rate-style columns (CTR, CPC, frequency, ratio) are best
+      // shown as averages, totals are misleading.
+      const isRate = /rate|ratio|cpc|cpm|frequency|%|per\s/i.test(h);
+      if (isRate) {
+        lines.push(`- ${h}: avg ${avg.toFixed(2)} across ${hits[h]} rows`);
+      } else {
+        lines.push(`- ${h}: total ${total.toLocaleString(undefined, { maximumFractionDigits: 2 })} (avg ${avg.toFixed(2)} per row)`);
+      }
+    }
+  }
+  return lines;
+}
+
 function rel(date) {
   const ms = Date.now() - new Date(date).getTime();
   const m = Math.floor(ms / 60000);
@@ -84,8 +127,20 @@ async function buildClientContext(clientId) {
       }).join("\n\n")
     : "## Creatives portals\n(none yet)";
 
+  // Distinguish dashboards with real data vs empty placeholders. The Oracle
+  // needs to see actual aggregates (totals, averages) so it can answer
+  // "what's our spend?" without telling the user to upload data they
+  // already uploaded.
+  const dashboardsWithData = (dashboards || []).filter(d => (d.rows?.length || 0) > 0);
   const dashboardsBlock = (dashboards || []).length > 0
-    ? `## Marketing dashboards\n` + dashboards.map(d => `- "${d.title}" (${d.headers?.length || 0} columns, ${d.rows?.length || 0} rows, last updated ${rel(d.updated_at)})`).join("\n")
+    ? `## Marketing dashboards (CSV data IS uploaded if any dashboard below has rows > 0; use the aggregates to answer performance questions)\n`
+      + dashboards.map(d => {
+          const rowCount = d.rows?.length || 0;
+          const head = `### "${d.title}" (${d.headers?.length || 0} columns, ${rowCount} rows, last updated ${rel(d.updated_at)})`;
+          if (rowCount === 0) return `${head}\n  (placeholder, no CSV data yet)`;
+          const summary = summarizeDashboard(d) || [];
+          return [head, ...summary].join("\n");
+        }).join("\n\n")
     : "## Marketing dashboards\n(none yet)";
 
   const activityLines = [];

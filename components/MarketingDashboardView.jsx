@@ -2973,40 +2973,73 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
     : [];
 
   // Compute the correct aggregate for a metric across a set of rows.
-  // Ratio metrics (CTR, CPM, CPA, CPC, ROAS, rates) are derived from underlying totals rather than summed.
+  // Ratio metrics (CTR, CPM, CPA, CPC, ROAS, frequency, "cost per X") must
+  // be AVERAGED (or recomputed from underlying totals) rather than summed —
+  // summing a CTR column gives nonsense like 808% across 100 rows.
+  // Matching is loose so it catches Meta Ads-style headers like
+  // "CTR (all)", "CPC (cost per link click) (USD)", "Cost per unique click (USD)",
+  // "Frequency", "Cost per post engagement (USD)", etc.
   const computeAggregate = (metric, rowsSlice) => {
-    const lower = metric.toLowerCase();
+    const lower = metric.toLowerCase().trim();
     const sumCol = (col) => {
       const idx = data.headers.indexOf(col);
       if (idx < 0) return 0;
       return rowsSlice.reduce((s, r) => s + parseNum(r[idx]), 0);
     };
-    if (lower === "ctr" || lower.includes("click-through")) {
-      const c = sumCol("Clicks"), im = sumCol("Impressions");
-      return im > 0 ? (c / im) * 100 : 0;
-    }
-    if (lower === "cpm") {
-      const s = sumCol("Spend"), im = sumCol("Impressions");
-      return im > 0 ? (s / im) * 1000 : 0;
-    }
-    if (lower === "cpa") {
-      const s = sumCol("Spend"), cv = sumCol("Conversions");
-      return cv > 0 ? s / cv : 0;
-    }
-    if (lower === "cpc") {
-      const s = sumCol("Spend"), c = sumCol("Clicks");
-      return c > 0 ? s / c : 0;
-    }
-    if (lower === "roas") {
-      const rv = sumCol("Revenue"), s = sumCol("Spend");
-      return s > 0 ? rv / s : 0;
-    }
-    if (lower.includes("rate") || lower.includes("percent")) {
+    const avgFromColumn = () => {
       const mi = data.headers.indexOf(metric);
-      const vals = rowsSlice.map(r => parseNum(r[mi]));
+      if (mi < 0) return 0;
+      const vals = rowsSlice.map(r => parseNum(r[mi])).filter(v => Number.isFinite(v));
       return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    };
+
+    // Pattern detectors — order matters. Most specific first.
+    const isCtr = /\bctr\b|click-through/.test(lower);
+    const isCpm = /\bcpm\b/.test(lower);
+    const isCpa = /\bcpa\b/.test(lower);
+    const isCpc = /\bcpc\b/.test(lower);
+    const isRoas = /\broas\b/.test(lower);
+    const isFrequency = /\bfrequency\b/.test(lower);
+    // "Cost per X" — averaged. Catches Meta's "Cost per unique link click",
+    // "Cost per post engagement", etc.
+    const isCostPer = /\bcost\s+per\b/.test(lower);
+    // Generic rate/percent/ratio columns — averaged.
+    const isRate = /rate|ratio|percent|%/.test(lower);
+    // Budget / spend / revenue / impressions / clicks / conversions — summed.
+    // (Default behavior, listed for clarity.)
+
+    // Recompute true ratios from underlying totals when we have raw columns
+    // available; otherwise fall back to averaging the rate column directly.
+    if (isCtr) {
+      const c = sumCol("Clicks"), im = sumCol("Impressions");
+      if (im > 0 && c > 0) return (c / im) * 100;
+      return avgFromColumn();
     }
-    // Default: sum
+    if (isCpm && !isCpc) {
+      const s = sumCol("Spend"), im = sumCol("Impressions");
+      if (s > 0 && im > 0) return (s / im) * 1000;
+      return avgFromColumn();
+    }
+    if (isCpa) {
+      const s = sumCol("Spend"), cv = sumCol("Conversions");
+      if (s > 0 && cv > 0) return s / cv;
+      return avgFromColumn();
+    }
+    if (isCpc) {
+      const s = sumCol("Spend"), c = sumCol("Clicks");
+      if (s > 0 && c > 0) return s / c;
+      return avgFromColumn();
+    }
+    if (isRoas) {
+      const rv = sumCol("Revenue"), s = sumCol("Spend");
+      if (s > 0) return rv / s;
+      return avgFromColumn();
+    }
+    if (isFrequency || isCostPer || isRate) {
+      return avgFromColumn();
+    }
+    // Default: sum. Volume metrics (impressions, clicks, spend, revenue,
+    // budget, conversions) are accurately represented by their total.
     const mi = data.headers.indexOf(metric);
     return rowsSlice.reduce((s, r) => s + parseNum(r[mi]), 0);
   };
