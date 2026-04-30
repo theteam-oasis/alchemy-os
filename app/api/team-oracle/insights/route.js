@@ -83,19 +83,35 @@ export async function GET() {
     for (const d of Object.values(latestPerClient)) {
       const headers = d.headers || [];
       const rows = d.rows || [];
-      const idx = (name) => headers.findIndex(h => String(h).toLowerCase() === name.toLowerCase());
-      const sum = (col) => {
-        const i = idx(col);
+      // Match Meta Ads / Google Ads / TikTok column names too — long suffixed
+      // headers like "Amount spent (USD)", "Cost (USD)", "Purchase value".
+      const findIdx = (...needles) => {
+        for (const needle of needles) {
+          const n = needle.toLowerCase();
+          const i = headers.findIndex((h) => {
+            const hl = String(h || "").toLowerCase().trim();
+            return hl === n || hl.startsWith(n + " (") || hl.endsWith(" " + n);
+          });
+          if (i >= 0) return i;
+        }
+        for (const needle of needles) {
+          const n = needle.toLowerCase();
+          const i = headers.findIndex((h) => String(h || "").toLowerCase().includes(n));
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+      const sumIdx = (i) => {
         if (i < 0) return 0;
         let total = 0;
         for (const r of rows) {
-          const v = Number(String(r[i] ?? "").replace(/[$,]/g, ""));
+          const v = Number(String(r[i] ?? "").replace(/[$,€£%\s]/g, ""));
           if (Number.isFinite(v)) total += v;
         }
         return total;
       };
-      const s = sum("Spend") || sum("Cost");
-      const r = sum("Revenue") || sum("Sales");
+      const s = sumIdx(findIdx("amount spent", "spend", "cost"));
+      const r = sumIdx(findIdx("revenue", "sales", "purchase value", "conversion value"));
       if (s > 0) { totalSpend += s; totalRev += r; dashCount++; }
     }
     if (dashCount > 0 && totalSpend > 0) {
