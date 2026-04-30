@@ -540,13 +540,18 @@ export default function TeamWorkspacePage() {
 
           {/* Content */}
           {section === "analytics" && (
+            // Fall back to /marketing/demo (the example-data dashboard) when
+            // we don't have a real dashboard slug yet — happens right after
+            // CSV delete, or on first load if the auto-create placeholder
+            // hasn't returned. Stops the section ever getting stuck on a
+            // loading spinner.
             <SectionFrame
               title="Analytics"
               subtitle={SECTION_COPY.analytics.subtitle}
-              src={dashboard ? `/marketing/${dashboard.slug}?embed=1` : null}
+              src={dashboard ? `/marketing/${dashboard.slug}?embed=1` : `/marketing/demo`}
               loadingMsg="Setting up analytics..."
               hubLink={clientHubUrl + "#analytics"}
-              onDelete={dashboard ? deleteDashboard : null}
+              onDelete={dashboard && (dashboard.rows?.length > 0 || dashboard.file_name !== "placeholder.csv") ? deleteDashboard : null}
               deleteLabel="Delete CSV"
             />
           )}
