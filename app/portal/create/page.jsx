@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Upload, X, Image, Film, Video, ArrowLeft, Save, Check, Sparkles, Link as LinkIcon, Copy, Clock, RefreshCw, MessageSquare, CheckCircle2, ExternalLink } from "lucide-react";
+import { Upload, X, Image, Film, Video, ArrowLeft, Save, Check, Sparkles, Link as LinkIcon, Copy, Clock, RefreshCw, MessageSquare, CheckCircle2, ExternalLink, Download } from "lucide-react";
 import { breakdownScript } from "@/lib/script-breakdown";
 import PortalChat from "@/components/PortalChat";
 import { supabase } from "@/lib/supabase";
@@ -151,7 +151,29 @@ function ScriptVideo({ type, script, onUpload, onRemove, onSetRatio }) {
 // The team uploads reference images so the client can preview the visual direction
 // before review. The mood board itself can be approved or sent back for revision
 // (handled separately on the client side using item ID `moodboard-<scriptId>`).
-function ScriptMoodBoard({ type, script, max, onUpload, onRemove, feedback }) {
+// Cross-origin-safe download. Anchor[download] gets ignored for cross-origin
+// images on most browsers (they navigate instead), so we fetch the bytes and
+// build a same-origin blob URL.
+async function downloadImage(url, filename) {
+  try {
+    const res = await fetch(url, { credentials: "omit" });
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename || url.split("/").pop() || "frame.jpg";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch (e) {
+    console.error("[download]", e);
+    // Fallback: just open the image in a new tab so the user can save manually.
+    window.open(url, "_blank");
+  }
+}
+
+function ScriptMoodBoard({ type, script, max, onUpload, onRemove, onSetRatio, feedback }) {
   const inputRef = useRef(null);
   const moodBoard = script.moodBoard || [];
   const remaining = max - moodBoard.length;
@@ -159,6 +181,10 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, feedback }) {
   const sub = max === 1 ? "1 reference frame" : `${max} reference frames`;
   const status = feedback?.status;
   const comments = feedback?.comments?.length || 0;
+  // Frame ratio is configurable per-script. Default 9:16 (vertical) for UGC,
+  // 1:1 for hero grid. The team flips this per script depending on whether
+  // they're shooting vertical Reels/Stories or widescreen YouTube/CTV.
+  const ratio = script.moodBoardRatio || (max === 1 ? "9/16" : "1/1");
 
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${G.border}` }}>
@@ -179,19 +205,40 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, feedback }) {
             </span>
           )}
         </div>
-        {remaining > 0 && (
-          <button onClick={() => inputRef.current?.click()} style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <Upload size={12} /> Upload {max === 1 ? "frame" : `${remaining} more`}
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Aspect ratio toggle. Same pill pattern as the video ratio picker. */}
+          {onSetRatio && (
+            <div style={{ display: "flex", gap: 2, background: "#F5F5F7", padding: 2, borderRadius: 980, border: `1px solid ${G.border}` }}>
+              {[{ v: "9/16", l: "9:16" }, { v: "16/9", l: "16:9" }].map((r) => (
+                <button key={r.v} onClick={() => onSetRatio(r.v)}
+                  style={{ ...mono, padding: "4px 10px", borderRadius: 980, fontSize: 11, fontWeight: ratio === r.v ? 700 : 500, cursor: "pointer", border: "none",
+                    background: ratio === r.v ? G.text : "transparent",
+                    color: ratio === r.v ? "#fff" : G.textSec,
+                  }}>{r.l}</button>
+              ))}
+            </div>
+          )}
+          {remaining > 0 && (
+            <button onClick={() => inputRef.current?.click()} style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <Upload size={12} /> Upload {max === 1 ? "frame" : `${remaining} more`}
+            </button>
+          )}
+        </div>
         <input ref={inputRef} type="file" multiple={max > 1} accept="image/*" style={{ display: "none" }}
           onChange={(e) => { onUpload(e.target.files); e.target.value = ""; }} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
         {moodBoard.map((img) => (
-          <div key={img.id} style={{ position: "relative", aspectRatio: max === 1 ? "16/9" : "1/1" }}>
-            <div style={{ width: "100%", height: "100%", borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
+          <div key={img.id} style={{ position: "relative", aspectRatio: ratio, maxWidth: max === 1 && ratio === "9/16" ? 280 : "100%" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}`, position: "relative" }}>
               <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              {/* Download button — sits in the bottom-right of the frame so it's
+                  always reachable. Frosted black pill so it reads on any image. */}
+              <button onClick={(e) => { e.stopPropagation(); downloadImage(img.url, img.name || `frame.jpg`); }}
+                title="Download frame"
+                style={{ ...mono, position: "absolute", bottom: 6, right: 6, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 9px", fontSize: 10, fontWeight: 700, background: "rgba(0,0,0,0.72)", color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)" }}>
+                <Download size={11} /> Save
+              </button>
             </div>
             <button onClick={() => onRemove(img.id)} style={{ position: "absolute", top: -8, right: -8, width: 24, height: 24, borderRadius: "50%", background: "#888", color: "#fff", border: `2px solid #fff`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.18)", zIndex: 5 }}>
               <X size={12} />
@@ -199,7 +246,7 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, feedback }) {
           </div>
         ))}
         {moodBoard.length === 0 && (
-          <div style={{ aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: G.textTer, cursor: "pointer", gridColumn: max === 1 ? "auto" : "1 / -1" }}
+          <div style={{ aspectRatio: ratio, maxWidth: max === 1 && ratio === "9/16" ? 280 : "100%", borderRadius: 10, border: `2px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: G.textTer, cursor: "pointer", gridColumn: max === 1 ? "auto" : "1 / -1" }}
             onClick={() => inputRef.current?.click()}>
             <Upload size={18} />
             <span style={{ ...mono, fontSize: 11 }}>{max === 1 ? "Add 1 reference frame" : `Add up to ${max} frames`}</span>
@@ -609,6 +656,13 @@ function CreateProject() {
     setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, videoRatio: ratio })));
   };
 
+  // Per-script mood-board frame ratio (separate from video ratio because the
+  // team sometimes references widescreen images for a vertical final video).
+  const setScriptMoodBoardRatio = (type, scriptId, ratio) => {
+    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
+    setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, moodBoardRatio: ratio })));
+  };
+
   const saveProject = async () => {
     setSaving(true);
     await fetch(`/api/portal/projects/${projectId}`, {
@@ -832,6 +886,7 @@ function CreateProject() {
                   <ScriptMoodBoard type="hero" script={s} max={6}
                     onUpload={(files) => uploadScriptMoodBoard("hero", s.id, files)}
                     onRemove={(imgId) => removeMoodBoardImage("hero", s.id, imgId)}
+                    onSetRatio={(r) => setScriptMoodBoardRatio("hero", s.id, r)}
                     feedback={feedback[`moodboard-${s.id}`]}
                   />
                   <ScriptVideo type="hero" script={s}
@@ -893,6 +948,7 @@ function CreateProject() {
                   <ScriptMoodBoard type="ugc" script={s} max={1}
                     onUpload={(files) => uploadScriptMoodBoard("ugc", s.id, files)}
                     onRemove={(imgId) => removeMoodBoardImage("ugc", s.id, imgId)}
+                    onSetRatio={(r) => setScriptMoodBoardRatio("ugc", s.id, r)}
                     feedback={feedback[`moodboard-${s.id}`]}
                   />
                   <ScriptVideo type="ugc" script={s}
