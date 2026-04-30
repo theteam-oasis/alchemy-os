@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { RichText } from "@/lib/rich-text";
 const mono = { fontFamily: "'Inter', -apple-system, sans-serif" };
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 
@@ -461,7 +462,7 @@ export default function DashboardChat() {
                       ...mono, fontSize: 13, lineHeight: 1.55,
                       boxShadow: m.role === "assistant" ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
                       whiteSpace: "pre-wrap", wordBreak: "break-word",
-                    }}>{m.content}</div>
+                    }}><RichText text={m.content} /></div>
                   </div>
                 ))}
                 {oracleSending && (
