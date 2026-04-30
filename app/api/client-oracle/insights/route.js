@@ -13,20 +13,24 @@ export async function GET(req) {
     const clientId = searchParams.get("clientId");
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
 
-    // Pull the most recent dashboard for this client (any product)
+    // Pull every dashboard for this client and pick the one with actual data.
+    // Previously we pulled "most recently updated" which gave us empty
+    // placeholders (created right after a CSV delete or for a brand-new
+    // product) even when an OTHER product had a fully populated CSV. The
+    // insights tab then said "upload CSV" despite data being uploaded.
     const { data: dashes } = await supabase
       .from("marketing_dashboards")
       .select("id, slug, title, headers, rows, updated_at")
       .eq("client_id", clientId)
-      .order("updated_at", { ascending: false })
-      .limit(1);
-    const dash = dashes?.[0];
+      .order("updated_at", { ascending: false });
+    // Prefer the most recently updated dashboard that has rows. Fall back to
+    // the most recent of any kind (which will trigger hasData:false below).
+    const dash = (dashes || []).find((d) => Array.isArray(d.rows) && d.rows.length > 0)
+      || (dashes || [])[0];
 
     const insights = [];
 
     if (!dash || !dash.rows?.length) {
-      // No data yet - return an "empty" payload so the UI can render a single
-      // upload-CTA card instead of clickable insights that don't exist yet.
       return Response.json({
         insights: [],
         hasData: false,
