@@ -49,19 +49,24 @@ export default function DashboardChat() {
 
   // Slot rotation order: oracle → insights → inbox → oracle.
   // Clicking a slot:
-  //   - If it's the active slot, advance to the next.
-  //   - If it's not active, jump directly to that slot.
+  //   - Panel CLOSED → just open whichever slot was clicked (don't advance).
+  //   - Panel OPEN + click the active slot → advance to the next slot.
+  //   - Panel OPEN + click a different slot → jump to it.
   const TAB_ORDER = ["oracle", "insights", "inbox"];
   const goTo = (slot) => {
     flashPress();
     setActiveConvo(null);
+    if (!open) {
+      setTab(slot);
+      setOpen(true);
+      return;
+    }
     if (slot === tab) {
       const idx = TAB_ORDER.indexOf(tab);
       setTab(TAB_ORDER[(idx + 1) % TAB_ORDER.length]);
     } else {
       setTab(slot);
     }
-    setOpen(true);
   };
 
   useEffect(() => {

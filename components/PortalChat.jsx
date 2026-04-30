@@ -96,18 +96,24 @@ export default function PortalChat({ projectId, sender = "client", brandName = "
   const [dockPress, setDockPress] = useState(false);
   const flashPress = () => { setDockPress(true); setTimeout(() => setDockPress(false), 280); };
 
-  // Slot rotation: oracle → insights → chat → oracle. Click inactive = jump,
-  // click active = advance to next.
+  // Slot rotation: oracle → insights → chat → oracle.
+  // Panel CLOSED → just open whichever slot was clicked (don't advance).
+  // Panel OPEN + active slot click → advance to next.
+  // Panel OPEN + inactive slot click → jump to it.
   const TAB_ORDER = ["oracle", "insights", "chat"];
   const goTo = (slot) => {
     flashPress();
+    if (!open) {
+      setTab(slot);
+      setOpen(true);
+      return;
+    }
     if (slot === tab) {
       const idx = TAB_ORDER.indexOf(tab);
       setTab(TAB_ORDER[(idx + 1) % TAB_ORDER.length]);
     } else {
       setTab(slot);
     }
-    setOpen(true);
   };
 
   const teamLabel = "The Alchemy Team";
