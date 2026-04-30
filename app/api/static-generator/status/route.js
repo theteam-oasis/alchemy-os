@@ -21,6 +21,35 @@ export async function GET(req) {
     if (error) return Response.json({ error: error.message }, { status: 500 });
     if (!job) return Response.json({ error: "job not found" }, { status: 404 });
 
+    // Self-heal stale jobs: if status is "running" but every task has resolved
+    // (completed + failed === total), the orchestrator's waitUntil() must have
+    // been cut short before the final "done" write. Mark it done now so the
+    // UI stops polling. Same heal if the row hasn't been touched in 10 min.
+    if (job.status === "running") {
+      const settled = (job.completed || 0) + (job.failed || 0) >= (job.total || 0) && (job.total || 0) > 0;
+      const stale = job.updated_at && Date.now() - new Date(job.updated_at).getTime() > 10 * 60 * 1000;
+      if (settled || stale) {
+        let portalSlug = job.portal_slug;
+        let portalId = job.portal_id;
+        if (!portalSlug) {
+          let q = supabase.from("portal_projects").select("id, slug").eq("client_id", job.client_id);
+          if (job.product_id) q = q.eq("product_id", job.product_id);
+          const { data: portals } = await q;
+          if (portals?.[0]) { portalSlug = portals[0].slug; portalId = portals[0].id; }
+        }
+        await supabase.from("static_gen_jobs").update({
+          status: stale && !settled ? "error" : "done",
+          error: stale && !settled ? "Generation timed out — partial results saved." : null,
+          portal_slug: portalSlug,
+          portal_id: portalId,
+          updated_at: new Date().toISOString(),
+        }).eq("id", id);
+        job.status = stale && !settled ? "error" : "done";
+        job.portal_slug = portalSlug;
+        job.portal_id = portalId;
+      }
+    }
+
     return Response.json({
       id: job.id,
       status: job.status,

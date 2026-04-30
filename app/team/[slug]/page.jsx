@@ -127,6 +127,37 @@ export default function TeamWorkspacePage() {
       const { data: bi } = await supabase.from("brand_intake").select("*").eq("client_id", matched.id).maybeSingle();
       if (cancelled) return;
       if (bi) setIntake(bi);
+
+      // Resume any in-flight Static Studio job for this client. The orchestrator
+      // runs server-side via Vercel waitUntil(), so jobs keep generating even
+      // when the team navigates away or fully reloads. On return, we look up
+      // the most recent running job and re-attach the polling effect to it.
+      const { data: runningJobs } = await supabase
+        .from("static_gen_jobs")
+        .select("id, total, completed, failed, images, failures, status, portal_slug, aspect_ratio, error")
+        .eq("client_id", matched.id)
+        .eq("status", "running")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      const running = runningJobs?.[0];
+      if (running) {
+        setGenState((s) => ({
+          ...s,
+          generating: true,
+          jobId: running.id,
+          aspectRatio: running.aspect_ratio || s.aspectRatio,
+          progress: { done: (running.completed || 0) + (running.failed || 0), total: running.total || 0 },
+          results: {
+            generated: running.completed || 0,
+            failed: running.failed || 0,
+            images: running.images || [],
+            failures: running.failures || [],
+            portalSlug: running.portal_slug,
+          },
+          error: running.error || "",
+        }));
+      }
     })();
     return () => { cancelled = true; };
   }, [slug]);
