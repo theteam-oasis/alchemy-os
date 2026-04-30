@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { Check, X, Image, Film, Video, MessageSquare, CheckCircle2, RefreshCw, Sparkles, ChevronLeft, ChevronRight, ZoomIn, Clock, Download } from "lucide-react";
+import { Check, X, Image, Film, Video, MessageSquare, CheckCircle2, RefreshCw, Sparkles, ChevronLeft, ChevronRight, ZoomIn, Clock, Download, Play, Pause, Maximize2 } from "lucide-react";
 import { breakdownScript } from "@/lib/script-breakdown";
 import PortalChat from "@/components/PortalChat";
 
@@ -15,7 +15,7 @@ const G = {
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 const mono = { fontFamily: "'Inter', -apple-system, sans-serif" };
 
-function FeedbackBox({ itemId, feedback, saving, onAddComment }) {
+function FeedbackBox({ itemId, feedback, saving, onAddComment, onDeleteComment, viewerSender = "client" }) {
   const [text, setText] = useState("");
   // Only show general comments (without a line index) - line-specific comments appear inline in ScriptBreakdownView
   const comments = (feedback[itemId]?.comments || []).filter(c => typeof c.line !== "number");
@@ -28,14 +28,26 @@ function FeedbackBox({ itemId, feedback, saving, onAddComment }) {
       {/* Comment trail */}
       {comments.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-          {comments.map((c, i) => (
-            <div key={i} style={{ background: "#F5F5F7", borderRadius: 10, padding: "10px 14px", border: `1px solid ${G.border}` }}>
-              <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.6, whiteSpace: "pre-wrap", margin: 0 }}>{c.text}</p>
-              <span style={{ ...mono, fontSize: 11, color: G.textTer, marginTop: 4, display: "block" }}>
-                {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              </span>
-            </div>
-          ))}
+          {comments.map((c, i) => {
+            const canDelete = onDeleteComment && (c.sender || "client") === viewerSender;
+            const who = c.senderName || (c.sender === "team" ? "Team" : "Client");
+            return (
+              <div key={i} style={{ background: "#F5F5F7", borderRadius: 10, padding: "10px 14px", border: `1px solid ${G.border}`, position: "relative" }}>
+                <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.6, whiteSpace: "pre-wrap", margin: 0, paddingRight: canDelete ? 24 : 0 }}>{c.text}</p>
+                <span style={{ ...mono, fontSize: 11, color: G.textTer, marginTop: 4, display: "block" }}>
+                  {who} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+                {canDelete && (
+                  <button onClick={() => onDeleteComment(itemId, c.date)} title="Delete comment"
+                    style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "#fff", border: `1px solid ${G.border}`, color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, transition: "all 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = clr.reject; e.currentTarget.style.borderColor = clr.reject; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.textSec; }}>
+                    <X size={13} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -118,25 +130,355 @@ function LineCommentBox({ lineIdx, selection, onSubmit, onCancel, saving }) {
   );
 }
 
-// Per-script mood board: team-uploaded reference frames the client can preview.
-// Has its own approve / revise / reject status (stored under itemId `moodboard-<scriptId>`)
-// and its own comment thread, separate from the script itself.
-function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, onAddComment }) {
-  const moodBoard = script.moodBoard || [];
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [text, setText] = useState("");
-  const moodFeedback = { [`mb-${script.id}`]: { comments } };
-  if (moodBoard.length === 0) return null;
+// Inline video review player. The team uploads a rendered cut to each script;
+// the client can watch it, click anywhere on the timeline (or hit "Comment at
+// current time") to drop a timestamped comment. Comments are stored on the same
+// portal_feedback row as the script with a `videoTimestamp` field, so they
+// appear separately from line/general feedback.
+function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteComment, viewerSender = "client" }) {
+  const videoRef = useRef(null);
+  const wrapRef = useRef(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [draftText, setDraftText] = useState("");
+  const [draftStamp, setDraftStamp] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  if (!script.videoUrl) return null;
+
+  const togglePlay = () => {
+    const v = videoRef.current; if (!v) return;
+    if (v.paused) v.play().catch(() => {}); else v.pause();
+  };
+  const requestFullscreen = () => {
+    const el = wrapRef.current; if (!el) return;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  };
+  const onScrub = (e) => {
+    const bar = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - bar.left) / bar.width;
+    if (videoRef.current && Number.isFinite(duration)) {
+      videoRef.current.currentTime = Math.max(0, Math.min(duration, pct * duration));
+    }
+  };
+
+  const allComments = feedback?.[scriptId]?.comments || [];
+  const videoComments = allComments
+    .filter(c => typeof c.videoTimestamp === "number")
+    .sort((a, b) => a.videoTimestamp - b.videoTimestamp);
+  const history = script.videoVersionHistory || [];
+  const currentVersion = history.length + 1;
+
+  const fmt = (s) => {
+    if (!Number.isFinite(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
+  };
+
+  const seek = (t) => {
+    const v = videoRef.current; if (!v) return;
+    v.currentTime = t;
+    v.play().catch(() => {});
+  };
+
+  const startCommentHere = () => {
+    const v = videoRef.current; if (!v) return;
+    setDraftStamp(v.currentTime);
+  };
+
+  const submitDraft = () => {
+    if (draftText.trim() && typeof draftStamp === "number") {
+      onAddComment(scriptId, draftText.trim(), { videoTimestamp: Math.round(draftStamp * 100) / 100 });
+      setDraftText(""); setDraftStamp(null);
+    }
+  };
 
   return (
     <div style={{ marginTop: 14, padding: 16, background: "#FAFAFA", border: `1px solid ${G.border}`, borderRadius: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Image size={14} color={G.textSec} />
-          <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            {max === 1 ? "Mood Frame" : "Mood Board"}
-          </span>
-          <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Reference frames from the team</span>
+          <Video size={14} color={G.textSec} />
+          <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>Final Video</span>
+          {currentVersion > 1 && (
+            <span style={{ ...mono, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 980, background: "#E5F0FC", color: "#3E8ED0" }}>V{currentVersion}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Wistia-style custom player: jet-black big play button, minimal controls
+          that fade in on hover, clickable timeline with comment pins.
+          Aspect ratio comes from the team's choice (defaults to 9:16 vertical). */}
+      <div ref={wrapRef}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ position: "relative", width: "100%", maxWidth: (script.videoRatio || "9/16") === "9/16" ? 360 : "100%", margin: (script.videoRatio || "9/16") === "9/16" ? "0 auto" : 0, borderRadius: 12, overflow: "hidden", background: "#000", aspectRatio: script.videoRatio || "9/16" }}>
+        <video ref={videoRef} src={script.videoUrl} preload="metadata" playsInline
+          onClick={togglePlay}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000", display: "block", cursor: "pointer" }} />
+
+        {/* Big jet-black play button overlay - shown only when paused */}
+        {!playing && (
+          <button onClick={togglePlay} aria-label="Play"
+            style={{
+              position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+              width: 84, height: 84, borderRadius: "50%",
+              background: "#000", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 6px 28px rgba(0,0,0,0.45)", padding: 0,
+              transition: "transform 0.15s ease, background 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = "translate(-50%, -50%) scale(1.06)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = "translate(-50%, -50%) scale(1)"; }}>
+            {/* Slight nudge right so the triangle looks visually centered */}
+            <Play size={32} color="#fff" fill="#fff" style={{ marginLeft: 4 }} />
+          </button>
+        )}
+
+        {/* Bottom control bar - fades in on hover OR when paused */}
+        <div style={{
+          position: "absolute", left: 0, right: 0, bottom: 0,
+          padding: "10px 14px 12px",
+          background: "linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0))",
+          opacity: hovered || !playing ? 1 : 0,
+          transition: "opacity 0.2s ease",
+          pointerEvents: hovered || !playing ? "auto" : "none",
+        }}>
+          {/* Scrubber + comment pins */}
+          <div onClick={onScrub}
+            style={{ position: "relative", height: 16, cursor: "pointer", display: "flex", alignItems: "center" }}>
+            <div style={{ position: "absolute", inset: "7px 0 7px 0", background: "rgba(255,255,255,0.25)", borderRadius: 999 }} />
+            <div style={{ position: "absolute", left: 0, top: 7, bottom: 7, width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%`, background: "#fff", borderRadius: 999 }} />
+            {duration > 0 && videoComments.map((c, i) => {
+              const left = `${Math.min(99, Math.max(0, (c.videoTimestamp / duration) * 100))}%`;
+              return (
+                <button key={i} onClick={(e) => { e.stopPropagation(); seek(c.videoTimestamp); }}
+                  title={`${fmt(c.videoTimestamp)}: ${c.text}`}
+                  style={{ position: "absolute", left, top: 1, width: 14, height: 14, borderRadius: "50%", background: clr.revision, border: "2px solid #fff", cursor: "pointer", padding: 0, transform: "translateX(-50%)" }} />
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, color: "#fff" }}>
+            <button onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}
+              style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {playing ? <Pause size={16} fill="#fff" /> : <Play size={16} fill="#fff" />}
+            </button>
+            <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: "#fff", opacity: 0.85, fontVariantNumeric: "tabular-nums" }}>
+              {fmt(currentTime)} / {fmt(duration)}
+            </span>
+            <button onClick={requestFullscreen} aria-label="Fullscreen"
+              style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", padding: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Maximize2 size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Add a comment at the current playhead */}
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        {draftStamp === null ? (
+          <button onClick={startCommentHere}
+            style={{ ...mono, alignSelf: "flex-start", padding: "7px 14px", fontSize: 12, fontWeight: 600, background: clr.revision, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <MessageSquare size={12} /> Comment at {fmt(currentTime)}
+          </button>
+        ) : (
+          <div style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 10, padding: 10 }}>
+            <div style={{ ...mono, fontSize: 11, color: G.textSec, marginBottom: 6 }}>
+              Commenting at <span style={{ fontWeight: 700, color: G.text }}>{fmt(draftStamp)}</span>
+            </div>
+            <textarea value={draftText} onChange={(e) => { setDraftText(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+              autoFocus placeholder="What needs to change at this moment?"
+              style={{ ...mono, width: "100%", padding: "8px 12px", fontSize: 13, border: `1px solid ${G.border}`, borderRadius: 8, outline: "none", background: "#fff", color: G.text, boxSizing: "border-box", resize: "none", minHeight: 56, lineHeight: 1.5, overflow: "hidden" }} />
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              <button onClick={submitDraft} disabled={!draftText.trim()}
+                style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: G.gold, color: "#fff", border: "none", borderRadius: 980, cursor: draftText.trim() ? "pointer" : "not-allowed", opacity: draftText.trim() ? 1 : 0.4 }}>
+                Submit
+              </button>
+              <button onClick={() => { setDraftStamp(null); setDraftText(""); }}
+                style={{ ...mono, padding: "6px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Timestamped comment list - newest at top of the timeline = lowest timestamp */}
+      {videoComments.length > 0 && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+          {videoComments.map((c, i) => {
+            const canDelete = onDeleteComment && (c.sender || "client") === viewerSender;
+            const who = c.senderName || (c.sender === "team" ? "Team" : "Client");
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", background: "#fff", borderRadius: 8, border: `1px solid ${G.border}`, position: "relative" }}>
+                <button onClick={() => seek(c.videoTimestamp)}
+                  style={{ ...mono, padding: "3px 10px", fontSize: 11, fontWeight: 700, background: clr.revision, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", flexShrink: 0 }}>
+                  {fmt(c.videoTimestamp)}
+                </button>
+                <div style={{ flex: 1, minWidth: 0, paddingRight: canDelete ? 24 : 0 }}>
+                  <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.5, margin: 0, whiteSpace: "pre-wrap" }}>{c.text}</p>
+                  <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
+                    {who} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                </div>
+                {canDelete && (
+                  <button onClick={() => onDeleteComment(scriptId, c.date)} title="Delete comment"
+                    style={{ position: "absolute", top: 6, right: 6, width: 22, height: 22, borderRadius: "50%", background: "#fff", border: `1px solid ${G.border}`, color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <X size={11} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Version history chain - same pattern as image VersionChain */}
+      {history.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => setHistoryOpen(o => !o)}
+            style={{ ...mono, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "#3E8ED0", background: "#E5F0FC", border: "none", borderRadius: 8, cursor: "pointer" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <RefreshCw size={11} /> Video revision history ({history.length} prior cut{history.length === 1 ? "" : "s"})
+            </span>
+            <span style={{ fontSize: 10, opacity: 0.7 }}>{historyOpen ? "Hide" : "Show"}</span>
+          </button>
+          {historyOpen && (
+            <div style={{ marginTop: 8, padding: 10, background: "#fff", border: `1px solid ${G.border}`, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+              {[...history].reverse().map((v, i) => (
+                <div key={i} style={{ paddingBottom: 10, borderBottom: i < history.length - 1 ? `1px solid ${G.border}` : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <span style={{ ...mono, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 980, background: "#FAFAFA", color: G.textSec, border: `1px solid ${G.border}` }}>V{v.version}</span>
+                    <span style={{ ...mono, fontSize: 10, color: G.textTer }}>
+                      Replaced {new Date(v.replacedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  {v.url && (
+                    <video src={v.url} controls preload="metadata"
+                      style={{ width: "100%", maxHeight: 220, borderRadius: 6, background: "#000", display: "block" }} />
+                  )}
+                  {(v.feedbackComments?.length > 0 || v.feedbackStatus) && (
+                    <div style={{ marginTop: 6, padding: "6px 10px", background: "#FAFAFA", borderLeft: `3px solid ${clr.revision}`, borderRadius: 6 }}>
+                      {v.feedbackStatus && (
+                        <p style={{ ...mono, fontSize: 10, color: clr.revision, fontWeight: 600, margin: 0, marginBottom: v.feedbackComments?.length > 0 ? 4 : 0 }}>
+                          Status was: {v.feedbackStatus}
+                        </p>
+                      )}
+                      {(v.feedbackComments || []).map((c, ci) => (
+                        <p key={ci} style={{ ...mono, fontSize: 11, color: G.text, lineHeight: 1.5, margin: 0, marginTop: ci > 0 ? 4 : 0 }}>
+                          {typeof c.videoTimestamp === "number" && <span style={{ fontWeight: 700, color: clr.revision }}>[{fmt(c.videoTimestamp)}] </span>}
+                          &ldquo;{c.text}&rdquo;
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Revision chain log: when an asset is replaced by the team, the prior version
+// is archived into versionHistory along with a snapshot of the feedback that
+// triggered the swap. Click "Version history" to expand the full chain.
+function VersionChain({ item, kind = "image" }) {
+  const [open, setOpen] = useState(false);
+  const history = item?.versionHistory || [];
+  if (history.length === 0) return null;
+  const currentVersion = history.length + 1;
+
+  return (
+    <div style={{ padding: "0 8px 8px" }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ ...mono, width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, padding: "6px 10px", fontSize: 11, fontWeight: 600, color: "#3E8ED0", background: "#E5F0FC", border: "none", borderRadius: 8, cursor: "pointer" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <RefreshCw size={11} /> Revision history ({history.length} prior version{history.length === 1 ? "" : "s"})
+        </span>
+        <span style={{ fontSize: 10, opacity: 0.7 }}>{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, padding: 10, background: "#FAFAFA", border: `1px solid ${G.border}`, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Most recent revisions first */}
+          {[...history].reverse().map((v, i) => (
+            <div key={i} style={{ paddingBottom: 10, borderBottom: i < history.length - 1 ? `1px solid ${G.border}` : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                <span style={{ ...mono, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 980, background: "#fff", color: G.textSec, border: `1px solid ${G.border}` }}>V{v.version}</span>
+                <span style={{ ...mono, fontSize: 10, color: G.textTer }}>
+                  Replaced {new Date(v.replacedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+              </div>
+              {kind === "image" && v.url && (
+                <a href={v.url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                  <img src={v.url} alt={v.name || ""} style={{ width: "100%", maxHeight: 140, objectFit: "contain", borderRadius: 6, border: `1px solid ${G.border}`, background: "#fff" }} />
+                </a>
+              )}
+              {/* Feedback that triggered the replacement */}
+              {(v.feedbackComments?.length > 0 || v.feedbackStatus) && (
+                <div style={{ marginTop: 6, padding: "6px 10px", background: "#fff", borderLeft: `3px solid ${clr.revision}`, borderRadius: 6 }}>
+                  {v.feedbackStatus && (
+                    <p style={{ ...mono, fontSize: 10, color: clr.revision, fontWeight: 600, margin: 0, marginBottom: v.feedbackComments?.length > 0 ? 4 : 0 }}>
+                      Status was: {v.feedbackStatus}
+                    </p>
+                  )}
+                  {(v.feedbackComments || []).map((c, ci) => (
+                    <p key={ci} style={{ ...mono, fontSize: 11, color: G.text, lineHeight: 1.5, margin: 0, marginTop: ci > 0 ? 4 : 0 }}>
+                      &ldquo;{c.text}&rdquo;
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <p style={{ ...mono, fontSize: 10, color: G.textTer, margin: 0, textAlign: "center" }}>
+            Currently viewing V{currentVersion}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Per-script mood board: team-uploaded reference frames the client can preview.
+// Has its own approve / revise / reject status (stored under itemId `moodboard-<scriptId>`)
+// and its own comment thread, separate from the script itself.
+function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, onAddComment, onDeleteComment, viewerSender = "client" }) {
+  const moodBoard = script.moodBoard || [];
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [text, setText] = useState("");
+  const [lightbox, setLightbox] = useState(null); // image url for the on-page modal
+  if (moodBoard.length === 0) return null;
+
+  // Different framing for Hero vs UGC. UGC is selfie-style with one influencer,
+  // so the reference frame is mostly about the talent and visual style. Hero is
+  // a multi-scene cinematic spot, so the mood board is a 6-frame storyboard.
+  const isUgc = max === 1;
+  const sectionLabel = isUgc ? "Influencer & Style Reference" : "Mood Board";
+  const sectionSub = isUgc
+    ? "This is selfie-style content with one influencer talking direct-to-camera. Approve the talent, wardrobe, lighting, and overall vibe, or tell us what to change before we create the full video."
+    : "A preview of the image direction and frames for the video. Approve the visual direction, casting, and scene composition, or tell us what to change before we create the full video.";
+
+  return (
+    <div style={{ marginTop: 14, marginBottom: 32, padding: 16, background: "#FAFAFA", border: `1px solid ${G.border}`, borderRadius: 14 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flex: 1, minWidth: 0 }}>
+          <Image size={14} color={G.textSec} style={{ marginTop: 3, flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 4 }}>
+              {sectionLabel}
+            </span>
+            <span style={{ ...mono, fontSize: 12, color: G.textSec, lineHeight: 1.5, display: "block" }}>{sectionSub}</span>
+          </div>
         </div>
         <StatusBtns
           status={status}
@@ -148,28 +490,51 @@ function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, 
       <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 12 }}>
         {moodBoard.map((img, i) => (
           <div key={img.id || i} style={{ position: "relative", aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, overflow: "hidden", background: "#fff", border: `1px solid ${G.border}`, cursor: "zoom-in" }}
-            onClick={() => window.open(img.url, "_blank")}>
+            onClick={() => setLightbox(img.url)}>
             <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
           </div>
         ))}
       </div>
-      {/* Existing comments */}
-      {comments?.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-          {comments.map((c, i) => (
-            <div key={i} style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 8, padding: "8px 12px" }}>
-              <p style={{ ...mono, fontSize: 12, color: G.text, lineHeight: 1.55, whiteSpace: "pre-wrap", margin: 0 }}>{c.text}</p>
-              <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
-                {c.sender === "team" ? "Team" : "Client"} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-              </span>
-            </div>
-          ))}
+      {/* In-page lightbox for mood board images - opens on the page, not a new tab */}
+      {lightbox && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setLightbox(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.92)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40, cursor: "zoom-out" }}>
+          <button onClick={() => setLightbox(null)}
+            style={{ position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
+            <X size={20} />
+          </button>
+          <img src={lightbox} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8 }} />
         </div>
       )}
-      {/* Add comment toggle */}
-      {!showFeedback ? (
+      {/* Existing comments - always shown so the team's notes stay visible */}
+      {comments?.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {comments.map((c, i) => {
+            const canDelete = onDeleteComment && (c.sender || "client") === viewerSender;
+            const who = c.senderName || (c.sender === "team" ? "Team" : "Client");
+            return (
+              <div key={i} style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 8, padding: "8px 12px", position: "relative" }}>
+                <p style={{ ...mono, fontSize: 12, color: G.text, lineHeight: 1.55, whiteSpace: "pre-wrap", margin: 0, paddingRight: canDelete ? 24 : 0 }}>{c.text}</p>
+                <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
+                  {who} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+                {canDelete && (
+                  <button onClick={() => onDeleteComment(`moodboard-${script.id}`, c.date)} title="Delete comment"
+                    style={{ position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: "50%", background: "#fff", border: `1px solid ${G.border}`, color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, transition: "all 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = clr.reject; e.currentTarget.style.borderColor = clr.reject; e.currentTarget.style.color = "#fff"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.textSec; }}>
+                    <X size={12} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {/* Add-comment box only appears once the user clicks Revision on the mood board */}
+      {status !== "revision" ? null : !showFeedback ? (
         <button onClick={() => setShowFeedback(true)} style={{ ...mono, padding: "6px 14px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <MessageSquare size={11} /> Comment on mood board
+          <MessageSquare size={11} /> Tell us what to revise
         </button>
       ) : (
         <div>
@@ -192,14 +557,16 @@ function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, 
   );
 }
 
-function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, saving }) {
+function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, onDeleteComment, saving, viewerSender = "client" }) {
   const bd = breakdownScript(content);
   const [activeLine, setActiveLine] = useState(null); // { lineIdx, selection }
   const [submitting, setSubmitting] = useState(false);
   const [hoverLine, setHoverLine] = useState(null);
   const [selectionPopup, setSelectionPopup] = useState(null); // { lineIdx, text, x, y }
 
-  if (!bd.sections.length) return <p style={{ ...mono, color: "#6E6E73", fontSize: 15, lineHeight: 1.7 }}>No content yet.</p>;
+  // Empty script content: render nothing instead of a "No content yet" message,
+  // since the video review surface above is the primary review tool.
+  if (!bd.sections.length) return null;
 
   const lineComments = (feedback?.[scriptId]?.comments || []).filter(c => typeof c.line === "number");
   const commentsByLine = {};
@@ -232,12 +599,12 @@ function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, saving
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 16, padding: "8px 14px", background: "#F5F5F7", borderRadius: 10, border: `1px solid ${G.border}`, width: "fit-content" }}>
+    <div style={{ marginTop: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, marginBottom: 24, padding: "10px 16px", background: "#F5F5F7", borderRadius: 10, border: `1px solid ${G.border}`, width: "fit-content" }}>
         <Clock size={13} color={G.textSec} />
         <span style={{ ...mono, fontSize: 13, fontWeight: 600, color: G.text }}>Estimated Length: {bd.totalFormatted}</span>
       </div>
-      <p style={{ ...mono, fontSize: 11, color: G.textTer, marginBottom: 12, fontStyle: "italic" }}>
+      <p style={{ ...mono, fontSize: 11, color: G.textTer, marginBottom: 16, fontStyle: "italic" }}>
         💡 Click a line to comment, or highlight any text to comment on a specific phrase.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -280,19 +647,31 @@ function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, saving
                 {/* Existing line comments */}
                 {comments.length > 0 && (
                   <div data-no-line-click style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                    {comments.map((c, ci) => (
-                      <div key={ci} style={{ padding: "8px 12px", background: "#F5F5F7", borderRadius: 8, borderLeft: `3px solid ${c.sender === "team" ? "#34C759" : "#3E8ED0"}` }}>
-                        {c.selection && (
-                          <div style={{ ...mono, fontSize: 11, color: G.textTer, marginBottom: 4, fontStyle: "italic" }}>
-                            on &ldquo;{c.selection}&rdquo;
-                          </div>
-                        )}
-                        <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.5, margin: 0, whiteSpace: "pre-wrap" }}>{c.text}</p>
-                        <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
-                          {c.sender === "team" ? "Team" : "Client"} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    ))}
+                    {comments.map((c, ci) => {
+                      const canDelete = onDeleteComment && (c.sender || "client") === viewerSender;
+                      const who = c.senderName || (c.sender === "team" ? "Team" : "Client");
+                      return (
+                        <div key={ci} style={{ padding: "8px 12px", background: "#F5F5F7", borderRadius: 8, borderLeft: `3px solid ${c.sender === "team" ? "#34C759" : "#3E8ED0"}`, position: "relative" }}>
+                          {c.selection && (
+                            <div style={{ ...mono, fontSize: 11, color: G.textTer, marginBottom: 4, fontStyle: "italic" }}>
+                              on &ldquo;{c.selection}&rdquo;
+                            </div>
+                          )}
+                          <p style={{ ...mono, fontSize: 13, color: G.text, lineHeight: 1.5, margin: 0, whiteSpace: "pre-wrap", paddingRight: canDelete ? 24 : 0 }}>{c.text}</p>
+                          <span style={{ ...mono, fontSize: 10, color: G.textTer, marginTop: 3, display: "block" }}>
+                            {who} · {new Date(c.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </span>
+                          {canDelete && (
+                            <button onClick={() => onDeleteComment(scriptId, c.date)} title="Delete comment"
+                              style={{ position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: "50%", background: "#fff", border: `1px solid ${G.border}`, color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, transition: "all 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = clr.reject; e.currentTarget.style.borderColor = clr.reject; e.currentTarget.style.color = "#fff"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = G.border; e.currentTarget.style.color = G.textSec; }}>
+                              <X size={12} strokeWidth={2.5} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {/* Active comment box for this line */}
@@ -307,6 +686,14 @@ function ScriptBreakdownView({ content, scriptId, feedback, onAddComment, saving
                     />
                   </div>
                 )}
+              </div>
+              {/* Per-line Revise button - only visible on hover, sits on the right side */}
+              <div data-no-line-click style={{ flex: "0 0 auto", alignSelf: "flex-start" }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveLine({ lineIdx: i, selection: null }); }}
+                  style={{ ...mono, opacity: isHover || isActive ? 1 : 0, transition: "opacity 0.15s", display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 980, fontSize: 11, fontWeight: 600, background: clr.revision, color: "#fff", border: "none", cursor: isHover || isActive ? "pointer" : "default", whiteSpace: "nowrap", pointerEvents: isHover || isActive ? "auto" : "none" }}>
+                  <RefreshCw size={11} /> Revise
+                </button>
               </div>
             </div>
           );
@@ -358,7 +745,9 @@ export default function ClientReview({ projectId: serverProjectId }) {
   const [notFound, setNotFound] = useState(false);
   const [expandedItem, setExpandedItem] = useState(null);
   const [lightboxIdx, setLightboxIdx] = useState(null);
-  const [authed, setAuthed] = useState(false);
+  // Client portal is now openly accessible - no password gate.
+  // (Team routes are still middleware-protected.)
+  const [authed, setAuthed] = useState(true);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState(false);
   const [slug, setSlug] = useState(null);
@@ -481,19 +870,69 @@ export default function ClientReview({ projectId: serverProjectId }) {
   };
 
   const onAddComment = useCallback(async (itemId, text, meta) => {
-    setSaving(prev => ({ ...prev, [itemId]: true }));
-    const body = { projectId, itemId, addComment: text, sender: "client" };
+    // Optimistic: append the comment to local state immediately so the UI feels
+    // instant. Reconcile with the server's authoritative list once the request
+    // returns. Restore on failure.
+    const optimistic = {
+      text,
+      date: new Date().toISOString(),
+      sender: "client",
+      senderName: project?.clientName || "Client",
+    };
+    if (meta && typeof meta === "object") {
+      if (typeof meta.line === "number") optimistic.line = meta.line;
+      if (meta.selection) optimistic.selection = meta.selection;
+      if (typeof meta.videoTimestamp === "number") optimistic.videoTimestamp = meta.videoTimestamp;
+    }
+    let snapshot;
+    setFeedback(prev => {
+      snapshot = prev[itemId]?.comments;
+      return { ...prev, [itemId]: { ...prev[itemId], comments: [...(prev[itemId]?.comments || []), optimistic] } };
+    });
+
+    const body = { projectId, itemId, addComment: text, sender: "client", senderName: project?.clientName || "Client" };
     if (meta && typeof meta === "object") {
       if (typeof meta.line === "number") body.commentLine = meta.line;
       if (meta.selection) body.commentSelection = meta.selection;
+      if (typeof meta.videoTimestamp === "number") body.commentVideoTimestamp = meta.videoTimestamp;
     }
-    const res = await fetch("/api/portal/feedback", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    try {
+      const res = await fetch("/api/portal/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("save failed");
+      const data = await res.json();
+      setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
+    } catch (e) {
+      console.error("[comment] save failed, restoring", e);
+      if (snapshot) setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: snapshot } }));
+    }
+  }, [projectId, project?.clientName]);
+
+  // Allow the client to delete their own comments. Optimistic UI: drop the
+  // comment from state immediately so the click feels instant, then sync to
+  // the server in the background. Restore on failure.
+  const onDeleteComment = useCallback(async (itemId, commentDate) => {
+    let snapshot;
+    setFeedback(prev => {
+      snapshot = prev[itemId]?.comments;
+      const next = (prev[itemId]?.comments || []).filter(c => c.date !== commentDate);
+      return { ...prev, [itemId]: { ...prev[itemId], comments: next } };
     });
-    const data = await res.json();
-    setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
-    setSaving(prev => ({ ...prev, [itemId]: false }));
+    try {
+      const res = await fetch("/api/portal/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, itemId, removeCommentDate: commentDate }),
+      });
+      if (!res.ok) throw new Error("delete failed");
+      // Reconcile with the server's authoritative list (cheap, doesn't block UI)
+      const data = await res.json();
+      setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: data.comments } }));
+    } catch (e) {
+      console.error("delete comment failed, restoring", e);
+      if (snapshot) setFeedback(prev => ({ ...prev, [itemId]: { ...prev[itemId], comments: snapshot } }));
+    }
   }, [projectId]);
 
   const downloadAsZip = async (images, kind) => {
@@ -646,8 +1085,8 @@ export default function ClientReview({ projectId: serverProjectId }) {
 
   const tabs = [
     { key: "images", label: "Images", count: project.images?.length || 0 },
-    { key: "hero", label: "Hero Scripts", count: project.heroScripts?.length || 0 },
-    { key: "ugc", label: "UGC Scripts", count: project.ugcScripts?.length || 0 },
+    { key: "hero", label: "Hero Videos", count: project.heroScripts?.length || 0 },
+    { key: "ugc", label: "UGC Videos", count: project.ugcScripts?.length || 0 },
   ];
 
   return (
@@ -770,9 +1209,10 @@ export default function ClientReview({ projectId: serverProjectId }) {
                         <button onClick={() => setItemStatus(img.id, "revision")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "revision" ? clr.revision : clr.revision + "30"}`, background: st === "revision" ? clr.revision : "transparent", color: st === "revision" ? "#fff" : clr.revision, transition: "all 0.15s" }}>Revise</button>
                         <button onClick={() => setItemStatus(img.id, "rejected")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "rejected" ? clr.reject : clr.reject + "30"}`, background: st === "rejected" ? clr.reject : "transparent", color: st === "rejected" ? "#fff" : clr.reject, transition: "all 0.15s" }}>Reject</button>
                       </div>
+                      <VersionChain item={img} kind="image" />
                       {expandedItem === img.id && (
                         <div style={{ padding: "0 6px 8px" }}>
-                          <FeedbackBox itemId={img.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
+                          <FeedbackBox itemId={img.id} feedback={feedback} saving={saving} onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
                         </div>
                       )}
                     </div>
@@ -870,7 +1310,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
                   </div>
                   <StatusBtns status={st} onApprove={() => setItemStatus(img.id, "approved")} onReject={() => setItemStatus(img.id, "rejected")} onRevision={() => setItemStatus(img.id, "revision")} />
                   <div style={{ marginTop: 20 }}>
-                    <FeedbackBox itemId={img.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
+                    <FeedbackBox itemId={img.id} feedback={feedback} saving={saving} onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
                   </div>
                 </div>
               </div>
@@ -896,9 +1336,8 @@ export default function ClientReview({ projectId: serverProjectId }) {
               return (
                 <div key={script.id} style={{ position: "relative", background: G.card, border: `1px solid ${borderColor}`, boxShadow: shadow, borderRadius: 20, padding: 28, transition: "all 0.2s" }}>
                   <StatusMark status={st} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ marginBottom: 16 }}>
                     <span style={{ ...hd, fontSize: 22, color: G.text }}>{script.title}</span>
-                    <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
                   </div>
                   <MoodBoardSection
                     script={script}
@@ -908,9 +1347,20 @@ export default function ClientReview({ projectId: serverProjectId }) {
                     saving={saving[`moodboard-${script.id}`]}
                     onSetStatus={(val) => setItemStatus(`moodboard-${script.id}`, val)}
                     onAddComment={(text) => onAddComment(`moodboard-${script.id}`, text)}
+                    onDeleteComment={onDeleteComment}
+                    viewerSender="client"
                   />
-                  <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} saving={saving[script.id]} />
-                  <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
+                  <VideoReviewPlayer script={script} scriptId={script.id} feedback={feedback}
+                    onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} onDeleteComment={onDeleteComment} saving={saving[script.id]} viewerSender="client" />
+                  {/* General feedback box only appears when the user has clicked Revision (or has existing comments) */}
+                  {(feedback[script.id]?.status === "revision" || (feedback[script.id]?.comments || []).filter(c => typeof c.line !== "number").length > 0) && (
+                    <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  )}
+                  {/* Approve / Revision / Reject buttons at the bottom of the script card */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
+                    <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
+                  </div>
                 </div>
               );
             })}
@@ -935,9 +1385,8 @@ export default function ClientReview({ projectId: serverProjectId }) {
               return (
                 <div key={script.id} style={{ position: "relative", background: G.card, border: `1px solid ${borderColor}`, boxShadow: shadow, borderRadius: 20, padding: 28, transition: "all 0.2s" }}>
                   <StatusMark status={st} />
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                  <div style={{ marginBottom: 16 }}>
                     <span style={{ ...hd, fontSize: 22, color: G.text }}>{script.title}</span>
-                    <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
                   </div>
                   <MoodBoardSection
                     script={script}
@@ -947,9 +1396,20 @@ export default function ClientReview({ projectId: serverProjectId }) {
                     saving={saving[`moodboard-${script.id}`]}
                     onSetStatus={(val) => setItemStatus(`moodboard-${script.id}`, val)}
                     onAddComment={(text) => onAddComment(`moodboard-${script.id}`, text)}
+                    onDeleteComment={onDeleteComment}
+                    viewerSender="client"
                   />
-                  <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} saving={saving[script.id]} />
-                  <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} />
+                  <VideoReviewPlayer script={script} scriptId={script.id} feedback={feedback}
+                    onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  <ScriptBreakdownView content={script.content} scriptId={script.id} feedback={feedback} onAddComment={onAddComment} onDeleteComment={onDeleteComment} saving={saving[script.id]} viewerSender="client" />
+                  {/* General feedback box only appears when the user has clicked Revision (or has existing comments) */}
+                  {(feedback[script.id]?.status === "revision" || (feedback[script.id]?.comments || []).filter(c => typeof c.line !== "number").length > 0) && (
+                    <FeedbackBox itemId={script.id} feedback={feedback} saving={saving} onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  )}
+                  {/* Approve / Revision / Reject buttons at the bottom of the script card */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
+                    <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
+                  </div>
                 </div>
               );
             })}
@@ -970,7 +1430,10 @@ export default function ClientReview({ projectId: serverProjectId }) {
           <span style={{ fontSize: 11, color: G.textTer, ...mono }}>&copy; 2026 Alchemy Productions LLC. All rights reserved.</span>
         </footer>
       </div>
-      <PortalChat projectId={projectId} sender="client" brandName={project?.clientName || ""} />
+      {/* Hide the floating chat when embedded inside the client/team hub - the parent already renders one */}
+      {typeof window !== "undefined" && window.parent === window && (
+        <PortalChat projectId={projectId} sender="client" brandName={project?.clientName || ""} />
+      )}
       {/* Rejection reason modal */}
       {rejectModal && (
         <div

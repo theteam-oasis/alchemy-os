@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, Sparkles, RefreshCw, Lock, X, Loader2, MessageSquare, Plus, Home, Send } from "lucide-react";
 import { supabase, createClient_db, updateClient_db, saveBrandIntake, saveBrandHub, lockBrandHub, uploadProductImage } from "../../lib/supabase";
 
@@ -212,6 +213,16 @@ function Section({ sectionKey, data, status, onApprove, onRequestChanges, onSubm
 }
 
 export default function BrandIntakePage() {
+  return <Suspense fallback={null}><BrandIntakeContent /></Suspense>;
+}
+
+function BrandIntakeContent() {
+  const searchParams = useSearchParams();
+  // Pre-existing client ID (from CRM, team workspace, or client portal embed).
+  // If absent, the form is in "new client" mode and will create one on submit.
+  const queryClientId = searchParams.get("clientId");
+  const embedded = searchParams.get("embed") === "1";
+
   const [mounted, setMounted] = useState(false);
   const [screen, setScreen] = useState("intake");
   const [formData, setFormData] = useState(null);
@@ -221,7 +232,7 @@ export default function BrandIntakePage() {
   const [loadingMsg, setLoadingMsg] = useState(0);
   const [regen, setRegen] = useState({});
   const [error, setError] = useState(null);
-  const [currentClientId, setCurrentClientId] = useState(null);
+  const [currentClientId, setCurrentClientId] = useState(queryClientId || null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { if (screen !== "generating") return; const iv = setInterval(() => setLoadingMsg(p => p + 1), 2500); return () => clearInterval(iv); }, [screen]);
@@ -230,13 +241,20 @@ export default function BrandIntakePage() {
 
   const handleSubmit = async (data) => {
     setFormData(data); setScreen("generating"); setError(null);
-    const dbClient = await createClient_db(data.brandName);
-    if (dbClient) {
-      setCurrentClientId(dbClient.id);
-      await saveBrandIntake(dbClient.id, data);
-      await updateClient_db(dbClient.id, { status: 'onboarding', stage: 'Generating', progress: 25 });
-      if (data.productImages?.length > 0) { const urls = []; for (const img of data.productImages) { if (img.file) { const url = await uploadProductImage(dbClient.id, img.file); if (url) urls.push(url); } } if (urls.length > 0 && supabase) { await supabase.from('brand_intake').update({ product_image_urls: urls }).eq('client_id', dbClient.id); } }
+    // If we already have a clientId (from CRM or client portal), save to that
+    // existing record instead of creating a new client.
+    let cid = queryClientId || null;
+    if (!cid) {
+      const dbClient = await createClient_db(data.brandName);
+      if (dbClient) cid = dbClient.id;
     }
+    if (cid) {
+      setCurrentClientId(cid);
+      await saveBrandIntake(cid, data);
+      await updateClient_db(cid, { status: 'onboarding', stage: 'Generating', progress: 25 });
+      if (data.productImages?.length > 0) { const urls = []; for (const img of data.productImages) { if (img.file) { const url = await uploadProductImage(cid, img.file); if (url) urls.push(url); } } if (urls.length > 0 && supabase) { await supabase.from('brand_intake').update({ product_image_urls: urls }).eq('client_id', cid); } }
+    }
+    const dbClient = cid ? { id: cid } : null;
     const r = await callClaude(`You are a senior brand strategist. Generate brand guidelines from this intake:\n${JSON.stringify(data, null, 2)}\nTone sliders 0-100: formality(0=Formal,100=Casual):${data.formality}, mood(0=Serious,100=Playful):${data.mood}, intensity(0=Subtle,100=Bold):${data.intensity}\n\nIMPORTANT: Use the avatar's deepest fears and desires to create emotionally resonant guidelines.\n\nReturn ONLY valid JSON: { "brandSummary": "2-3 paragraphs", "toneOfVoice": { "description": "...", "doList": ["5 items"], "dontList": ["5 items"] }, "audiencePersona": { "name": "...", "age": "...", "description": "...", "painPoints": ["4-5"], "aspirations": ["4-5"], "deepestFears": ["3-4 fears"], "deepestDesires": ["3-4 desires"] }, "visualDirection": { "description": "...", "moodKeywords": ["8-10"], "colorUsage": "..." }, "copyDirection": { "taglineOptions": ["3"], "headlines": ["5"], "hooks": ["5"], "ctaExamples": ["5"] } }`);
     if (r) {
       setGuidelines(r); const init = {}; SECTIONS.forEach(s => init[s] = "pending"); setStatuses(init); setScreen("review");
@@ -266,13 +284,16 @@ export default function BrandIntakePage() {
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", background: C.bg, color: C.text, minHeight: "100vh" }}>
       <style>{fonts}{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.15; } 100% { transform: scale(0.8); opacity: 0.5; } } @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-      <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
-          <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Productions</span></span>
+      {/* Top nav hidden when embedded (client portal iframe) - parent page already provides chrome */}
+      {!embedded && (
+        <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
+          <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", cursor: "pointer" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: C.accent, display: "flex", alignItems: "center", justifyContent: "center" }}><Sparkles size={16} style={{ color: "#fff" }} /></div>
+            <span style={{ fontSize: 18, fontWeight: 600, color: C.text }}>ALCHEMY <span style={{ fontWeight: 400, color: C.textSec }}>Productions</span></span>
+          </a>
+          {screen === "review" && <span style={{ fontSize: 13, color: C.textSec }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
         </div>
-        {screen === "review" && <span style={{ fontSize: 13, color: C.textSec }}>{SECTIONS.filter(s => statuses[s] === "approved").length}/{SECTIONS.length} approved</span>}
-      </div>
+      )}
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
         {error && <div style={{ background: "#FFF2F2", border: `1px solid ${C.danger}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, color: C.danger, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><X size={16} /> {error}</div>}

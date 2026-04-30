@@ -68,7 +68,7 @@ export default function ClientsPage() {
     `}</style>
     <div className="shell">
       <nav className="nav">
-        <a href="/" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
+        <a href="/dashboard" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
         <div className="nav-links">
           <a href="/clients" className="nl a">CRM</a>
           <a href="/sample-brief" className="nl">Sample Brief</a>

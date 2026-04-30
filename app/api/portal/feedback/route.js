@@ -45,12 +45,41 @@ export async function GET(req) {
 
 export async function POST(req) {
   const body = await req.json()
-  const { itemId, approved, feedbackText, addComment, status, sender, commentLine, commentSelection } = body
+  const { itemId, approved, feedbackText, addComment, status, sender, senderName, commentLine, commentSelection, removeCommentDate, commentVideoTimestamp } = body
   const rawId = body.projectId
   if (!rawId || !itemId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
   const projectId = await resolveProjectId(rawId)
   if (!projectId) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+
+  // Remove a single comment by its date (the unique identifier we already store on each comment)
+  if (removeCommentDate) {
+    const { data: existing } = await supabase
+      .from('portal_feedback')
+      .select('feedback_comments')
+      .eq('project_id', projectId)
+      .eq('item_id', itemId)
+      .single()
+
+    const remaining = (existing?.feedback_comments || []).filter(c => c.date !== removeCommentDate)
+    const { data, error } = await supabase
+      .from('portal_feedback')
+      .upsert({
+        project_id: projectId,
+        item_id: itemId,
+        feedback_comments: remaining,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'project_id,item_id' })
+      .select()
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({
+      approved: data.approved,
+      feedbackText: data.feedback_text,
+      comments: data.feedback_comments || [],
+      updatedAt: data.updated_at,
+    })
+  }
 
   // If adding a comment, fetch existing comments first and append
   if (addComment) {
@@ -64,8 +93,10 @@ export async function POST(req) {
     const comments = existing?.feedback_comments || []
     const newComment = { text: addComment, date: new Date().toISOString() }
     if (sender) newComment.sender = sender
+    if (senderName) newComment.senderName = senderName
     if (typeof commentLine === 'number') newComment.line = commentLine
     if (commentSelection) newComment.selection = commentSelection
+    if (typeof commentVideoTimestamp === 'number') newComment.videoTimestamp = commentVideoTimestamp
     comments.push(newComment)
 
     const { data, error } = await supabase

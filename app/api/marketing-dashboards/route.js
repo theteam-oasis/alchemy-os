@@ -28,6 +28,7 @@ export async function POST(request) {
       slug = `${base}-${suffix}`
     }
 
+    const product_id = body.productId || body.product_id || null
     const payload = {
       slug,
       client_id,
@@ -39,6 +40,7 @@ export async function POST(request) {
       rows,
       updated_at: new Date().toISOString(),
     }
+    if (product_id) payload.product_id = product_id
 
     const { data, error } = await supabase
       .from('marketing_dashboards')

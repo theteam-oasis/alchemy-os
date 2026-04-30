@@ -148,8 +148,8 @@ export default function DeliveryClient({ slug }) {
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 40 }}>
           {[
             { k: "images", l: "Images", icon: <Image size={14} />, count: approvedImages.length },
-            { k: "hero", l: "Hero Scripts", icon: <Film size={14} />, count: approvedHero.length },
-            { k: "ugc", l: "UGC Scripts", icon: <Video size={14} />, count: approvedUgc.length },
+            { k: "hero", l: "Hero Videos", icon: <Film size={14} />, count: approvedHero.length },
+            { k: "ugc", l: "UGC Videos", icon: <Video size={14} />, count: approvedUgc.length },
           ].map(t => (
             <button key={t.k} onClick={() => setActiveTab(t.k)}
               style={{

@@ -761,17 +761,17 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
       <form
         onSubmit={e => { e.preventDefault(); send(); }}
         style={{
-          padding: "14px 14px 16px",
+          padding: "10px 12px 12px",
           borderTop: (expanded && messages.length === 0 && !loading) ? "none" : (expanded ? `1px solid ${C.borderLight}` : "none"),
           background: C.bg,
-          display: "flex", gap: 10, alignItems: "center",
+          display: "flex", gap: 8, alignItems: "center",
         }}
       >
         {/* Back button. solid black, collapses chat when full-height, closes the sheet otherwise */}
         <button type="button"
           onClick={fullHeight ? onToggle : onCloseSheet}
           style={{
-            width: 40, height: 40, borderRadius: 12,
+            width: 39, height: 39, borderRadius: 12,
             border: "none", background: C.accent,
             color: "#fff", cursor: "pointer", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -795,16 +795,16 @@ function OracleDock({ expanded, onToggle, onCloseSheet, data, stats, overallRoas
           onBlur={e => { e.target.style.borderColor = C.borderLight; e.target.style.boxShadow = "none"; }}
           style={{
             flex: 1, minWidth: 0,
-            padding: "14px 16px", borderRadius: 14,
+            padding: "10px 14px", borderRadius: 12,
             border: `1px solid ${C.borderLight}`, background: C.bgSoft,
-            ...body, fontSize: 17, color: C.text, outline: "none",
-            height: 52,
+            ...body, fontSize: 15, color: C.text, outline: "none",
+            height: 39,
             transition: "border-color 0.15s, box-shadow 0.15s",
           }}
         />
         <button type="submit" disabled={loading || !input.trim()}
           style={{
-            width: 48, height: 48, borderRadius: 14, border: "none",
+            width: 39, height: 39, borderRadius: 12, border: "none",
             background: input.trim() && !loading ? C.accent : C.bgHover,
             color: input.trim() && !loading ? "#fff" : C.textTer,
             cursor: input.trim() && !loading ? "pointer" : "not-allowed",
@@ -910,9 +910,12 @@ function Oracle({ open, onToggle, data, stats, overallRoas, totalRevenue, totalS
 
       {open && (
         <div style={{
-          position: "fixed", bottom: 24, right: rightPos, zIndex: 200,
-          width: 400, maxWidth: "calc(100vw - 32px)",
-          height: 600, maxHeight: "calc(100vh - 48px)",
+          // Oracle should never get squeezed when embedded in a shorter iframe.
+          // Stretch from 16px-from-bottom to 16px-from-top so the input is always
+          // visible regardless of the parent iframe's height.
+          position: "fixed", bottom: 16, right: rightPos, zIndex: 200,
+          width: 420, maxWidth: "calc(100vw - 32px)",
+          height: "calc(100vh - 32px)", maxHeight: 720,
           background: C.bg, borderRadius: 20,
           boxShadow: "0 24px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.08)",
           display: "flex", flexDirection: "column",
@@ -2653,7 +2656,8 @@ function InsightsSidebar({
             </div>
           )}
 
-          {/* Oracle Chat - docked at bottom of sidebar */}
+          {/* Oracle Chat - docked at bottom of sidebar. Guarded on `data` to
+              avoid crashes when the dashboard data hasn't loaded yet. */}
           {showOracle && data && (
             <OracleDock
               expanded={oracleExpanded}
@@ -3190,10 +3194,11 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
       {topContent}
 
       <div style={{
-        maxWidth: 1280, margin: "0 auto",
+        // Wider canvas now that the InsightsSidebar is gone - reclaim the
+        // ~54px the rail used to reserve, and bump the maxWidth so KPIs and
+        // charts get more breathing room.
+        maxWidth: 1440, margin: "0 auto",
         padding: isMobile ? "20px 8px 120px" : "32px 32px 64px",
-        paddingRight: isMobile ? 8 : (insightsOpen ? "calc(420px + 32px)" : 54),
-        transition: "padding-right 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
       }}>
         {view === "table" ? (
           <div>
@@ -3590,26 +3595,9 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
         )}
       </div>
 
-      <InsightsSidebar
-        open={insightsOpen}
-        onToggle={() => setInsightsOpen(!insightsOpen)}
-        summary={summary}
-        playbook={playbook}
-        opportunities={opportunities}
-        warnings={warnings}
-        loading={suggestionsLoading}
-        summaryLoading={summaryLoading}
-        playbookLoading={playbookLoading}
-        insightsLoading={insightsLoading}
-        error={suggestionsError}
-        overallRoas={overallRoas}
-        totalRevenue={totalRevenue}
-        totalSpend={totalSpend}
-        data={enrichedData}
-        stats={stats}
-        categoryCol={categoryCol}
-        showOracle={showOracle}
-      />
+      {/* InsightsSidebar removed - the floating chat dock (DashboardChat /
+          PortalChat) now hosts the Oracle + Insights tabs instead, so we
+          don't need a second one inside the dashboard. */}
     </div>
   );
 }

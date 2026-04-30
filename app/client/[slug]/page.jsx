@@ -5,9 +5,14 @@ import {
   Sparkles, MessageSquare, Palette, BarChart3, FileText, ArrowRight,
   ExternalLink, Check, RefreshCw, X, Image as ImageIcon, Globe, Users,
   Target, Calendar, TrendingUp, Activity, ChevronRight, Briefcase,
-  LogOut, Menu, ChevronLeft, Loader2,
+  LogOut, Menu, ChevronLeft, Loader2, Film,
 } from "lucide-react";
 import PortalChat from "@/components/PortalChat";
+import SectionHeader from "@/components/SectionHeader";
+import { SECTION_COPY } from "@/lib/sectionCopy";
+import { BrandKitGrid } from "@/components/BrandKit";
+import ProductSwitcher from "@/components/ProductSwitcher";
+import { supabase } from "@/lib/supabase";
 
 const G = {
   bg: "#FFFFFF", card: "#FFFFFF", cardBorder: "#E8E8ED",
@@ -26,11 +31,25 @@ export default function ClientHubPage() {
   const slug = params?.slug;
   const [data, setData] = useState(null);
   const [notFound, setNotFound] = useState(false);
-  const [authed, setAuthed] = useState(false);
+  // Client portal is now openly accessible via URL - no password gate.
+  // Anyone with the link can view. (Team-only routes still middleware-protected.)
+  const [authed, setAuthed] = useState(true);
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState(false);
   const [section, setSection] = useState("analytics"); // analytics | creatives | brand
+  // Listen for in-page navigation events from the floating chat (e.g. when the
+  // "Open Analytics" CTA is clicked inside Insights with no data yet).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (e) => { if (e?.detail?.section) setSection(e.detail.section); };
+    window.addEventListener("portal:nav", handler);
+    return () => window.removeEventListener("portal:nav", handler);
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // desktop full-screen toggle
+  // Product picker - same component as the team workspace, but read-only (no Add button)
+  const [products, setProducts] = useState([]);
+  const [activeProduct, setActiveProduct] = useState(null);
 
   // Session auth
   useEffect(() => {
@@ -105,6 +124,89 @@ export default function ClientHubPage() {
       .catch(() => setNotFound(true));
   }, [slug, authed]);
 
+  // Fetch the client's products once we have the client id. The first product
+  // becomes the active one. Auto-creates a "Main" product for legacy clients.
+  useEffect(() => {
+    if (!data?.client?.id) return;
+    let cancelled = false;
+    fetch(`/api/products?clientId=${data.client.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const list = d?.products || [];
+        setProducts(list);
+        if (list.length > 0) setActiveProduct(list[0]);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [data?.client?.id]);
+
+  // Each time the active product changes, swap the analytics dashboard to that
+  // product's dashboard. Auto-provisions a fresh one if it doesn't exist yet.
+  useEffect(() => {
+    if (!data?.client?.id || !activeProduct?.id) return;
+    let cancelled = false;
+    (async () => {
+      // Try to find an existing dashboard for this product
+      const { data: dashes } = await supabase
+        .from("marketing_dashboards")
+        .select("id, slug, title, file_name, created_at")
+        .eq("client_id", data.client.id)
+        .eq("product_id", activeProduct.id)
+        .order("created_at", { ascending: false });
+      let dash = dashes?.[0];
+
+      // Fallback: claim a legacy unlinked one for this product
+      if (!dash) {
+        const { data: legacy } = await supabase
+          .from("marketing_dashboards")
+          .select("id, slug, title, file_name, created_at, product_id")
+          .eq("client_id", data.client.id)
+          .is("product_id", null)
+          .order("created_at", { ascending: false });
+        if (legacy?.length > 0) {
+          dash = legacy[0];
+          await supabase.from("marketing_dashboards").update({ product_id: activeProduct.id }).eq("id", dash.id);
+        }
+      }
+
+      // Auto-provision a new dashboard for this product if there isn't one
+      if (!dash) {
+        try {
+          const r = await fetch("/api/marketing-dashboards", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clientId: data.client.id,
+              clientName: data.client.name,
+              productId: activeProduct.id,
+              title: `${data.client.name} - ${activeProduct.name} Analytics`,
+              fileName: "placeholder.csv",
+              headers: ["Date", "Spend", "Revenue", "Impressions", "Clicks"],
+              rows: [],
+            }),
+          });
+          const j = await r.json();
+          if (j?.success && j.dashboard) dash = j.dashboard;
+        } catch (e) { console.error("auto-create dashboard for product:", e); }
+      }
+
+      if (!cancelled && dash) {
+        setData((prev) => ({
+          ...prev,
+          dashboards: [{
+            id: dash.id,
+            slug: dash.slug,
+            title: dash.title,
+            fileName: dash.file_name,
+            rowCount: 0, columnCount: 5,
+            createdAt: dash.created_at || new Date().toISOString(),
+          }],
+        }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.client?.id, activeProduct?.id]);
+
   const handleLogin = (e) => {
     e.preventDefault();
     const expected = `${slug}2026`;
@@ -172,7 +274,7 @@ export default function ClientHubPage() {
 
   const sections = [
     { k: "analytics", lbl: "Analytics", icon: <BarChart3 size={16} /> },
-    { k: "creatives", lbl: "Creatives", icon: <MessageSquare size={16} />, badge: pendingCount > 0 ? pendingCount : null },
+    { k: "creatives", lbl: "Creatives", icon: <Film size={16} />, badge: pendingCount > 0 ? pendingCount : null },
     { k: "brand", lbl: "Brand Guidelines", icon: <Palette size={16} /> },
   ];
 
@@ -184,7 +286,10 @@ export default function ClientHubPage() {
       <style>{`
         @keyframes spinKf { to { transform: rotate(360deg); } }
         .ch-shell { display: flex; min-height: 100vh; }
-        .ch-side { width: 240px; flex-shrink: 0; background: ${G.sidebar}; border-right: 1px solid ${G.border}; display: flex; flex-direction: column; padding: 22px 16px; position: sticky; top: 0; height: 100vh; }
+        .ch-side { width: ${sidebarCollapsed ? "0px" : "240px"}; flex-shrink: 0; background: ${G.sidebar}; border-right: ${sidebarCollapsed ? "none" : `1px solid ${G.border}`}; display: flex; flex-direction: column; padding: ${sidebarCollapsed ? "0" : "22px 16px"}; position: sticky; top: 0; height: 100vh; transition: width 0.25s ease, padding 0.25s ease; overflow: hidden; }
+        .ch-collapse-toggle { position: fixed; left: ${sidebarCollapsed ? 12 : 224}px; top: 18px; z-index: 110; width: 28px; height: 28px; border-radius: 8px; background: #fff; border: 1px solid ${G.border}; cursor: pointer; display: flex; align-items: center; justify-content: center; color: ${G.textSec}; box-shadow: 0 1px 3px rgba(0,0,0,0.06); transition: left 0.25s ease; }
+        .ch-collapse-toggle:hover { color: ${G.text}; border-color: ${G.textTer}; }
+        @media (max-width: 880px) { .ch-collapse-toggle { display: none; } }
         .ch-main { flex: 1; min-width: 0; min-height: 100vh; }
         .ch-mobile-bar { display: none; }
         @media (max-width: 880px) {
@@ -203,10 +308,19 @@ export default function ClientHubPage() {
         {/* Mobile overlay */}
         <div className="ch-overlay" onClick={() => setSidebarOpen(false)}></div>
 
+        {/* Desktop collapse / expand toggle. Hidden on mobile (mobile uses hamburger). */}
+        <button className="ch-collapse-toggle" onClick={() => setSidebarCollapsed(c => !c)}
+          title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}>
+          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
         {/* Sidebar */}
         <aside className="ch-side">
-          {/* Brand identity at top */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", marginBottom: 28 }}>
+          {/* Brand identity at top - clicking returns to the client portal home (Analytics) */}
+          <a href={`/client/${slug}`}
+            onClick={(e) => { e.preventDefault(); setSection("analytics"); }}
+            title="Back to Portal Home"
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px", marginBottom: 28, textDecoration: "none" }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", border: `2px solid ${G.ink}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Sparkles size={13} style={{ color: G.ink }} />
             </div>
@@ -214,7 +328,7 @@ export default function ClientHubPage() {
               <p style={{ fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.05em", lineHeight: 1.1 }}>ALCHEMY</p>
               <p style={{ fontSize: 10, color: G.textTer, fontWeight: 400, lineHeight: 1.1, marginTop: 1 }}>Productions</p>
             </div>
-          </div>
+          </a>
 
           {/* Client identity card */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", background: G.bg, border: `1px solid ${G.border}`, borderRadius: 12, marginBottom: 22 }}>
@@ -225,8 +339,26 @@ export default function ClientHubPage() {
             </div>
           </div>
 
+          {/* Product switcher - shown whenever the client has at least one
+              product. Clients can add their own products via the modal (Express
+              mode auto-fills from a product page URL). */}
+          {products.length > 0 && (
+            <ProductSwitcher
+              products={products}
+              activeId={activeProduct?.id}
+              onChange={setActiveProduct}
+              onAdd={(newProduct) => {
+                if (!newProduct) return;
+                setProducts((prev) => [...prev, newProduct]);
+                setActiveProduct(newProduct);
+              }}
+              canAdd
+              clientId={data?.client?.id}
+            />
+          )}
+
           {/* Section nav */}
-          <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <nav style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: products.length > 1 ? 12 : 0 }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: G.textTer, padding: "6px 12px", marginBottom: 4 }}>Workspace</p>
             {sections.map(s => (
               <button key={s.k} className={`ch-nav-item${section === s.k ? " active" : ""}`} onClick={() => { setSection(s.k); setSidebarOpen(false); }}>
@@ -272,13 +404,13 @@ export default function ClientHubPage() {
           )}
 
           {section === "brand" && (
-            <BrandSection intake={intake} clientName={client.name} />
+            <BrandSection intake={intake} clientName={client.name} clientId={client.id} />
           )}
         </main>
       </div>
 
       {/* Floating chat - always available */}
-      {portal && <PortalChat projectId={portal.id} sender="client" brandName={client?.name || ""} />}
+      {portal && <PortalChat projectId={portal.id} sender="client" brandName={client?.name || ""} clientId={client?.id} />}
     </div>
   );
 }
@@ -288,7 +420,7 @@ export default function ClientHubPage() {
 function AnalyticsSection({ client, dashboard, dashboards, campaigns, feedback, totalAssets }) {
   return (
     <div style={{ padding: "32px 40px 80px", maxWidth: 1280, margin: "0 auto" }}>
-      <SectionHeader title="Analytics" subtitle="Live performance data, KPIs and Oracle AI insights." />
+      <SectionHeader title={SECTION_COPY.analytics.title} subtitle={SECTION_COPY.analytics.subtitle} />
 
       {/* Inline iframe of the marketing dashboard (full functionality) */}
       {dashboard ? (
@@ -314,7 +446,7 @@ function CreativesSection({ portal, feedback, clientName }) {
   if (!portal) {
     return (
       <div style={{ padding: "32px 40px 80px", maxWidth: 1280, margin: "0 auto" }}>
-        <SectionHeader title="Creatives" subtitle="Review draft assets and approve or request revisions." />
+        <SectionHeader title={SECTION_COPY.creatives.title} subtitle={SECTION_COPY.creatives.subtitle({ approved: 0 })} />
         <div style={{ padding: 60, background: G.card, border: `1px dashed ${G.border}`, borderRadius: 18, textAlign: "center" }}>
           <MessageSquare size={36} color={G.textTer} style={{ marginBottom: 12 }} />
           <h3 style={{ ...hd, fontSize: 24, color: G.text, marginBottom: 6 }}>No creatives yet</h3>
@@ -326,8 +458,8 @@ function CreativesSection({ portal, feedback, clientName }) {
   return (
     <div style={{ padding: "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
       <SectionHeader
-        title="Creatives"
-        subtitle={`Review and approve assets. ${feedback.approved} approved · ${feedback.revision} revisions · ${feedback.rejected} rejected.`}
+        title={SECTION_COPY.creatives.title}
+        subtitle={SECTION_COPY.creatives.subtitle(feedback)}
       />
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", minHeight: 800 }}>
         <iframe
@@ -341,24 +473,58 @@ function CreativesSection({ portal, feedback, clientName }) {
   );
 }
 
-function BrandSection({ intake, clientName }) {
-  if (!intake) {
+function BrandSection({ intake, clientName, clientId }) {
+  const [editing, setEditing] = useState(false);
+
+  // No brand intake yet OR client clicked Edit -> embed the brand DNA form so
+  // the client can fill it out themselves right inside their portal.
+  if (!intake || editing) {
     return (
-      <div style={{ padding: "32px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
-        <SectionHeader title="Brand Guidelines" subtitle="Your brand foundation - voice, audience, visual references." />
-        <div style={{ padding: 60, background: G.card, border: `1px dashed ${G.border}`, borderRadius: 18, textAlign: "center" }}>
-          <Palette size={36} color={G.textTer} style={{ marginBottom: 12 }} />
-          <h3 style={{ ...hd, fontSize: 24, color: G.text, marginBottom: 6 }}>Brand Guidelines coming soon</h3>
-          <p style={{ fontSize: 13, color: G.textSec, maxWidth: 460, margin: "0 auto" }}>Your brand identity will live here once we capture it together.</p>
+      <div style={{ padding: editing ? "16px 24px 0" : "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ ...hd, fontSize: 36, color: G.text, marginBottom: 4 }}>{intake ? "Edit Brand DNA" : "Brand DNA"}</h1>
+            <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.5 }}>
+              {intake ? `Update your brand identity for ${clientName}.` : `Tell us about ${clientName} so we can create work that feels exactly right.`}
+            </p>
+          </div>
+          {editing && (
+            <button onClick={() => setEditing(false)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 12, fontWeight: 600, color: G.text, background: "transparent", border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+              Cancel
+            </button>
+          )}
+        </div>
+        <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", marginBottom: 32 }}>
+          <iframe
+            src={`/brand-intake?clientId=${clientId}&embed=1`}
+            title="Brand DNA"
+            style={{ width: "100%", height: "calc(100vh - 200px)", minHeight: 720, border: "none", display: "block" }}
+          />
         </div>
       </div>
     );
   }
+
   return (
     <div style={{ padding: "32px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
-      <SectionHeader title="Brand Guidelines" subtitle={`The foundation for everything we create for ${clientName}.`} />
+      <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ ...hd, fontSize: 36, color: G.text, marginBottom: 4 }}>Brand Guidelines</h1>
+          <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.5 }}>The foundation for everything we create for {clientName}.</p>
+        </div>
+        <button onClick={() => setEditing(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 12, fontWeight: 600, color: "#fff", background: G.ink, border: "none", borderRadius: 980, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+          Edit Brand DNA
+        </button>
+      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+      {/* The full brand kit (story, colors, voice, audience, etc.) is rendered
+          by the shared <BrandKitGrid /> so the team and client views stay in
+          lockstep. Edit /components/BrandKit.jsx to update both at once. */}
+      <BrandKitGrid intake={intake} />
+      {false && (
+      <div style={{ display: "none" }}>
         {(intake.tagline || intake.story) && (
           <BrandCard fullWidth title="Brand Story">
             {intake.tagline && <p style={{ ...hd, fontSize: 26, color: G.text, marginBottom: 12, lineHeight: 1.25, fontStyle: "italic" }}>&ldquo;{intake.tagline}&rdquo;</p>}
@@ -529,18 +695,13 @@ function BrandSection({ intake, clientName }) {
           </BrandCard>
         )}
       </div>
+      )}
     </div>
   );
 }
 
-function SectionHeader({ title, subtitle }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h1 style={{ ...hd, fontSize: 36, color: G.text, marginBottom: 4 }}>{title}</h1>
-      <p style={{ fontSize: 14, color: G.textSec, lineHeight: 1.5 }}>{subtitle}</p>
-    </div>
-  );
-}
+// SectionHeader has moved to /components/SectionHeader.jsx so the team and
+// client views render with identical proportions. Edits there flow to both.
 
 // ── Inline style helpers (for BrandCard etc.) ──
 const tagStyle = { fontSize: 11, fontWeight: 500, color: G.textSec, padding: "4px 10px", background: "#F5F5F7", borderRadius: 980, border: `1px solid ${G.border}` };

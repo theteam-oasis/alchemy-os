@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { v4 as uuid } from 'uuid'
 
+// Extend the function timeout so big uploads don't get killed mid-stream
+export const maxDuration = 60
+export const runtime = 'nodejs'
+
 export async function POST(req) {
   const formData = await req.formData()
   const file = formData.get('file')

@@ -169,7 +169,7 @@ export default function ClientProfilePage({ params }) {
     `}</style>
     <div className="shell">
       <nav className="nav">
-        <a href="/" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
+        <a href="/dashboard" className="nav-logo"><div className="logo-mark">A</div><span className="logo-text">Alchemy <em>OS</em></span></a>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'4px 10px',background:'#111',color:'#fff',borderRadius:980,fontSize:10,fontWeight:700,letterSpacing:'0.08em',textTransform:'uppercase'}}>
             <span style={{width:5,height:5,borderRadius:'50%',background:'#22c55e'}}></span>

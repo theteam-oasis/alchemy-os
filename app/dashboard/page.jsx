@@ -55,6 +55,50 @@ function Btn({ children, onClick, primary, disabled, small, icon }) {
 
 // Compact tool status pill used in the dashboard client rows. Click jumps directly to the
 // relevant tool (existing or create-new flow). Green = setup, gray = not yet.
+// Roster of team members. Edit this list to add/remove people.
+const TEAM_MEMBERS = ["Andrew", "Shalie", "Bebon", "Wak"];
+
+// Inline dropdown to assign a client to a team member. Persists to clients.assigned_to
+// and shows a tinted pill once a person is selected so the team can scan ownership at a glance.
+function AssignedDropdown({ clientId, value, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  const handleChange = async (e) => {
+    const v = e.target.value || null;
+    setSaving(true);
+    try {
+      const { supabase } = await import("@/lib/supabase");
+      const { error } = await supabase.from("clients").update({ assigned_to: v }).eq("id", clientId);
+      if (error) {
+        console.error("[assigned] supabase error", error);
+        alert(`Couldn't save assignment: ${error.message}\n\nIf this mentions a missing column, run this SQL in Supabase:\n\nalter table public.clients add column if not exists assigned_to text;`);
+        return;
+      }
+      if (onSaved) onSaved(clientId, v);
+    } catch (err) {
+      console.error("Save assigned failed", err);
+      alert(`Couldn't save: ${err?.message || "Unknown error"}`);
+    } finally { setSaving(false); }
+  };
+  // A subtle color tag per person so rows are visually grouped by owner
+  const tone = value
+    ? { background: "#F5F5F7", color: "#1D1D1F", border: "1px solid #E8E8ED" }
+    : { background: "transparent", color: "#86868B", border: "1px dashed #D2D2D7" };
+  return (
+    <select value={value || ""} onChange={handleChange} disabled={saving}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: value ? 600 : 500,
+        padding: "5px 26px 5px 10px", borderRadius: 980, cursor: "pointer", appearance: "none",
+        background: `${tone.background} url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='%2386868B' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 8px center`,
+        color: tone.color, border: tone.border,
+        outline: "none", maxWidth: "100%", width: "fit-content", minWidth: 96,
+      }}>
+      <option value="">Unassigned</option>
+      {TEAM_MEMBERS.map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+  );
+}
+
 function DashToolPill({ icon, label, active, count, href }) {
   const handleClick = (e) => { e.stopPropagation(); };
   return (
@@ -89,7 +133,7 @@ async function callClaude(prompt) {
 }
 
 // ─── Agency Dashboard ───
-function Dashboard({ clients, onNew, onSelect, onDelete }) {
+function Dashboard({ clients, onNew, onSelect, onDelete, onAssignedChanged }) {
   const sc = { onboarding: C.warning, reviewing: C.info, production: "#5856D6", delivered: C.success };
   const [dashTab, setDashTab] = useState("clients");
   const [conversations, setConversations] = useState([]);
@@ -121,6 +165,30 @@ function Dashboard({ clients, onNew, onSelect, onDelete }) {
   if (toolOverview?.clients) {
     for (const c of toolOverview.clients) toolByName[c.name?.toLowerCase()] = c;
   }
+
+  // Unread activity counts per client (compares /api/activity to localStorage last-viewed)
+  const [unreadByClient, setUnreadByClient] = useState({});
+  useEffect(() => {
+    if (!clients?.length) return;
+    let cancelled = false;
+    const refresh = async () => {
+      const out = {};
+      await Promise.all(clients.map(async (c) => {
+        try {
+          const res = await fetch(`/api/activity?clientId=${c.id}`);
+          const data = await res.json();
+          if (cancelled) return;
+          const items = data?.activity || [];
+          const lastViewed = Number(localStorage.getItem(`team_activity_seen_${c.id}`) || 0);
+          out[c.id] = items.filter(a => new Date(a.createdAt).getTime() > lastViewed && a.actor === "client").length;
+        } catch (e) { /* ignore */ }
+      }));
+      if (!cancelled) setUnreadByClient(out);
+    };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [clients]);
 
   const loadConversations = async () => {
     try {
@@ -188,7 +256,7 @@ function Dashboard({ clients, onNew, onSelect, onDelete }) {
       {dashTab === "clients" && (
         <div style={{ background: C.card, boxShadow: C.cardShadow, borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
           <div style={{ display: "flex", padding: "14px 24px", borderBottom: `1px solid ${C.borderLight}`, fontSize: 11, color: C.textTer, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", alignItems: "center" }}>
-            <span style={{ flex: 2 }}>Client</span><span style={{ flex: 1.4 }}>Tools</span><span style={{ flex: 1 }}>Stage</span><span style={{ flex: 0.9 }}>Progress</span><span style={{ flex: 1.1, textAlign: "right", paddingRight: 8 }}>Hub</span>
+            <span style={{ flex: 2.4 }}>Client</span><span style={{ flex: 0.9 }}>Team</span><span style={{ flex: 1 }}>Stage</span><span style={{ flex: 0.9 }}>Progress</span><span style={{ flex: 1.1, textAlign: "right", paddingRight: 8 }}>Hub</span>
           </div>
           {clients.map((c, i) => {
             const t = toolByName[c.name?.toLowerCase()];
@@ -196,19 +264,29 @@ function Dashboard({ clients, onNew, onSelect, onDelete }) {
               <div key={c.id} style={{ display: "flex", alignItems: "center", padding: "16px 24px", borderBottom: i < clients.length - 1 ? `1px solid ${C.borderLight}` : "none", transition: "background 0.15s" }}
                 onMouseEnter={e => e.currentTarget.style.background = C.bgSoft} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                 {/* Client */}
-                <div onClick={() => onSelect(c)} style={{ flex: 2, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", minWidth: 0 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: (c.color || C.info) + "15", display: "flex", alignItems: "center", justifyContent: "center", color: c.color || C.info, fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{c.name[0]}</div>
+                <div onClick={() => onSelect(c)} style={{ flex: 2.4, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", minWidth: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#000", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700, flexShrink: 0, position: "relative" }}>
+                    {c.name[0]}
+                    {unreadByClient[c.id] > 0 && (
+                      <span title={`${unreadByClient[c.id]} new update${unreadByClient[c.id] === 1 ? "" : "s"}`}
+                        style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, background: C.danger, color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}>
+                        {unreadByClient[c.id]}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ color: C.text, fontWeight: 600, fontSize: 15, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</p>
+                    <p style={{ color: C.text, fontWeight: 600, fontSize: 15, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 6 }}>
+                      {c.name}
+                      {unreadByClient[c.id] > 0 && (
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.danger, animation: "pulse-dot 1.6s ease-in-out infinite" }} />
+                      )}
+                    </p>
                     <p style={{ color: C.textTer, fontSize: 11 }}>{c.date}</p>
                   </div>
                 </div>
-                {/* Tool badges */}
-                <div style={{ flex: 1.4, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  <DashToolPill icon={<MessageSquare size={10} />} label="Portal" active={!!t?.hasPortal} count={t?.portal?.images || 0} href={t?.portal ? `/portal/create?id=${t.portal.id}` : `/portal/create?clientId=${c.id}&clientName=${encodeURIComponent(c.name)}`} />
-                  <DashToolPill icon={<Sparkles size={10} />} label="Brand" active={!!t?.hasBrandKit} href={`/brand-intake?clientId=${c.id}`} />
-                  <DashToolPill icon={<Image size={10} />} label="BI" active={(t?.dashboards?.length || 0) > 0} count={t?.dashboards?.length || 0} href={t?.dashboards?.[0] ? `/marketing/${t.dashboards[0].slug}` : `/marketing/create?clientId=${c.id}`} />
-                  <DashToolPill icon={<Edit3 size={10} />} label="Briefs" active={(t?.campaignCount || 0) > 0} count={t?.campaignCount || 0} href={t?.slug ? `/team/${t.slug}` : `/clients/${c.id}`} />
+                {/* Assigned team member - dropdown saves directly to the clients table */}
+                <div style={{ flex: 0.9 }}>
+                  <AssignedDropdown clientId={c.id} value={c.assigned_to || ""} onSaved={onAssignedChanged} />
                 </div>
                 {/* Stage */}
                 <span onClick={() => onSelect(c)} style={{ flex: 1, color: C.textSec, fontSize: 13, cursor: "pointer" }}>{c.stage}</span>
@@ -227,9 +305,9 @@ function Dashboard({ clients, onNew, onSelect, onDelete }) {
                         {copiedId === c.id ? <Check size={11} color={C.success} /> : <Copy size={11} />}
                         {copiedId === c.id ? "Copied" : "Link"}
                       </button>
-                      <a href={`/client/${t.slug}`} target="_blank" rel="noreferrer"
+                      <a href={`/team/${t.slug}`}
                         onClick={e => e.stopPropagation()}
-                        title="Open client hub"
+                        title="Open team workspace"
                         style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", fontSize: 11, fontWeight: 600, background: C.accent, color: "#fff", borderRadius: 6, textDecoration: "none" }}>
                         <ArrowRight size={11} /> Open
                       </a>
@@ -949,7 +1027,7 @@ export default function AlchemyOS() {
     async function load() {
       const dbClients = await getClients();
       if (dbClients && dbClients.length > 0) {
-        setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' })));
+        setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF', assigned_to: c.assigned_to || null })));
       }
     }
     load();
@@ -998,7 +1076,7 @@ CRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EX
 
   const goHome = async () => {
     const dbClients = await getClients();
-    if (dbClients && dbClients.length > 0) { setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' }))); }
+    if (dbClients && dbClients.length > 0) { setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF', assigned_to: c.assigned_to || null }))); }
     setView("dashboard"); setSelectedClient(null); setCurrentClientId(null);
   };
 
@@ -1038,7 +1116,7 @@ CRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EX
         }
         // Refresh list
         const dbClients = await getClients();
-        if (dbClients) setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF' })));
+        if (dbClients) setClients(dbClients.map(c => ({ id: c.id, name: c.name, status: c.status, stage: c.stage, progress: c.progress, date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: c.color || '#007AFF', assigned_to: c.assigned_to || null })));
         setNewClientModal(false);
         setNewClientName(""); setNewClientEmail(""); setNewClientWebsite("");
       }
@@ -1077,7 +1155,7 @@ CRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EX
 
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", background: C.bg, color: C.text, minHeight: "100vh" }}>
-      <style>{fonts}{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.15; } 100% { transform: scale(0.8); opacity: 0.5; } } @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } * { box-sizing: border-box; margin: 0; padding: 0; } select option { background: #fff; color: #1D1D1F; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #D2D2D7; border-radius: 3px; } input:focus, textarea:focus, select:focus { border-color: #000 !important; outline: none; } ::placeholder { color: #AEAEB2; }`}</style>
+      <style>{fonts}{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 0.15; } 100% { transform: scale(0.8); opacity: 0.5; } } @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } } @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } } * { box-sizing: border-box; margin: 0; padding: 0; } select option { background: #fff; color: #1D1D1F; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #D2D2D7; border-radius: 3px; } input:focus, textarea:focus, select:focus { border-color: #000 !important; outline: none; } ::placeholder { color: #AEAEB2; }`}</style>
 
       <div style={{ borderBottom: `1px solid ${C.borderLight}`, padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: isAdmin ? "pointer" : "default" }} onClick={isAdmin ? goHome : undefined}>
@@ -1090,8 +1168,8 @@ CRITICAL: Return ONLY the value. do NOT wrap it in {"${key}": ...}. Match the EX
         </div>
       </div>
 
-      <div style={{ maxWidth: view === "dashboard" || view === "detail" ? 960 : 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
-        {view === "dashboard" && <Dashboard clients={clients} onNew={newClient} onSelect={selectClient} onDelete={deleteClient} />}
+      <div style={{ maxWidth: view === "dashboard" ? 1280 : view === "detail" ? 960 : 720, margin: "0 auto", padding: "48px 24px", animation: "fadeIn 0.4s ease-out" }}>
+        {view === "dashboard" && <Dashboard clients={clients} onNew={newClient} onSelect={selectClient} onDelete={deleteClient} onAssignedChanged={(id, v) => setClients(prev => prev.map(cl => cl.id === id ? { ...cl, assigned_to: v } : cl))} />}
         {view === "detail" && selectedClient && <ClientDetail client={selectedClient} onBack={() => { setView("dashboard"); setSelectedClient(null); }} onUpdate={updateClient} />}
         {view === "client" && <>
           {error && <div style={{ background: "#FFF2F2", border: `1px solid ${C.danger}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, color: C.danger, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}><X size={16} /> {error}</div>}

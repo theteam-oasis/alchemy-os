@@ -5,14 +5,15 @@ const COOKIE_NAME = 'alchemy_portal_auth'
 
 // Team-only paths require the universal team password (set via cookie).
 // Anything not in this list is publicly reachable - including the client-facing
-// hub `/client/[slug]`, marketing dashboards, proposals, mood boards, etc.
+// hub `/client/[slug]`, the creatives review portal `/portal/[slug]`, marketing
+// dashboards, proposals, mood boards, etc.
 const TEAM_PREFIXES = [
   '/dashboard',
   '/clients',           // /clients and /clients/[uuid]
   '/team',              // /team/[slug]
-  '/portal',            // creatives team manager
-  '/portal/create',
-  '/brand-intake',
+  // /brand-intake is intentionally NOT team-only - the client portal embeds it
+  // so clients can fill in their own Brand DNA. Access still requires a valid
+  // clientId in the query string (the form scopes saves to that row).
   '/marketing/create',
   '/deliverables/create',
   '/proposal/create',
@@ -26,7 +27,11 @@ const TEAM_PREFIXES = [
   '/samples',
 ]
 
+// Within /portal/*, only /portal (the manager) and /portal/create (the editor)
+// are team-only. /portal/[slug] is the client review surface and is public.
 function isTeamPath(pathname) {
+  if (pathname === '/portal') return true
+  if (pathname.startsWith('/portal/create')) return true
   return TEAM_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
 }
 
@@ -52,7 +57,7 @@ export const config = {
     '/clients/:path*',
     '/team/:path*',
     '/portal/:path*',
-    '/brand-intake/:path*',
+    // '/brand-intake/:path*' removed - now public so clients can fill it
     '/marketing/create/:path*',
     '/deliverables/create/:path*',
     '/proposal/create/:path*',

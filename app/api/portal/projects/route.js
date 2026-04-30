@@ -51,6 +51,7 @@ export async function POST(req) {
     ugc_scripts: [],
   }
   if (body.clientId) insert.client_id = body.clientId
+  if (body.productId) insert.product_id = body.productId
 
   const { data, error } = await supabase
     .from('portal_projects')
