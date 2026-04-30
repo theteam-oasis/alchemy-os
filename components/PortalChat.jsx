@@ -28,6 +28,7 @@ export default function PortalChat({ projectId, sender = "client", brandName = "
   const [oracleDraft, setOracleDraft] = useState("");
   const [oracleSending, setOracleSending] = useState(false);
   const [oracleInsights, setOracleInsights] = useState([]);
+  const [insightsPatterns, setInsightsPatterns] = useState([]);
   const [insightsHasData, setInsightsHasData] = useState(true);
   const [insightsDashSlug, setInsightsDashSlug] = useState(null);
   const oracleScrollRef = useRef(null);
@@ -43,6 +44,7 @@ export default function PortalChat({ projectId, sender = "client", brandName = "
         .then((d) => {
           if (cancelled) return;
           if (Array.isArray(d?.insights)) setOracleInsights(d.insights);
+          if (Array.isArray(d?.patterns)) setInsightsPatterns(d.patterns);
           setInsightsHasData(d?.hasData !== false);
           setInsightsDashSlug(d?.dashboardSlug || null);
         })
@@ -482,24 +484,53 @@ export default function PortalChat({ projectId, sender = "client", brandName = "
                   Open Analytics →
                 </span>
               </button>
-            ) : oracleInsights.length === 0 ? (
+            ) : oracleInsights.length === 0 && insightsPatterns.length === 0 ? (
               <div style={{ padding: 40, textAlign: "center", color: "#AEAEB2" }}>
                 <p style={{ ...mono, fontSize: 13 }}>Loading insights...</p>
               </div>
             ) : (
               <>
-                <p style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#AEAEB2", marginBottom: 4 }}>Live snapshot</p>
-                {oracleInsights.map((ins, i) => (
-                  <button key={i}
-                    onClick={() => { setTab("oracle"); askOracle(`Tell me more about: ${ins.headline}`); }}
-                    style={{ background: "#fff", border: "1px solid #E8E8ED", borderRadius: 14, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", cursor: "pointer", textAlign: "left" }}>
-                    <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{ins.icon || "✨"}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ ...mono, fontSize: 13, fontWeight: 700, color: "#1D1D1F", lineHeight: 1.35, margin: 0 }}>{ins.headline}</p>
-                      {ins.body && <p style={{ ...mono, fontSize: 12, color: "#86868B", lineHeight: 1.5, marginTop: 4 }}>{ins.body}</p>}
-                    </div>
-                  </button>
-                ))}
+                {oracleInsights.length > 0 && (
+                  <>
+                    <p style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#AEAEB2", marginBottom: 4 }}>Live snapshot</p>
+                    {oracleInsights.map((ins, i) => (
+                      <button key={i}
+                        onClick={() => { setTab("oracle"); askOracle(`Tell me more about: ${ins.headline}`); }}
+                        style={{ background: "#fff", border: "1px solid #E8E8ED", borderRadius: 14, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", cursor: "pointer", textAlign: "left" }}>
+                        <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{ins.icon || "✨"}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ ...mono, fontSize: 13, fontWeight: 700, color: "#1D1D1F", lineHeight: 1.35, margin: 0 }}>{ins.headline}</p>
+                          {ins.body && <p style={{ ...mono, fontSize: 12, color: "#86868B", lineHeight: 1.5, marginTop: 4 }}>{ins.body}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {insightsPatterns.length > 0 && (
+                  <>
+                    <p style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#AEAEB2", marginTop: 14, marginBottom: 4 }}>Patterns</p>
+                    {insightsPatterns.map((pat, i) => (
+                      <button key={`p-${i}`}
+                        onClick={() => { setTab("oracle"); askOracle(`Why is "${pat.rows[0]?.label}" the top performing ${pat.column?.toLowerCase()}? What's the pattern across the rest, and what should we double down on?`); }}
+                        style={{ background: "#fff", border: "1px solid #E8E8ED", borderRadius: 14, padding: 14, display: "flex", flexDirection: "column", gap: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", cursor: "pointer", textAlign: "left" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <p style={{ ...mono, fontSize: 12, fontWeight: 700, color: "#1D1D1F", lineHeight: 1.3, margin: 0 }}>{pat.title}</p>
+                          <span style={{ ...mono, fontSize: 9, fontWeight: 700, color: "#86868B", letterSpacing: "0.04em", textTransform: "uppercase" }}>by {pat.column}</span>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {pat.rows.map((r, j) => (
+                            <div key={j} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "4px 0", borderBottom: j < pat.rows.length - 1 ? "1px solid #F5F5F7" : "none" }}>
+                              <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: j === 0 ? "#30A46C" : "#86868B", flexShrink: 0, width: 14 }}>{j + 1}.</span>
+                              <span style={{ ...mono, fontSize: 12, color: "#1D1D1F", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
+                              <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: "#1D1D1F", flexShrink: 0 }}>{r.metric}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>

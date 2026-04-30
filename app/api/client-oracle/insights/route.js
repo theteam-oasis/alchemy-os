@@ -103,11 +103,84 @@ export async function GET(req) {
       });
     }
 
+    // ── Patterns: group rows by creative attribute and find top performers ──
+    // We look for any of these grouping columns in the CSV. For each group we
+    // aggregate spend + revenue + clicks + impressions and rank by ROAS,
+    // falling back to CTR if revenue isn't present. Returns an array of
+    // pattern blocks so the UI can render "Top hooks", "Top asset types",
+    // "Top placements", etc.
+    const PATTERN_COLUMNS = [
+      { key: "Hook", needles: ["hook", "angle", "creative angle"] },
+      { key: "Asset Type", needles: ["asset type", "ad type", "creative type", "format"] },
+      { key: "Image Style", needles: ["image style", "visual style", "creative style", "style"] },
+      { key: "Product", needles: ["product", "product name"] },
+      { key: "Placement", needles: ["placement"] },
+      { key: "Ad Set", needles: ["ad set name", "ad set", "campaign name", "campaign"] },
+    ];
+    const patterns = [];
+    const spendIdx = findIdx("amount spent", "spend", "cost");
+    const revIdx = findIdx("revenue", "sales", "purchase value", "conversion value");
+    const clicksIdx = findIdx("link clicks", "clicks (all)", "clicks");
+    const imprIdx = findIdx("impressions");
+
+    for (const { key, needles } of PATTERN_COLUMNS) {
+      const colIdx = findIdx(...needles);
+      if (colIdx < 0) continue;
+      // Group rows by the column value
+      const groups = new Map();
+      for (const r of rows) {
+        const label = String(r[colIdx] ?? "").trim();
+        if (!label) continue;
+        if (!groups.has(label)) groups.set(label, { spend: 0, rev: 0, clicks: 0, imps: 0, count: 0 });
+        const g = groups.get(label);
+        const num = (i) => {
+          if (i < 0) return 0;
+          const v = Number(String(r[i] ?? "").replace(/[$,€£%\s]/g, ""));
+          return Number.isFinite(v) ? v : 0;
+        };
+        g.spend += num(spendIdx);
+        g.rev += num(revIdx);
+        g.clicks += num(clicksIdx);
+        g.imps += num(imprIdx);
+        g.count += 1;
+      }
+      if (groups.size < 2) continue; // only one bucket -> not a pattern
+
+      // Score: ROAS if we have revenue, else CTR, else just count.
+      const scored = [...groups.entries()].map(([label, g]) => {
+        const score = g.spend > 0 && g.rev > 0
+          ? g.rev / g.spend
+          : g.imps > 0 && g.clicks > 0
+          ? (g.clicks / g.imps) * 100
+          : g.count;
+        const metric = g.spend > 0 && g.rev > 0
+          ? `${(g.rev / g.spend).toFixed(2)}x ROAS`
+          : g.imps > 0 && g.clicks > 0
+          ? `${((g.clicks / g.imps) * 100).toFixed(2)}% CTR`
+          : `${g.count} run${g.count === 1 ? "" : "s"}`;
+        return { label, score, metric, spend: g.spend, count: g.count };
+      }).sort((a, b) => b.score - a.score);
+
+      // Skip pattern if everyone tied at 0.
+      if (scored[0].score === 0) continue;
+
+      patterns.push({
+        kind: "pattern",
+        title: `Top ${key.toLowerCase()}${key.endsWith("s") ? "" : "s"}`,
+        column: key,
+        rows: scored.slice(0, 3).map((s) => ({
+          label: s.label.length > 50 ? s.label.slice(0, 50) + "…" : s.label,
+          metric: s.metric,
+          spend: s.spend > 0 ? `$${s.spend >= 1000 ? (s.spend / 1000).toFixed(1) + "k" : s.spend.toFixed(0)} spent` : null,
+          count: s.count,
+        })),
+      });
+    }
+
     // Belt-and-suspenders: if none of the standard metrics yielded an insight
     // (e.g. the CSV uses unfamiliar column names), surface a fallback so the
-    // panel doesn't show "Loading insights..." forever just because we didn't
-    // recognize the schema.
-    if (insights.length === 0) {
+    // panel doesn't show "Loading insights..." forever.
+    if (insights.length === 0 && patterns.length === 0) {
       insights.push({
         kind: "metric", icon: "📊",
         headline: `${rows.length.toLocaleString()} row${rows.length === 1 ? "" : "s"} of data ready`,
@@ -115,7 +188,12 @@ export async function GET(req) {
       });
     }
 
-    return Response.json({ insights: insights.slice(0, 4), hasData: true, dashboardSlug: dash.slug });
+    return Response.json({
+      insights: insights.slice(0, 4),
+      patterns: patterns.slice(0, 4),
+      hasData: true,
+      dashboardSlug: dash.slug,
+    });
   } catch (e) {
     console.error("[client-oracle/insights]", e);
     return Response.json({ error: e.message }, { status: 500 });
