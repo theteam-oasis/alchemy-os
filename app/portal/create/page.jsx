@@ -181,10 +181,11 @@ function ScriptMoodBoard({ type, script, max, onUpload, onRemove, onSetRatio, fe
   const sub = max === 1 ? "1 reference frame" : `${max} reference frames`;
   const status = feedback?.status;
   const comments = feedback?.comments?.length || 0;
-  // Frame ratio is configurable per-script. Default 9:16 (vertical) for UGC,
-  // 1:1 for hero grid. The team flips this per script depending on whether
-  // they're shooting vertical Reels/Stories or widescreen YouTube/CTV.
-  const ratio = script.moodBoardRatio || (max === 1 ? "9/16" : "1/1");
+  // Frame ratio is configurable per-script. Default 9:16 (vertical) since
+  // that's the dominant ad format these days; team can flip to 16:9 for
+  // widescreen YouTube/CTV references. The toggle pills always show one
+  // option highlighted on first render (no unselected state).
+  const ratio = script.moodBoardRatio || "9/16";
 
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${G.border}` }}>
