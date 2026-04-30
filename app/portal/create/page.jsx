@@ -256,6 +256,19 @@ function CreateProject() {
     fetch(`/api/portal/feedback?projectId=${projectId}`).then(r => r.json()).then(fb => setFeedback(fb || {})).catch(() => {});
   }, [projectId]);
 
+  // Live-poll feedback so the team sees client approve/reject/revision marks
+  // appear in (near) real-time without having to reload the page. 10s cadence.
+  useEffect(() => {
+    if (!projectId) return;
+    const id = setInterval(() => {
+      fetch(`/api/portal/feedback?projectId=${projectId}`)
+        .then(r => r.json())
+        .then(fb => setFeedback(fb || {}))
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(id);
+  }, [projectId]);
+
   // Auto-save: persist any change to images / scripts / ratio on a short debounce.
   // No more manual "Save" button - the team just uploads and the data flows through.
   useEffect(() => {
@@ -739,14 +752,18 @@ function CreateProject() {
                     <div onClick={() => setFeedbackModalImageId(img.id)}
                       style={{ width: "100%", aspectRatio: imageRatio, background: "#F5F5F7", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer", position: "relative" }}>
                       <img src={img.url} alt={img.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block", pointerEvents: "none" }} />
-                      {/* Comment count badge appears bottom-left if the client has left feedback */}
-                      {(feedback[img.id]?.comments?.length > 0 || feedback[img.id]?.status) && (
-                        <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", gap: 4 }}>
-                          {feedback[img.id]?.comments?.length > 0 && (
-                            <span style={{ ...mono, display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 8px", borderRadius: 980, fontSize: 10, fontWeight: 700, background: "rgba(0,0,0,0.7)", color: "#fff" }}>
-                              <MessageSquare size={10} /> {feedback[img.id].comments.length}
-                            </span>
-                          )}
+                      {/* Prominent client-feedback overlay. Status pill in the top-right with the
+                          status color, comment count in bottom-left. The team needs to spot
+                          what the client said at-a-glance, not squint at a tiny badge. */}
+                      {feedback[img.id]?.status && (
+                        <div style={{ position: "absolute", top: 8, right: 8, display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 980, fontSize: 11, fontWeight: 700, background: fbClr[feedback[img.id].status], color: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,0.18)", ...mono }}>
+                          {feedback[img.id].status === "approved" ? <CheckCircle2 size={12} /> : feedback[img.id].status === "rejected" ? <X size={12} /> : <RefreshCw size={12} />}
+                          {feedback[img.id].status === "approved" ? "Approved" : feedback[img.id].status === "rejected" ? "Rejected" : "Revision"}
+                        </div>
+                      )}
+                      {feedback[img.id]?.comments?.length > 0 && (
+                        <div style={{ position: "absolute", bottom: 8, left: 8, display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 980, fontSize: 11, fontWeight: 700, background: "rgba(0,0,0,0.78)", color: "#fff", ...mono }}>
+                          <MessageSquare size={11} /> {feedback[img.id].comments.length}
                         </div>
                       )}
                     </div>
