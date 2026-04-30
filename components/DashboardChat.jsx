@@ -85,7 +85,7 @@ export default function DashboardChat() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setOracleMessages([...next, { role: "assistant", content: `Sorry — ${data?.error || "something went wrong"}.` }]);
+        setOracleMessages([...next, { role: "assistant", content: `Sorry, ${data?.error || "something went wrong"}.` }]);
       } else {
         setOracleMessages([...next, { role: "assistant", content: data.answer || "(no response)" }]);
       }
@@ -374,7 +374,7 @@ export default function DashboardChat() {
                     </div>
                     <div>
                       <p style={{ ...hd, fontSize: 16, color: "#fff", margin: 0, lineHeight: 1.1 }}>Alchemy Oracle</p>
-                      <p style={{ ...mono, fontSize: 10, color: "rgba(255,255,255,0.6)", margin: 0, marginTop: 2 }}>AI assistant — knows every client</p>
+                      <p style={{ ...mono, fontSize: 10, color: "rgba(255,255,255,0.6)", margin: 0, marginTop: 2 }}>AI assistant. Knows every client.</p>
                     </div>
                   </>
                 ) : tab === "insights" ? (

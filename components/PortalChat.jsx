@@ -71,7 +71,7 @@ export default function PortalChat({ projectId, sender = "client", brandName = "
       });
       const data = await res.json();
       if (!res.ok) {
-        setOracleMessages([...next, { role: "assistant", content: `Sorry — ${data?.error || "something went wrong"}.` }]);
+        setOracleMessages([...next, { role: "assistant", content: `Sorry, ${data?.error || "something went wrong"}.` }]);
       } else {
         setOracleMessages([...next, { role: "assistant", content: data.answer || "(no response)" }]);
       }

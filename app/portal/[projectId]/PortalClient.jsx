@@ -217,6 +217,31 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
     }
   };
 
+  // Cross-origin-safe download. Anchor[download] gets ignored for cross-origin
+  // videos on most browsers, so we fetch and build a same-origin blob URL.
+  const [downloading, setDownloading] = useState(false);
+  const downloadVideo = async () => {
+    if (!script.videoUrl) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(script.videoUrl, { credentials: "omit" });
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = script.videoName || `${script.title || "video"}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (e) {
+      console.error("[video download]", e);
+      window.open(script.videoUrl, "_blank");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div style={{ marginTop: 14, padding: 16, background: "#FAFAFA", border: `1px solid ${G.border}`, borderRadius: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
@@ -227,6 +252,11 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
             <span style={{ ...mono, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 980, background: "#E5F0FC", color: "#3E8ED0" }}>V{currentVersion}</span>
           )}
         </div>
+        <button onClick={downloadVideo} disabled={downloading}
+          title="Download this cut"
+          style={{ ...mono, padding: "6px 12px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 980, cursor: downloading ? "wait" : "pointer", display: "inline-flex", alignItems: "center", gap: 5, opacity: downloading ? 0.6 : 1 }}>
+          <Download size={11} /> {downloading ? "Preparing..." : "Download"}
+        </button>
       </div>
 
       {/* Wistia-style custom player: jet-black big play button, minimal controls
@@ -338,7 +368,7 @@ function VideoReviewPlayer({ script, scriptId, feedback, onAddComment, onDeleteC
           <div style={{ background: "#fff", border: `1px solid ${G.border}`, borderRadius: 10, padding: 10 }}>
             <div style={{ ...mono, fontSize: 11, color: G.textSec, marginBottom: 6 }}>General feedback on this cut</div>
             <textarea value={generalDraft} onChange={(e) => { setGeneralDraft(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
-              autoFocus placeholder="Overall thoughts — pacing, hook, vibe, what's working, what's not..."
+              autoFocus placeholder="Overall thoughts on pacing, hook, vibe, what's working, what's not..."
               style={{ ...mono, width: "100%", padding: "8px 12px", fontSize: 13, border: `1px solid ${G.border}`, borderRadius: 8, outline: "none", background: "#fff", color: G.text, boxSizing: "border-box", resize: "none", minHeight: 72, lineHeight: 1.5, overflow: "hidden" }} />
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <button onClick={submitGeneral} disabled={!generalDraft.trim()}
@@ -561,14 +591,23 @@ function MoodBoardSection({ script, max, status, comments, saving, onSetStatus, 
           onRevision={() => onSetStatus("revision")}
         />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: max === 1 ? "1fr" : "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 12 }}>
-        {moodBoard.map((img, i) => (
-          <div key={img.id || i} style={{ position: "relative", aspectRatio: max === 1 ? "16/9" : "1/1", borderRadius: 10, overflow: "hidden", background: "#fff", border: `1px solid ${G.border}`, cursor: "zoom-in" }}
-            onClick={() => setLightbox(img.url)}>
-            <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      {/* Frames render in the ratio the team chose when uploading (9:16 default,
+          flippable to 16:9). Each frame is capped at 220px so a single UGC frame
+          doesn't take over the page in vertical mode. Click to expand. */}
+      {(() => {
+        const frameRatio = script.moodBoardRatio || "9/16";
+        const frameMax = max === 1 ? (frameRatio === "9/16" ? 220 : 360) : 200;
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(140px, ${frameMax}px))`, gap: 8, marginBottom: 12, justifyContent: max === 1 ? "center" : "start" }}>
+            {moodBoard.map((img, i) => (
+              <div key={img.id || i} style={{ position: "relative", aspectRatio: frameRatio, borderRadius: 10, overflow: "hidden", background: "#fff", border: `1px solid ${G.border}`, cursor: "zoom-in" }}
+                onClick={() => setLightbox(img.url)}>
+                <img src={img.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
       {/* In-page lightbox for mood board images - opens on the page, not a new tab */}
       {lightbox && (
         <div onClick={(e) => { if (e.target === e.currentTarget) setLightbox(null); }}
@@ -1524,7 +1563,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
           ? "Tell the team what to fix so they can ship a revision. A note is required to send back for revision."
           : "Please share why this doesn't work so the team can adjust accordingly. A reason is required to reject.";
         const placeholder = isRevision
-          ? "What should the team change? Be specific — copy, layout, color, image, etc..."
+          ? "What should the team change? Be specific. Copy, layout, color, image, etc..."
           : "What's wrong with this asset? Be specific so the team can fix it...";
         const cta = isRevision ? "Send for Revision" : "Confirm Rejection";
         const ctaLoading = isRevision ? "Sending..." : "Rejecting...";

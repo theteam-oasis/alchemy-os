@@ -39,7 +39,7 @@ export async function GET(req) {
         }
         await supabase.from("static_gen_jobs").update({
           status: stale && !settled ? "error" : "done",
-          error: stale && !settled ? "Generation timed out — partial results saved." : null,
+          error: stale && !settled ? "Generation timed out. Partial results saved." : null,
           portal_slug: portalSlug,
           portal_id: portalId,
           updated_at: new Date().toISOString(),

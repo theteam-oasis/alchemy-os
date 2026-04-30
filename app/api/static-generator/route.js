@@ -256,7 +256,7 @@ export async function POST(req) {
         const upload = await uploadBase64(img.base64, img.mime, portalRow.id);
         return {
           ok: true,
-          image: { id: crypto.randomUUID(), url: upload.url, name: `${t.headline.slice(0, 30)} — ${t.imagePrompt.slice(0, 30)}.${img.mime?.includes("png") ? "png" : "jpg"}` },
+          image: { id: crypto.randomUUID(), url: upload.url, name: `${t.headline.slice(0, 30)} - ${t.imagePrompt.slice(0, 30)}.${img.mime?.includes("png") ? "png" : "jpg"}` },
         };
       } catch (e) {
         console.error("[generator] failed", t.headline, e.message);
