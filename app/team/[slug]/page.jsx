@@ -336,9 +336,12 @@ export default function TeamWorkspacePage() {
     }
   };
 
-  // Wipe the CSV-backed marketing dashboard for the active product. Used by
-  // the trash button in the Analytics section header. After delete the
-  // section will auto-show the empty-state CTA so the team can re-upload.
+  // Wipe the CSV-backed marketing dashboard for the active product, then
+  // immediately recreate an EMPTY placeholder dashboard so the analytics
+  // iframe falls back to its empty-state / example-data view instead of
+  // showing a perpetual loading spinner. The empty dashboard is what the
+  // /marketing/[slug] route uses to know "no data yet, show the upload CTA
+  // + dummy chart preview."
   const deleteDashboard = async () => {
     if (!dashboard?.slug) return;
     if (typeof window !== "undefined" && !window.confirm("Delete this dashboard's CSV data? You'll need to re-upload to see analytics again.")) return;
@@ -350,6 +353,26 @@ export default function TeamWorkspacePage() {
         return;
       }
       setDashboard(null);
+
+      // Auto-create a fresh empty dashboard so the iframe has something to
+      // load (empty-state UI instead of an infinite spinner).
+      try {
+        const r = await fetch("/api/marketing-dashboards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: client.id,
+            clientName: client.name,
+            productId: activeProduct?.id || null,
+            title: `${client.name}${activeProduct ? ` - ${activeProduct.name}` : ""} Analytics`,
+            fileName: "placeholder.csv",
+            headers: ["Date", "Spend", "Revenue", "Impressions", "Clicks"],
+            rows: [],
+          }),
+        });
+        const replaced = await r.json();
+        if (replaced?.success && replaced.dashboard) setDashboard(replaced.dashboard);
+      } catch (e) { console.error("recreate placeholder dashboard:", e); }
     } catch (e) {
       alert(`Failed to delete: ${e.message}`);
     }
