@@ -1,5 +1,21 @@
 import { supabase } from '@/lib/supabase'
 
+// Strip null bytes + other unprintable C0 controls + UTF-8 BOM. Postgres
+// JSONB rejects these with "unsupported Unicode escape sequence".
+const CTRL_RE = new RegExp('[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]', 'g')
+const BOM_RE = new RegExp('^\\uFEFF')
+function sanitize(value) {
+  if (value === null || value === undefined) return value
+  if (typeof value === 'string') return value.replace(CTRL_RE, '').replace(BOM_RE, '')
+  if (Array.isArray(value)) return value.map(sanitize)
+  if (typeof value === 'object') {
+    const out = {}
+    for (const k of Object.keys(value)) out[sanitize(k)] = sanitize(value[k])
+    return out
+  }
+  return value
+}
+
 /**
  * POST /api/marketing-dashboards/add-product
  * Body: { slug, productName, headers, rows }
@@ -18,8 +34,8 @@ export async function POST(request) {
     const body = await request.json()
     const slug = body.slug
     const productName = (body.productName || '').trim()
-    const newHeaders = body.headers || []
-    const newRows = body.rows || []
+    const newHeaders = sanitize(body.headers || [])
+    const newRows = sanitize(body.rows || [])
 
     if (!slug) return Response.json({ success: false, error: 'slug is required' }, { status: 400 })
     if (!productName) return Response.json({ success: false, error: 'productName is required' }, { status: 400 })
