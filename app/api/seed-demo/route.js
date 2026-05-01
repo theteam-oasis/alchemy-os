@@ -132,8 +132,8 @@ async function upsertClient() {
     .from("clients")
     .insert({
       name: DEMO_CLIENT_NAME,
-      stage: "Active",
-      status: "active",
+      stage: "Drafts",
+      status: "production",
       progress: 70,
       assigned_to: "Demo",
     })
