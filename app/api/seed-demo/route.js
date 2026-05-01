@@ -229,7 +229,7 @@ async function upsertPortalProject(clientId, productId, productName) {
         // Free Pexels skincare imagery - solid placeholder
         { id: crypto.randomUUID(), url: "https://images.pexels.com/photos/3762875/pexels-photo-3762875.jpeg?auto=compress&w=1200", name: `${productName} hero shot.jpg` },
         { id: crypto.randomUUID(), url: "https://images.pexels.com/photos/4938332/pexels-photo-4938332.jpeg?auto=compress&w=1200", name: `${productName} lifestyle.jpg` },
-        { id: crypto.randomUUID(), url: "https://images.pexels.com/photos/3762871/pexels-photo-3762871.jpeg?auto=compress&w=1200", name: `${productName} routine.jpg` },
+        { id: crypto.randomUUID(), url: "https://images.pexels.com/photos/3735619/pexels-photo-3735619.jpeg?auto=compress&w=1200", name: `${productName} routine.jpg` },
       ],
       hero_scripts: [],
       ugc_scripts: [],
