@@ -2929,18 +2929,26 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
   const suggestionsFetchedRef = useRef(false);
   const enrichedData = { ...data, types };
 
-  // Time series
+  // Time series. Per-date aggregation per metric. Rate-style metrics (CTR,
+  // ROAS, CPC, CPM, Frequency, "cost per X") are RECOMPUTED from underlying
+  // totals or averaged per date — summing them produces nonsense (each row
+  // already carries a rate for its own slice of impressions).
   const chartData = dateCol ? (() => {
     const di = data.headers.indexOf(dateCol);
+    // First, group raw rows by date so we can compute aggregates from them.
     const grouped = {};
     data.rows.forEach(row => {
       const key = row[di];
       if (!key) return;
-      if (!grouped[key]) grouped[key] = { _name: key };
+      if (!grouped[key]) grouped[key] = { _name: key, _rows: [] };
+      grouped[key]._rows.push(row);
+    });
+    // Then for each date, compute the right aggregate per selected metric.
+    Object.values(grouped).forEach(g => {
       selectedMetrics.forEach(m => {
-        const mi = data.headers.indexOf(m);
-        grouped[key][m] = (grouped[key][m] || 0) + parseNum(row[mi]);
+        g[m] = computeAggregate(m, g._rows);
       });
+      delete g._rows; // strip helper before chart consumes
     });
     return Object.values(grouped).sort((a, b) => {
       const da = new Date(a._name), db = new Date(b._name);
@@ -2979,7 +2987,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
   // Matching is loose so it catches Meta Ads-style headers like
   // "CTR (all)", "CPC (cost per link click) (USD)", "Cost per unique click (USD)",
   // "Frequency", "Cost per post engagement (USD)", etc.
-  const computeAggregate = (metric, rowsSlice) => {
+  function computeAggregate(metric, rowsSlice) {
     const lower = metric.toLowerCase().trim();
     const sumCol = (col) => {
       const idx = data.headers.indexOf(col);
@@ -3042,7 +3050,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
     // budget, conversions) are accurately represented by their total.
     const mi = data.headers.indexOf(metric);
     return rowsSlice.reduce((s, r) => s + parseNum(r[mi]), 0);
-  };
+  }
 
   const stats = selectedMetrics.map(m => {
     const total = computeAggregate(m, data.rows);
