@@ -2898,14 +2898,49 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
   const categoryCols = data.headers.filter(h => types[h] === "category");
 
   const [selectedMetrics, setSelectedMetrics] = useState(() => {
-    // Organic-style data uses Reach/Likes; paid uses Spend/Revenue
-    const isOrganic = numericCols.has("Reach") || numericCols.has("Followers Gained");
-    const preferred = isOrganic
-      ? ["Reach", "Likes", "Impressions", "Engagement Rate"]  // Likes (red) before Impressions (blue)
-      : ["Impressions", "Clicks", "Spend", "Revenue"];
-    const pref = preferred.filter(m => numericCols.has(m));
-    if (pref.length >= 2) return pref;
-    return [...numericCols].slice(0, 4);
+    // Pick the two most informative metrics for the dataset on first load.
+    // Volume metrics with very different scales are bad defaults (Impressions
+    // at 2M dwarfs Frequency at 1.19, flatlining everything else). Instead
+    // we pair "spend" with "outcome" so the user sees the input/output
+    // relationship at a glance — same pattern Meta and Google ad managers
+    // default to.
+    const colArr = [...numericCols];
+    const find = (...needles) => {
+      for (const needle of needles) {
+        const n = needle.toLowerCase();
+        // exact, "X (USD)", or partial match
+        const hit = colArr.find((c) => {
+          const cl = String(c).toLowerCase().trim();
+          return cl === n || cl.startsWith(n + " (") || cl === n + " (usd)";
+        });
+        if (hit) return hit;
+      }
+      for (const needle of needles) {
+        const n = needle.toLowerCase();
+        const hit = colArr.find((c) => String(c).toLowerCase().includes(n));
+        if (hit) return hit;
+      }
+      return null;
+    };
+
+    const spendCol = find("amount spent", "spend", "cost");
+    const revenueCol = find("purchase value", "revenue", "sales", "conversion value");
+    const conversionsCol = find("conversions", "purchases", "results");
+    const impressionsCol = find("impressions");
+    const clicksCol = find("link clicks", "clicks (all)", "clicks");
+    const reachCol = find("reach");
+
+    // Pair spend with the strongest outcome metric available.
+    const pair = (a, b) => (a && b ? [a, b] : null);
+    const candidates = [
+      pair(spendCol, revenueCol),       // best for paid ads with revenue tracked
+      pair(spendCol, conversionsCol),   // paid ads, lead gen
+      pair(impressionsCol, clicksCol),  // awareness
+      pair(reachCol, impressionsCol),   // organic
+    ].filter(Boolean);
+
+    if (candidates.length > 0) return candidates[0];
+    return colArr.slice(0, 2);
   });
   const [dateCol, setDateCol] = useState(dateCols[0] || null);
   const [categoryCol, setCategoryCol] = useState(categoryCols[0] || null);
