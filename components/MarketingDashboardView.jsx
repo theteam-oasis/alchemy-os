@@ -39,15 +39,54 @@ const CHART_COLORS = [
 
 // Airy 3-stop gradients matching the iOS badge aesthetic. light → signature → signature
 const CHART_GRADIENTS = [
-  ["#A7F3D0", "#34C759", "#30D158"], // mint → iOS green
-  ["#FFB5B0", "#FF3B30", "#FF453A"], // coral → iOS red
-  ["#BAE6FD", "#007AFF", "#0A84FF"], // sky → iOS blue
-  ["#FFD494", "#FF9500", "#FF9F0A"], // amber → iOS orange
-  ["#E4B4F5", "#AF52DE", "#BF5AF2"], // lavender pink → iOS pink
-  ["#A5A3F3", "#5856D6", "#7D7AFF"], // lavender → iOS purple
-  ["#7FECE5", "#00C7BE", "#66D4CF"], // aqua → iOS teal
-  ["#FFE98B", "#FFCC00", "#FFD60A"], // pale yellow → iOS yellow
+  ["#A7F3D0", "#34C759", "#30D158"], // 0 mint → iOS green
+  ["#FFB5B0", "#FF3B30", "#FF453A"], // 1 coral → iOS red
+  ["#BAE6FD", "#007AFF", "#0A84FF"], // 2 sky → iOS blue
+  ["#FFD494", "#FF9500", "#FF9F0A"], // 3 amber → iOS orange
+  ["#E4B4F5", "#AF52DE", "#BF5AF2"], // 4 lavender pink → iOS pink
+  ["#A5A3F3", "#5856D6", "#7D7AFF"], // 5 lavender → iOS purple
+  ["#7FECE5", "#00C7BE", "#66D4CF"], // 6 aqua → iOS teal
+  ["#FFE98B", "#FFCC00", "#FFD60A"], // 7 pale yellow → iOS yellow
 ];
+
+// Pick a gradient for a metric based on its semantic meaning, not its index
+// in the selection array. So "Spend" is always red, "Revenue" is always
+// green, etc., regardless of which order you toggle them on. Keeps charts
+// readable across days/clients/products.
+//
+// Conventions used here:
+// - Cost / CPC / CPM / Spend / "Cost per X" → red (the dollars going out)
+// - Revenue / Purchase value / ROAS → green (dollars coming back)
+// - Impressions / Reach → blue (visibility)
+// - Clicks (any kind) → purple (engagement)
+// - Conversions / Purchases / Results → orange (the outcome)
+// - CTR → yellow (rate)
+// - Frequency → teal (cadence)
+function gradientForMetric(name) {
+  const n = String(name || "").toLowerCase();
+  // Check ROAS / Revenue first because some include "cost" via "cost per
+  // conversion" but should clearly be green outcome metrics.
+  if (/\broas\b/.test(n)) return CHART_GRADIENTS[0]; // green
+  if (/(revenue|purchase value|sales|conversion value)/.test(n)) return CHART_GRADIENTS[0]; // green
+  // Conversion-type metrics → orange (the desired outcome event)
+  if (/(conversions|purchases|results|leads|sign ?ups|installs)/.test(n)) return CHART_GRADIENTS[3]; // orange
+  // Spend / Cost / CPM / CPC / "Cost per X" → red
+  if (/(spend|amount spent|^cost\b|cpc|cpm|cpa|cost per)/.test(n)) return CHART_GRADIENTS[1]; // red
+  // CTR → yellow (it's a rate)
+  if (/\bctr\b|click-?through/.test(n)) return CHART_GRADIENTS[7]; // yellow
+  // Clicks → purple
+  if (/click/.test(n)) return CHART_GRADIENTS[5]; // purple
+  // Impressions → blue, Reach → teal
+  if (/impression/.test(n)) return CHART_GRADIENTS[2]; // blue
+  if (/\breach\b/.test(n)) return CHART_GRADIENTS[6]; // teal
+  // Frequency → teal-ish (close to reach since they're related)
+  if (/frequency/.test(n)) return CHART_GRADIENTS[6]; // teal
+  // Engagement metrics → pink
+  if (/(engagement|likes?|shares?|comments?|saves?)/.test(n)) return CHART_GRADIENTS[4]; // pink
+  // Followers / audience growth → green
+  if (/(follower|audience)/.test(n)) return CHART_GRADIENTS[0]; // green
+  return CHART_GRADIENTS[2]; // default to blue
+}
 
 const hd = { fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 400, letterSpacing: "-0.02em" };
 const body = { fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" };
@@ -271,8 +310,7 @@ function MetricToggleBar({ metrics, selected, onChange }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {metrics.map((m, i) => {
           const active = selected.includes(m);
-          const activeIdx = selected.indexOf(m);
-          const g = CHART_GRADIENTS[(activeIdx >= 0 ? activeIdx : i) % CHART_GRADIENTS.length];
+          const g = gradientForMetric(m);
           return (
             <button
               key={m}
@@ -3420,7 +3458,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                       <AreaChart data={chartData} margin={{ top: 5, right: isMobile ? 8 : 20, bottom: 5, left: isMobile ? -10 : 0 }}>
                         <defs>
                           {selectedMetrics.map((m, i) => {
-                            const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                            const g = gradientForMetric(m);
                             return (
                               <g key={m}>
                                 {/* Subtle fill only on the single-metric case;
@@ -3444,7 +3482,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                         <YAxis tick={{ fontSize: 11, fill: C.textSec }} tickLine={false} axisLine={false} tickFormatter={v => fmt(v)} />
                         <Tooltip content={<CustomTooltip />} />
                         {selectedMetrics.map((m, i) => {
-                          const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                          const g = gradientForMetric(m);
                           return (
                             <Area key={m} type="monotone" dataKey={m} name={m}
                               stroke={g[1]} strokeWidth={2.25}
@@ -3494,7 +3532,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                         />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
                         {selectedMetrics.map((m, i) => {
-                          const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                          const g = gradientForMetric(m);
                           return (
                             <Bar key={m} dataKey={m} name={m}
                               fill={g[1] + "22"}
@@ -3528,7 +3566,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                         />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
                         {selectedMetrics.map((m, i) => {
-                          const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                          const g = gradientForMetric(m);
                           return (
                             <Bar key={m} dataKey={m} name={m}
                               fill={g[1] + "22"}
@@ -3578,7 +3616,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                           strokeWidth={1.5}
                           animationDuration={700}>
                           {trimmed.map((entry, i) => {
-                            const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                            const g = gradientForMetric(m);
                             const stroke = entry.fill || g[1];
                             const fill = entry.fill ? entry.fill + "22" : g[1] + "22";
                             return <Cell key={i} fill={fill} stroke={stroke} />;
@@ -3636,8 +3674,8 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                       <YAxis tick={{ fontSize: 11, fill: C.textSec }} tickLine={false} axisLine={false} tickFormatter={v => fmt(v)} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend formatter={(val) => <span style={{ color: C.textSec, fontSize: 12, ...body }}>{val}</span>} iconSize={8} iconType="circle" />
-                      {selectedMetrics.map((m, i) => {
-                        const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                      {selectedMetrics.map((m) => {
+                        const g = gradientForMetric(m);
                         return (
                           <Line key={m} type="monotone" dataKey={m} name={m} stroke={g[1]}
                             strokeWidth={2.2} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#fff" }} />
@@ -3666,7 +3704,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
                       <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={isMobile ? 22 : 20} strokeWidth={1.5}>
                         {stats.map((_, i) => {
-                          const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
+                          const g = gradientForMetric(m);
                           return <Cell key={i} fill={g[1] + "22"} stroke={g[1]} />;
                         })}
                       </Bar>
