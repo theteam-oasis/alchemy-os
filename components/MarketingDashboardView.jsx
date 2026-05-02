@@ -3380,9 +3380,13 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                             const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
                             return (
                               <g key={m}>
-                                {/* Light airy fill. iOS-style */}
+                                {/* Subtle fill only on the single-metric case;
+                                    when multiple metrics overlap, gradients
+                                    muddied together into brown. We solve that
+                                    below by giving the stroke the visible
+                                    color and the fill a near-zero opacity. */}
                                 <linearGradient id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor={g[1]} stopOpacity={0.28} />
+                                  <stop offset="0%" stopColor={g[1]} stopOpacity={selectedMetrics.length === 1 ? 0.28 : 0.06} />
                                   <stop offset="100%" stopColor={g[1]} stopOpacity={0} />
                                 </linearGradient>
                               </g>
@@ -3400,7 +3404,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                           const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
                           return (
                             <Area key={m} type="monotone" dataKey={m} name={m}
-                              stroke={g[1]} strokeWidth={2}
+                              stroke={g[1]} strokeWidth={2.25}
                               fill={`url(#grad-${i})`} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: "#fff" }}
                             />
                           );
