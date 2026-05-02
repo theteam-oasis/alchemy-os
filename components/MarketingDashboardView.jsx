@@ -3503,22 +3503,42 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                 </ChartCard>
               )}
 
-              {pieData.length > 0 && (
+              {pieData.length > 0 && (() => {
+                // Cap to the top 6 segments + roll the rest into "Other" so a
+                // long-tail ad set list doesn't blow up the legend into the
+                // donut. Long category names (e.g. "Before & After - Studio -
+                // Retargeting 30d") get truncated in the legend so it reads
+                // clean.
+                const TOP_N = 6;
+                const sorted = [...pieData].sort((a, b) => (b.value || 0) - (a.value || 0));
+                const head = sorted.slice(0, TOP_N);
+                const tail = sorted.slice(TOP_N);
+                const trimmed = tail.length > 0
+                  ? [...head, { name: `Other (${tail.length})`, value: tail.reduce((s, x) => s + (x.value || 0), 0), fill: "#C7C7CC" }]
+                  : head;
+                const truncate = (s) => (String(s).length > 32 ? String(s).slice(0, 30) + "…" : String(s));
+                // Height needs to fit the donut + per-row legend.
+                const segCount = trimmed.length;
+                const legendRowH = isMobile ? 18 : 16;
+                const chartHeight = (isMobile ? 320 : 340) + segCount * legendRowH;
+                return (
                 <ChartCard title={`${selectedMetrics[0]} Distribution`} subtitle={`By ${categoryCol}`} delay={0.25} mounted={mounted} tight={isMobile}>
                   <div style={{ position: "relative" }}>
-                    <ResponsiveContainer width="100%" height={isMobile ? 340 : 300}>
+                    <ResponsiveContainer width="100%" height={chartHeight}>
                       <PieChart>
-                        <Pie data={pieData} dataKey="value" nameKey="name"
-                          cx="50%" cy={isMobile ? "38%" : "50%"}
+                        <Pie data={trimmed} dataKey="value" nameKey="name"
+                          cx="50%" cy={150}
                           innerRadius={isMobile ? 60 : 76}
                           outerRadius={isMobile ? 92 : 116}
                           paddingAngle={3}
                           cornerRadius={3}
                           strokeWidth={1.5}
                           animationDuration={700}>
-                          {pieData.map((entry, i) => {
+                          {trimmed.map((entry, i) => {
                             const g = CHART_GRADIENTS[i % CHART_GRADIENTS.length];
-                            return <Cell key={i} fill={g[1] + "22"} stroke={g[1]} />;
+                            const stroke = entry.fill || g[1];
+                            const fill = entry.fill ? entry.fill + "22" : g[1] + "22";
+                            return <Cell key={i} fill={fill} stroke={stroke} />;
                           })}
                         </Pie>
                         <Tooltip content={<CustomTooltip />} />
@@ -3528,21 +3548,21 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                           layout="horizontal"
                           iconSize={8}
                           iconType="circle"
-                          wrapperStyle={isMobile ? { fontSize: 11, paddingTop: 8 } : { fontSize: 12 }}
-                          formatter={(val) => <span style={{ color: C.textSec, fontSize: isMobile ? 11 : 12, ...body }}>{val}</span>}
+                          wrapperStyle={{ fontSize: isMobile ? 11 : 12, paddingTop: 12, lineHeight: "16px" }}
+                          formatter={(val) => <span style={{ color: C.textSec, fontSize: isMobile ? 11 : 12, ...body }} title={val}>{truncate(val)}</span>}
                         />
                       </PieChart>
                     </ResponsiveContainer>
 
-                    {/* Center label. clean Inter, not serif, to match the stat cards */}
+                    {/* Center label sits over the donut at cy=150 (matches the
+                        Pie's cy prop). Uses Inter to match the stat cards. */}
                     <div style={{
                       position: "absolute",
-                      top: isMobile ? "38%" : "50%",
+                      top: 150,
                       left: "50%",
                       transform: "translate(-50%, -50%)",
                       textAlign: "center",
                       pointerEvents: "none",
-                      marginTop: isMobile ? -10 : 0,
                     }}>
                       <div style={{
                         fontSize: 9, fontWeight: 700, color: C.textTer,
@@ -3558,7 +3578,8 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                     </div>
                   </div>
                 </ChartCard>
-              )}
+                );
+              })()}
 
               {chartData.length > 0 && selectedMetrics.length >= 2 && (
                 <ChartCard title="Trend Comparison" subtitle="Multi-metric trends" span={isMobile ? undefined : 2} delay={0.3} mounted={mounted} tight={isMobile}>
