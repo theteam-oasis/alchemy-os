@@ -277,6 +277,14 @@ function CreateProject() {
   const [imageRatio, setImageRatio] = useState("1/1");
   const [heroScripts, setHeroScripts] = useState([{ id: "1", title: "Hero Video 1", content: "" }]);
   const [ugcScripts, setUgcScripts] = useState([{ id: "1", title: "UGC Video 1", content: "" }]);
+  // Loops: 3 standalone video slots, no script. Used for ambient brand films,
+  // looping product demos, hero scene loops. Slots are fixed (1, 2, 3) so the
+  // team always has the same number of upload spots regardless of what's filled.
+  const [loopVideos, setLoopVideos] = useState([
+    { id: "loop-1", title: "Loop 1" },
+    { id: "loop-2", title: "Loop 2" },
+    { id: "loop-3", title: "Loop 3" },
+  ]);
   // Tab nav so the team can jump between asset types (mirrors the client portal UX)
   const [activeTab, setActiveTab] = useState("statics");
   // When the team clicks an image, this opens a modal showing its full preview
@@ -302,6 +310,12 @@ function CreateProject() {
       if (data.imageRatio) setImageRatio(data.imageRatio);
       if (data.heroScripts?.length) setHeroScripts(data.heroScripts);
       if (data.ugcScripts?.length) setUgcScripts(data.ugcScripts);
+      if (data.loopVideos?.length) {
+        // Pad with empty slots up to 3 if fewer were saved.
+        const padded = [...data.loopVideos];
+        while (padded.length < 3) padded.push({ id: `loop-${padded.length + 1}`, title: `Loop ${padded.length + 1}` });
+        setLoopVideos(padded.slice(0, 3));
+      }
       // mark hydrated on the next tick so the auto-save effect picks up future changes only
       setTimeout(() => { hydratedRef.current = true; }, 50);
     });
@@ -330,7 +344,7 @@ function CreateProject() {
       try {
         await fetch(`/api/portal/projects/${projectId}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ images, imageRatio, heroScripts, ugcScripts }),
+          body: JSON.stringify({ images, imageRatio, heroScripts, ugcScripts, loopVideos }),
         });
         setSaved(true);
         setTimeout(() => setSaved(false), 1500);
@@ -338,7 +352,7 @@ function CreateProject() {
       finally { setSaving(false); }
     }, 600);
     return () => clearTimeout(t);
-  }, [projectId, images, imageRatio, heroScripts, ugcScripts]);
+  }, [projectId, images, imageRatio, heroScripts, ugcScripts, loopVideos]);
 
   const uploadFiles = async (files) => {
     const toUpload = Array.from(files);
@@ -536,8 +550,8 @@ function CreateProject() {
   const uploadScriptVideo = async (type, scriptId, file) => {
     if (!file) return;
     if (!projectId || !supabase) { alert("Storage not ready."); return; }
-    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
-    const list = type === "hero" ? heroScripts : ugcScripts;
+    const setter = type === "hero" ? setHeroScripts : type === "ugc" ? setUgcScripts : setLoopVideos;
+    const list = type === "hero" ? heroScripts : type === "ugc" ? ugcScripts : loopVideos;
     const current = list.find(s => s.id === scriptId);
     if (!current) return;
 
@@ -652,12 +666,12 @@ function CreateProject() {
   };
 
   const removeScriptVideo = (type, scriptId) => {
-    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
+    const setter = type === "hero" ? setHeroScripts : type === "ugc" ? setUgcScripts : setLoopVideos;
     setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, videoUrl: null, videoName: null })));
   };
 
   const setScriptVideoRatio = (type, scriptId, ratio) => {
-    const setter = type === "hero" ? setHeroScripts : setUgcScripts;
+    const setter = type === "hero" ? setHeroScripts : type === "ugc" ? setUgcScripts : setLoopVideos;
     setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, videoRatio: ratio })));
   };
 
@@ -752,6 +766,7 @@ function CreateProject() {
             { key: "statics", label: "Statics", count: images.length },
             { key: "hero", label: "Hero Video", count: heroScripts.length },
             { key: "ugc", label: "UGC Video", count: ugcScripts.length },
+            { key: "loop", label: "Loop", count: loopVideos.filter(v => v.videoUrl).length },
           ].map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               style={{ ...mono, flex: 1, padding: "10px 24px", borderRadius: 980, fontSize: 14, fontWeight: activeTab === t.key ? 600 : 500, cursor: "pointer", border: "none", transition: "all 0.2s",
@@ -975,6 +990,36 @@ function CreateProject() {
                 </div>
               );
             })}
+          </div>
+        </div>
+        )}
+
+        {/* ─── Loop Videos ─── 3 fixed slots, no scripts. */}
+        {activeTab === "loop" && (
+        <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 16, padding: 32, marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>
+              <Video size={14} color={G.textSec} />
+              Loops ({loopVideos.filter(v => v.videoUrl).length}/3)
+            </label>
+            <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Standalone clips. No script needed.</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {loopVideos.map(v => (
+              <div key={v.id} style={{ border: `1px solid ${feedback[v.id]?.status ? fbClr[feedback[v.id].status] + "60" : G.border}`, borderRadius: 12, padding: 16, position: "relative" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ ...hd, fontSize: 18, color: G.text }}>{v.title}</span>
+                    <FeedbackBadge status={feedback[v.id]?.status} comments={feedback[v.id]?.comments} />
+                  </div>
+                </div>
+                <ScriptVideo type="loop" script={v}
+                  onUpload={(file) => uploadScriptVideo("loop", v.id, file)}
+                  onRemove={() => removeScriptVideo("loop", v.id)}
+                  onSetRatio={(r) => setScriptVideoRatio("loop", v.id, r)}
+                />
+              </div>
+            ))}
           </div>
         </div>
         )}

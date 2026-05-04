@@ -17,6 +17,7 @@ function mapProject(data) {
     imageRatio: data.image_ratio || "1/1",
     heroScripts: data.hero_scripts || [],
     ugcScripts: data.ugc_scripts || [],
+    loopVideos: data.loop_videos || [],
     createdAt: data.created_at,
   }
 }
@@ -41,6 +42,7 @@ export async function PUT(req, context) {
   if (body.images !== undefined) updates.images = body.images
   if (body.heroScripts !== undefined) updates.hero_scripts = body.heroScripts
   if (body.ugcScripts !== undefined) updates.ugc_scripts = body.ugcScripts
+  if (body.loopVideos !== undefined) updates.loop_videos = body.loopVideos
   if (body.clientName !== undefined) updates.client_name = body.clientName
   if (body.imageRatio !== undefined) updates.image_ratio = body.imageRatio
   if (body.clientId !== undefined) updates.client_id = body.clientId

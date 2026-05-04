@@ -1189,12 +1189,15 @@ export default function ClientReview({ projectId: serverProjectId }) {
 
   if (!project) return <div style={{ ...mono, minHeight: "100vh", background: G.bg, display: "flex", alignItems: "center", justifyContent: "center" }}><p style={{ color: G.textTer }}>Loading...</p></div>;
 
-  const totalItems = (project.images?.length || 0) + (project.heroScripts?.length || 0) + (project.ugcScripts?.length || 0);
-  // Build a set of IDs that actually exist in the project, so orphaned feedback (pointing to deleted items) is excluded
+  // Loops are filled-only — empty slots (no videoUrl) shouldn't count toward
+  // the "items to review" total or the validIds set used for feedback dedup.
+  const filledLoops = (project.loopVideos || []).filter(v => v.videoUrl);
+  const totalItems = (project.images?.length || 0) + (project.heroScripts?.length || 0) + (project.ugcScripts?.length || 0) + filledLoops.length;
   const validIds = new Set([
     ...(project.images || []).map(x => x.id),
     ...(project.heroScripts || []).map(x => x.id),
     ...(project.ugcScripts || []).map(x => x.id),
+    ...filledLoops.map(x => x.id),
   ]);
   const liveFeedback = Object.entries(feedback).filter(([id]) => validIds.has(id)).map(([, f]) => f);
   const approvedCount = liveFeedback.filter(f => f.status === "approved").length;
@@ -1206,6 +1209,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
     { key: "images", label: "Images", count: project.images?.length || 0 },
     { key: "hero", label: "Hero Videos", count: project.heroScripts?.length || 0 },
     { key: "ugc", label: "UGC Videos", count: project.ugcScripts?.length || 0 },
+    { key: "loop", label: "Loops", count: filledLoops.length },
   ];
 
   return (
@@ -1528,6 +1532,40 @@ export default function ClientReview({ projectId: serverProjectId }) {
                   {/* Approve / Revision / Reject buttons at the bottom of the script card */}
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
                     <StatusBtns status={st} onApprove={() => setItemStatus(script.id, "approved")} onReject={() => setItemStatus(script.id, "rejected")} onRevision={() => setItemStatus(script.id, "revision")} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ─── Loop Videos ─── Standalone clips, no scripts. */}
+        {activeTab === "loop" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {filledLoops.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 60, color: G.textTer }}><p>No loop videos uploaded yet.</p></div>
+            ) : filledLoops.filter(v => {
+              if (statusFilter === "all") return true;
+              const st = feedback[v.id]?.status || null;
+              if (statusFilter === "pending") return !st;
+              return st === statusFilter;
+            }).map(v => {
+              const st = feedback[v.id]?.status;
+              const borderColor = st === "approved" ? clr.approve : st === "rejected" ? clr.reject : st === "revision" ? clr.revision : G.cardBorder;
+              const shadow = st ? `0 0 0 2px ${borderColor}` : G.cardShadow;
+              return (
+                <div key={v.id} style={{ position: "relative", background: G.card, border: `1px solid ${borderColor}`, boxShadow: shadow, borderRadius: 20, padding: 28, transition: "all 0.2s" }}>
+                  <StatusMark status={st} />
+                  <div style={{ marginBottom: 16 }}>
+                    <span style={{ ...hd, fontSize: 22, color: G.text }}>{v.title}</span>
+                  </div>
+                  <VideoReviewPlayer script={v} scriptId={v.id} feedback={feedback}
+                    onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  {(feedback[v.id]?.status === "revision" || (feedback[v.id]?.comments || []).filter(c => typeof c.line !== "number").length > 0) && (
+                    <FeedbackBox itemId={v.id} feedback={feedback} saving={saving} onAddComment={onAddComment} onDeleteComment={onDeleteComment} viewerSender="client" />
+                  )}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16, paddingTop: 16, borderTop: `1px solid ${G.border}` }}>
+                    <StatusBtns status={st} onApprove={() => setItemStatus(v.id, "approved")} onReject={() => setItemStatus(v.id, "rejected")} onRevision={() => setItemStatus(v.id, "revision")} />
                   </div>
                 </div>
               );
