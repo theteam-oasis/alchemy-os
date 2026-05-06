@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Play, Quote, Phone, Download } from "lucide-react";
+import { Sparkles, ArrowRight, Check, Zap, TrendingUp, Rocket, Users, Play, Quote, Phone, Download, X } from "lucide-react";
 
 /* ── Design tokens ── */
 const G = {
@@ -182,6 +182,7 @@ export default function ProposalClient({ proposal }) {
   const tallSlugs = ["dude-meds", "chiller-body"];
   const aspectRatio = tallSlugs.includes(proposal.slug) ? "177.78%" : "100%";
   const hideDiscount = proposal.slug === "chiller-body";
+  const [enlargedImage, setEnlargedImage] = useState(null);
 
   return (
     <>
@@ -247,7 +248,7 @@ export default function ProposalClient({ proposal }) {
                 return (
                 <BlurReveal key={i} style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, background: G.card }}>
                   <div style={{ position: "relative", paddingTop: aspectRatio, background: "#F5F5F7" }}>
-                    <img src={src} alt={`${brandName} ${label}`} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={src} alt={`${brandName} ${label}`} onClick={() => setEnlargedImage(src)} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} />
                     <a
                       href={`/api/download-image?url=${encodeURIComponent(src)}&name=${encodeURIComponent(`${brandName}-${label}.png`)}`}
                       style={{ position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", color: "#1D1D1F", textDecoration: "none", transition: "all 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }}
@@ -269,16 +270,39 @@ export default function ProposalClient({ proposal }) {
             </div>
             <BlurReveal style={{ textAlign: "center", marginTop: 32 }}>
               <button
-                onClick={() => {
-                  statics.forEach((src, i) => {
+                onClick={async (e) => {
+                  const btn = e.currentTarget;
+                  const originalLabel = btn.innerHTML;
+                  btn.disabled = true;
+                  btn.innerHTML = "Bundling images…";
+                  try {
+                    const { default: JSZip } = await import("jszip");
+                    const zip = new JSZip();
                     const labels = ["dark-horse", "bond-matchmaking", "zenith-funding", "dude-meds", "speaking-roses", "ra-optics", "cannabals"].includes(proposal.slug)
                       ? ["Lifestyle", "Product Hero", "Detail Shot", "Editorial", "Scene Setting", "Wild Card"]
                       : ["Bold Claim Ad", "Product Hero", "Social Proof Ad", "Editorial", "Offer Ad", "Lifestyle"];
-                    const label = labels[i % labels.length];
+                    await Promise.all(statics.map(async (src, i) => {
+                      const label = labels[i % labels.length];
+                      const proxied = `/api/download-image?url=${encodeURIComponent(src)}&name=ref.png`;
+                      const res = await fetch(proxied);
+                      if (!res.ok) return;
+                      const blob = await res.blob();
+                      zip.file(`${i + 1}-${label.replace(/\s+/g, "-")}.png`, blob);
+                    }));
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
                     const a = document.createElement("a");
-                    a.href = `/api/download-image?url=${encodeURIComponent(src)}&name=${encodeURIComponent(`${brandName}-${label}.png`)}`;
+                    a.href = URL.createObjectURL(zipBlob);
+                    a.download = `${brandName}-creative-bundle.zip`;
+                    document.body.appendChild(a);
                     a.click();
-                  });
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                  } catch (err) {
+                    alert("Download failed. Try downloading images individually with the button on each one.");
+                  } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalLabel;
+                  }
                 }}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 8,
@@ -450,6 +474,39 @@ export default function ProposalClient({ proposal }) {
           </div>
         </footer>
       </div>
+
+      {/* ── Lightbox: click any image to enlarge ── */}
+      {enlargedImage && (
+        <div
+          onClick={() => setEnlargedImage(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.9)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 32, cursor: "zoom-out",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setEnlargedImage(null)}
+            style={{
+              position: "absolute", top: 20, right: 20,
+              width: 40, height: 40, borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)", color: "#fff",
+              border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={enlargedImage}
+            alt="Enlarged"
+            style={{ maxWidth: "92vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 80px rgba(0,0,0,0.5)", cursor: "zoom-out" }}
+          />
+        </div>
+      )}
     </>
   );
 }

@@ -462,6 +462,45 @@ function CreateProject() {
       alert(`Replace failed: ${e?.message || "Unknown error"}`);
     }
   };
+
+  // Size variants. The team can attach extra renders of the same creative at
+  // different aspect ratios (e.g., 1080x1350 for feed, 1080x1920 for stories).
+  // Each variant is stored on the parent image so feedback/status stays attached
+  // to one logical creative, but viewers (team and client) can flip between
+  // size renders. If no variants are attached, no chips render anywhere.
+  const uploadVariant = async (imageId, dimensions, file) => {
+    if (!projectId || !supabase) { alert("Storage not ready."); return; }
+    if (!file) return;
+    try {
+      const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+      const path = `portal/${projectId}/variants/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("brand-assets")
+        .upload(path, file, { contentType: file.type, cacheControl: "3600", upsert: false });
+      if (upErr) { alert(`Variant upload failed: ${upErr.message}`); return; }
+      const { data: { publicUrl } } = supabase.storage.from("brand-assets").getPublicUrl(path);
+      setImages(prev => prev.map(img => {
+        if (img.id !== imageId) return img;
+        const variants = img.variants || [];
+        // Replace existing variant of same dimension if present
+        const filtered = variants.filter(v => v.dimensions !== dimensions);
+        return {
+          ...img,
+          variants: [...filtered, { id: crypto.randomUUID(), dimensions, url: publicUrl, name: file.name }],
+        };
+      }));
+    } catch (e) {
+      console.error("[uploadVariant] threw", e);
+      alert(`Variant upload failed: ${e?.message || "Unknown error"}`);
+    }
+  };
+
+  const removeVariant = (imageId, variantId) => {
+    setImages(prev => prev.map(img => {
+      if (img.id !== imageId) return img;
+      return { ...img, variants: (img.variants || []).filter(v => v.id !== variantId) };
+    }));
+  };
   const reorderImage = (fromIdx, toIdx) => {
     setImages(prev => {
       const arr = [...prev];
@@ -851,7 +890,19 @@ function CreateProject() {
                         )}
                       </div>
                       <FeedbackBadge status={feedback[img.id]?.status} comments={feedback[img.id]?.comments} />
-                      {/* Replace this image - opens file picker, archives the old version into versionHistory */}
+                      {/* Size-variant chips. Only render when at least one
+                          variant exists, so unconfigured cards stay clean. */}
+                      {(img.variants || []).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                          {img.variants.map(v => (
+                            <a key={v.id} href={v.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                              style={{ ...mono, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 980, background: G.text, color: "#fff", textDecoration: "none" }}
+                              title={`${v.dimensions} variant`}>
+                              {v.dimensions.replace("x", "×")}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       <label style={{ ...mono, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", fontSize: 10, fontWeight: 600, background: "#F5F5F7", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
                         <RefreshCw size={9} /> Replace
                         <input type="file" accept="image/*" style={{ display: "none" }}
@@ -1102,8 +1153,47 @@ function CreateProject() {
                     </div>
                   )}
                 </div>
+                {/* Size variants. Each slot is one of the predefined dimensions
+                    we ship in our creative briefs. Upload writes to the image's
+                    variants array; an existing variant of the same size is
+                    replaced. The chip renders the dimension and acts as both
+                    the upload trigger (when empty) and the preview link (when
+                    filled). Empty slots ARE shown to the team so they know
+                    which sizes are available; only filled ones surface to the
+                    client. */}
+                <div style={{ padding: "14px 24px", borderTop: `1px solid ${G.border}` }}>
+                  <p style={{ ...mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: G.textTer, marginBottom: 8 }}>Size variants</p>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {[{ d: "1080x1350", label: "1080×1350" }, { d: "1080x1920", label: "1080×1920" }].map(opt => {
+                      const variant = (img.variants || []).find(v => v.dimensions === opt.d);
+                      return (
+                        <div key={opt.d} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {variant ? (
+                            <>
+                              <a href={variant.url} target="_blank" rel="noreferrer"
+                                style={{ ...mono, padding: "6px 12px", fontSize: 11, fontWeight: 700, background: G.text, color: "#fff", border: "none", borderRadius: 980, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <Check size={11} /> {opt.label}
+                              </a>
+                              <button onClick={() => removeVariant(img.id, variant.id)}
+                                title={`Remove ${opt.label} variant`}
+                                style={{ width: 24, height: 24, borderRadius: "50%", background: "transparent", border: `1px solid ${G.border}`, color: G.textTer, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                                <X size={11} />
+                              </button>
+                            </>
+                          ) : (
+                            <label style={{ ...mono, padding: "6px 12px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px dashed ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                              <Upload size={11} /> Add {opt.label}
+                              <input type="file" accept="image/*" style={{ display: "none" }}
+                                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadVariant(img.id, opt.d, f); e.target.value = ""; }} />
+                            </label>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div style={{ padding: "12px 24px", borderTop: `1px solid ${G.border}`, display: "flex", gap: 8 }}>
-                  <button onClick={() => { setFeedbackModalImageId(null); replaceImage && document.querySelector(`input[data-replace-id="${img.id}"]`)?.click(); }}
+                  <button onClick={() => setFeedbackModalImageId(null)}
                     style={{ ...mono, flex: 1, padding: "9px 14px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                     Close
                   </button>

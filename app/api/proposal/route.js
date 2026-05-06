@@ -31,16 +31,26 @@ export async function GET(request) {
       return Response.json({ success: false, error: 'slug query param is required' }, { status: 400 })
     }
 
+    // Use maybeSingle() so "no row found" returns null instead of throwing.
+    // This is the correct behavior for the slug-collision check on the create page.
     const { data, error } = await supabase
       .from('proposals')
       .select('*')
       .eq('slug', slug)
-      .single()
+      .maybeSingle()
 
-    if (error) throw error
+    if (error) {
+      console.error('Get proposal error:', error)
+      return Response.json({ success: false, error: error.message }, { status: 500 })
+    }
+
+    if (!data) {
+      return Response.json({ success: false, notFound: true })
+    }
+
     return Response.json({ success: true, proposal: data })
   } catch (error) {
-    console.error('Get proposal error:', error)
+    console.error('Get proposal exception:', error)
     return Response.json({ success: false, error: error.message }, { status: 500 })
   }
 }

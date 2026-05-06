@@ -356,12 +356,35 @@ export default function ProposalPage() {
           </div>
           <BlurReveal style={{ textAlign: "center", marginTop: 32 }}>
             <button
-              onClick={() => {
-                samples.forEach(s => {
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                const originalLabel = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = "Bundling images…";
+                try {
+                  const { default: JSZip } = await import("jszip");
+                  const zip = new JSZip();
+                  await Promise.all(samples.map(async (s, i) => {
+                    const proxied = `/api/download-image?url=${encodeURIComponent(s.src)}&name=ref.png`;
+                    const res = await fetch(proxied);
+                    if (!res.ok) return;
+                    const blob = await res.blob();
+                    zip.file(`${i + 1}-${s.category.replace(/\s+/g, "-")}.png`, blob);
+                  }));
+                  const zipBlob = await zip.generateAsync({ type: "blob" });
                   const a = document.createElement("a");
-                  a.href = `/api/download-image?url=${encodeURIComponent(s.src)}&name=${encodeURIComponent(`${s.category}.png`)}`;
+                  a.href = URL.createObjectURL(zipBlob);
+                  a.download = `alchemy-creative-bundle.zip`;
+                  document.body.appendChild(a);
                   a.click();
-                });
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(a.href);
+                } catch (err) {
+                  alert("Download failed. Try downloading images individually.");
+                } finally {
+                  btn.disabled = false;
+                  btn.innerHTML = originalLabel;
+                }
               }}
               style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
