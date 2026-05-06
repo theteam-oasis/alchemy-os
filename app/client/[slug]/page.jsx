@@ -456,7 +456,12 @@ function CreativesSection({ portal, feedback, clientName }) {
     );
   }
   return (
-    <div style={{ padding: "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
+    <div className="creatives-wrap" style={{ padding: "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .creatives-wrap { padding: 16px 12px 0 !important; }
+        }
+      `}</style>
       <SectionHeader
         title={SECTION_COPY.creatives.title}
         subtitle={SECTION_COPY.creatives.subtitle(feedback)}

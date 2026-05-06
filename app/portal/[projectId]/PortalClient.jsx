@@ -1227,9 +1227,27 @@ export default function ClientReview({ projectId: serverProjectId }) {
           <span style={{ fontSize: 13, color: G.textSec, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>{project.clientName}</span>
         </nav>
 
+        {/* Mobile-friendly: shrink the header chrome so images aren't pushed
+            way below the fold on a phone. Stats stack 2-up instead of wrap-
+            chaotic; tabs become a horizontal scroll strip with tighter padding. */}
+        <style>{`
+          @media (max-width: 768px) {
+            .pc-header { padding: 20px 0 16px !important; }
+            .pc-header h1 { font-size: 32px !important; }
+            .pc-header .pc-pill { padding: 6px 14px !important; font-size: 11px !important; margin-bottom: 14px !important; }
+            .pc-stats { gap: 8px !important; margin-bottom: 20px !important; }
+            .pc-stats > div { flex: 1 1 calc(50% - 4px) !important; min-width: 0 !important; padding: 12px 14px !important; }
+            .pc-stats > div p:first-child { font-size: 11px !important; }
+            .pc-stats > div p:last-child { font-size: 28px !important; }
+            .pc-tabs { overflow-x: auto; flex-wrap: nowrap !important; margin-bottom: 20px !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+            .pc-tabs::-webkit-scrollbar { display: none; }
+            .pc-tabs button { flex: 0 0 auto !important; padding: 8px 14px !important; font-size: 12px !important; white-space: nowrap; }
+          }
+        `}</style>
+
         {/* Header */}
-        <section style={{ textAlign: "center", padding: "48px 0 40px" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 24 }}>
+        <section className="pc-header" style={{ textAlign: "center", padding: "48px 0 40px" }}>
+          <div className="pc-pill" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 980, border: `1px solid ${G.goldBorder}`, background: G.goldSoft, marginBottom: 24 }}>
             <Sparkles size={14} style={{ color: G.gold }} />
             <span style={{ color: G.gold, fontSize: 13, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", ...mono }}>{project.clientName}&apos;s Assets</span>
           </div>
@@ -1237,7 +1255,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
         </section>
 
         {/* Stats */}
-        <div style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
+        <div className="pc-stats" style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
           {[{ label: "Total Assets", value: totalItems }, { label: "Approved", value: approvedCount, c: clr.approve }, { label: "Rejected", value: rejectedCount, c: clr.reject }, { label: "Revisions", value: revisionCount, c: clr.revision }, { label: "Feedback", value: feedbackCount }].map((s, i) => (
             <div key={i} style={{ flex: 1, minWidth: 120, background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 20, padding: "24px 28px" }}>
               <p style={{ ...mono, color: G.textSec, fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{s.label}</p>
@@ -1247,7 +1265,7 @@ export default function ClientReview({ projectId: serverProjectId }) {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, background: "#F5F5F7", padding: 4, borderRadius: 980, marginBottom: 40, border: `1px solid ${G.border}` }}>
+        <div className="pc-tabs" style={{ display: "flex", gap: 4, background: "#F5F5F7", padding: 4, borderRadius: 980, marginBottom: 40, border: `1px solid ${G.border}` }}>
           {tabs.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               style={{ ...mono, flex: 1, padding: "10px 24px", borderRadius: 980, fontSize: 14, fontWeight: activeTab === t.key ? 600 : 500, cursor: "pointer", border: "none", transition: "all 0.2s",
