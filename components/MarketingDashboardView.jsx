@@ -3616,7 +3616,7 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                           strokeWidth={1.5}
                           animationDuration={700}>
                           {trimmed.map((entry, i) => {
-                            const g = gradientForMetric(m);
+                            const g = gradientForMetric(selectedMetrics[0]);
                             const stroke = entry.fill || g[1];
                             const fill = entry.fill ? entry.fill + "22" : g[1] + "22";
                             return <Cell key={i} fill={fill} stroke={stroke} />;
@@ -3703,8 +3703,8 @@ export default function MarketingDashboardView({ data: rawIncomingData, headerBa
                       <YAxis type="category" dataKey="name" tick={{ fontSize: isMobile ? 10 : 11, fill: C.textSec, fontWeight: 500 }} tickLine={false} axisLine={false} width={isMobile ? 76 : 110} />
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
                       <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={isMobile ? 22 : 20} strokeWidth={1.5}>
-                        {stats.map((_, i) => {
-                          const g = gradientForMetric(m);
+                        {stats.map((s, i) => {
+                          const g = gradientForMetric(s.name);
                           return <Cell key={i} fill={g[1] + "22"} stroke={g[1]} />;
                         })}
                       </Bar>

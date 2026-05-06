@@ -149,37 +149,20 @@ function BlurReveal({ children, as: Tag = "div", style = {}, className = "", blu
   );
 }
 
-/* ── Lazy Wistia iframe: only loads when near viewport ── */
+/* Wistia removed for now. LazyVideo renders an inert black 9:16 placeholder
+   so the surrounding grid spacing stays the same. Swap the body for an
+   <iframe> or self-hosted <video> later when we re-enable demo videos. */
 function LazyVideo({ vid, title = "Video Ad" }) {
-  const ref = useRef(null);
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    if (!ref.current || inView) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "400px 0px" }
-    );
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [inView]);
   return (
-    <div ref={ref} style={{ position: "relative", paddingBottom: "177.78%", height: 0, background: "#0A0A0A" }}>
-      {inView && (
-        <iframe
-          src={`https://fast.wistia.net/embed/iframe/${vid}?seo=true&videoFoam=false&playerColor=000000`}
-          title={title}
-          allow="autoplay; fullscreen"
-          frameBorder="0"
-          scrolling="no"
-          loading="lazy"
-          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-        />
-      )}
+    <div style={{ position: "relative", paddingBottom: "177.78%", height: 0, background: "linear-gradient(135deg, #0A0A0A, #1D1D1F)" }}>
+      <div style={{
+        position: "absolute", inset: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: "rgba(255,255,255,0.3)", fontSize: 11, letterSpacing: "0.1em",
+        textTransform: "uppercase", fontFamily: "'Inter', sans-serif",
+      }}>
+        {title}
+      </div>
     </div>
   );
 }
