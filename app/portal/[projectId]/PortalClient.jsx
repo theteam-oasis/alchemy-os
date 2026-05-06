@@ -1327,12 +1327,17 @@ export default function ClientReview({ projectId: serverProjectId }) {
                           <ZoomIn size={14} color="#fff" />
                         </div>
                       </div>
-                      {/* Size variants. Only render the row when the team has
-                          actually attached one or more size renders. Each chip
-                          opens the variant in a new tab so the client can grab
-                          a 1080x1350 or 1080x1920 directly. */}
+                      <div style={{ padding: "8px 6px", display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button onClick={() => setItemStatus(img.id, "approved")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "approved" ? clr.approve : clr.approve + "30"}`, background: st === "approved" ? clr.approve : "transparent", color: st === "approved" ? "#fff" : clr.approve, transition: "all 0.15s" }}>Approve</button>
+                        <button onClick={() => setItemStatus(img.id, "revision")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "revision" ? clr.revision : clr.revision + "30"}`, background: st === "revision" ? clr.revision : "transparent", color: st === "revision" ? "#fff" : clr.revision, transition: "all 0.15s" }}>Revise</button>
+                        <button onClick={() => setItemStatus(img.id, "rejected")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "rejected" ? clr.reject : clr.reject + "30"}`, background: st === "rejected" ? clr.reject : "transparent", color: st === "rejected" ? "#fff" : clr.reject, transition: "all 0.15s" }}>Reject</button>
+                      </div>
+                      {/* Size variants live at the very bottom of the card so
+                          all cards' approve/revise/reject buttons stay on the
+                          same horizontal line in the grid. Only renders when
+                          variants exist. */}
                       {(img.variants || []).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "6px 6px 0", justifyContent: "center" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, padding: "0 8px 8px", justifyContent: "center" }}>
                           {img.variants.map(v => (
                             <a key={v.id} href={v.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
                               style={{ ...mono, fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 980, background: "#1D1D1F", color: "#fff", textDecoration: "none" }}
@@ -1342,11 +1347,6 @@ export default function ClientReview({ projectId: serverProjectId }) {
                           ))}
                         </div>
                       )}
-                      <div style={{ padding: "8px 6px", display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={() => setItemStatus(img.id, "approved")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "approved" ? clr.approve : clr.approve + "30"}`, background: st === "approved" ? clr.approve : "transparent", color: st === "approved" ? "#fff" : clr.approve, transition: "all 0.15s" }}>Approve</button>
-                        <button onClick={() => setItemStatus(img.id, "revision")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "revision" ? clr.revision : clr.revision + "30"}`, background: st === "revision" ? clr.revision : "transparent", color: st === "revision" ? "#fff" : clr.revision, transition: "all 0.15s" }}>Revise</button>
-                        <button onClick={() => setItemStatus(img.id, "rejected")} style={{ ...mono, flex: 1, padding: "5px 0", fontSize: 10, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${st === "rejected" ? clr.reject : clr.reject + "30"}`, background: st === "rejected" ? clr.reject : "transparent", color: st === "rejected" ? "#fff" : clr.reject, transition: "all 0.15s" }}>Reject</button>
-                      </div>
                       <VersionChain item={img} kind="image" />
                       {expandedItem === img.id && (
                         <div style={{ padding: "0 6px 8px" }}>

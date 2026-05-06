@@ -890,10 +890,16 @@ function CreateProject() {
                         )}
                       </div>
                       <FeedbackBadge status={feedback[img.id]?.status} comments={feedback[img.id]?.comments} />
-                      {/* Size-variant chips. Only render when at least one
-                          variant exists, so unconfigured cards stay clean. */}
+                      <label style={{ ...mono, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", fontSize: 10, fontWeight: 600, background: "#F5F5F7", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+                        <RefreshCw size={9} /> Replace
+                        <input type="file" accept="image/*" style={{ display: "none" }}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) replaceImage(img.id, f); e.target.value = ""; }} />
+                      </label>
+                      {/* Variant chips pinned to the very bottom of the card so
+                          all cards' Replace buttons stay on the same row in the
+                          grid. Only renders when variants exist. */}
                       {(img.variants || []).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6, justifyContent: "center" }}>
                           {img.variants.map(v => (
                             <a key={v.id} href={v.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
                               style={{ ...mono, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 980, background: G.text, color: "#fff", textDecoration: "none" }}
@@ -903,11 +909,6 @@ function CreateProject() {
                           ))}
                         </div>
                       )}
-                      <label style={{ ...mono, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", fontSize: 10, fontWeight: 600, background: "#F5F5F7", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
-                        <RefreshCw size={9} /> Replace
-                        <input type="file" accept="image/*" style={{ display: "none" }}
-                          onChange={(e) => { const f = e.target.files?.[0]; if (f) replaceImage(img.id, f); e.target.value = ""; }} />
-                      </label>
                     </div>
                   </div>
                   {/* X sits on the outer wrapper so it's never clipped by the card's overflow:hidden */}
