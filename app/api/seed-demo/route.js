@@ -149,14 +149,24 @@ async function upsertBrandIntake(clientId) {
     brand_name: "Lumen Skincare",
     tagline: "Skin that catches the light.",
     website: "https://lumenskincare.example.com",
-    story: "Lumen Skincare is a Brooklyn-based luxury skincare brand. Founded by a former esthetician who got tired of greenwashed lines that didn't work on real skin. Every formula is pH-balanced, fragrance-free, and tested on melanin-rich skin first. The brand launched in 2023 with three core SKUs and grew to a six-figure DTC business in its first year through paid social and word of mouth.",
+    industry: "Skincare / Clean beauty",
+    location: "Brooklyn, NY",
+    story: "Lumen Skincare was founded in 2023 by Mira Okafor, a former esthetician who got tired of greenwashed lines that didn't work on real skin. Every formula is pH-balanced, fragrance-free, and tested on melanin-rich skin first. The brand launched with three core SKUs and grew to a six-figure DTC business in its first year through paid social and word of mouth. Mira's thesis: most skincare is overengineered. Three products done right beats twelve done okay.",
     audience_description: "Women 28-44 in major metro areas who already use skincare but are graduating from drugstore brands to higher performance products. They read INCI lists, follow a few esthetician influencers on TikTok, and are tired of complicated 12-step routines.",
     age_range: "28-44",
     competitors: "Drunk Elephant, Topicals, Glossier, Fenty Skin, Tower 28",
     deepest_fears: "Wasting money on products that don't work. Looking older than they feel. Reactive skin that flares up from new products. Being marketed to like an idiot.",
     deepest_desires: "A simple routine that visibly works in two weeks. Skin that looks lit-from-within without makeup. Feeling like they finally found a brand that gets them.",
     objective: "Drive first-time purchases of the Glow Serum (hero SKU), then upsell into the full ritual via email + retargeting.",
+    target_audience: "Women 28-44 with combination/sensitive skin who already use skincare and are graduating from drugstore brands to performance products.",
+    campaign_goals: "Q2: Hit $200k in Glow Serum revenue. 3.0x blended ROAS on paid social. 25% lift in returning customer rate via the email-driven upsell into Renewal Cream + Active Sunscreen.",
     key_message: "Three products. One ritual. Two weeks to glow.",
+    // Product imagery for the Products card on the brand kit page.
+    product_image_urls: [
+      "https://images.pexels.com/photos/3762875/pexels-photo-3762875.jpeg?auto=compress&w=600",
+      "https://images.pexels.com/photos/4938332/pexels-photo-4938332.jpeg?auto=compress&w=600",
+      "https://images.pexels.com/photos/3735619/pexels-photo-3735619.jpeg?auto=compress&w=600",
+    ],
     unique_features: [
       "10% niacinamide + tranexamic acid (clinical-strength)",
       "Fragrance-free across the line",
@@ -190,8 +200,11 @@ async function upsertBrandIntake(clientId) {
     video_transitions: "Smooth",
     video_cuts: "Medium",
     video_notes: "Cinematic, soft natural light, 24fps look. Macro shots of texture, slow hands-on-skin pours, no speed ramps. Editorial grade — think Aesop's brand films, not Glossier's TikToks.",
-    // Brand visual identity
-    brand_colors: "Sand beige (#E8DCCB), deep terracotta (#A65A3F), soft cream (#FBF7F1), charcoal accents (#2A2826)",
+    // Brand visual identity. Stored as a comma-separated string of hex codes
+    // because the BrandKit component parses chips with the regex
+    // /^#?[0-9A-Fa-f]{3,8}$/ — wrapping codes in parens (like "(#E8DCCB)")
+    // breaks the matcher and leaves the Colors card empty.
+    brand_colors: "#E8DCCB, #A65A3F, #FBF7F1, #2A2826, #C8956D, #6B4423",
     // Spokesperson / influencer profile
     influencer_age: 32,
     influencer_gender: "female",
