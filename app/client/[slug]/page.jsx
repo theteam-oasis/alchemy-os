@@ -459,15 +459,32 @@ function CreativesSection({ portal, feedback, clientName }) {
     <div className="creatives-wrap" style={{ padding: "32px 40px 0", maxWidth: 1280, margin: "0 auto" }}>
       <style>{`
         @media (max-width: 768px) {
-          .creatives-wrap { padding: 16px 12px 0 !important; }
+          .creatives-wrap { padding: 0 !important; }
+          .creatives-wrap .creatives-outer-header { display: none !important; }
+          .creatives-wrap > .creatives-shell {
+            border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+            min-height: 0 !important;
+          }
+          .creatives-wrap .creatives-frame {
+            /* Lock the iframe to the rest of the visible viewport on mobile
+               so there's only ONE scroller. Avoids the nested-scroll glitch
+               where iOS hijacks touch events. */
+            height: calc(100vh - 64px) !important;
+            min-height: 0 !important;
+          }
         }
       `}</style>
-      <SectionHeader
-        title={SECTION_COPY.creatives.title}
-        subtitle={SECTION_COPY.creatives.subtitle(feedback)}
-      />
-      <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", minHeight: 800 }}>
+      <div className="creatives-outer-header">
+        <SectionHeader
+          title={SECTION_COPY.creatives.title}
+          subtitle={SECTION_COPY.creatives.subtitle(feedback)}
+        />
+      </div>
+      <div className="creatives-shell" style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, overflow: "hidden", minHeight: 800 }}>
         <iframe
+          className="creatives-frame"
           src={`/portal/${portal.slug}?embed=1`}
           title={`${clientName} Creatives`}
           style={{ width: "100%", height: "calc(100vh - 180px)", minHeight: 720, border: "none", display: "block" }}

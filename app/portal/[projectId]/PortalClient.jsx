@@ -1232,16 +1232,21 @@ export default function ClientReview({ projectId: serverProjectId }) {
             chaotic; tabs become a horizontal scroll strip with tighter padding. */}
         <style>{`
           @media (max-width: 768px) {
-            .pc-header { padding: 20px 0 16px !important; }
-            .pc-header h1 { font-size: 32px !important; }
-            .pc-header .pc-pill { padding: 6px 14px !important; font-size: 11px !important; margin-bottom: 14px !important; }
-            .pc-stats { gap: 8px !important; margin-bottom: 20px !important; }
-            .pc-stats > div { flex: 1 1 calc(50% - 4px) !important; min-width: 0 !important; padding: 12px 14px !important; }
+            .pc-header { padding: 18px 0 12px !important; }
+            .pc-header h1 { font-size: 28px !important; }
+            .pc-header .pc-pill { padding: 5px 12px !important; font-size: 10px !important; margin-bottom: 12px !important; }
+            /* Force a 2-column grid for the 5 stat cards. Last card spans
+               the full width so the layout is 2+2+1 cleanly. */
+            .pc-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-bottom: 20px !important; flex-wrap: initial !important; }
+            .pc-stats > div { flex: initial !important; min-width: 0 !important; padding: 12px 14px !important; }
+            .pc-stats > div:nth-child(5) { grid-column: 1 / -1; }
             .pc-stats > div p:first-child { font-size: 11px !important; }
             .pc-stats > div p:last-child { font-size: 28px !important; }
-            .pc-tabs { overflow-x: auto; flex-wrap: nowrap !important; margin-bottom: 20px !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+            /* Tabs: horizontal scroll strip with no pill background so the
+               active black tab can't overflow a rounded container. */
+            .pc-tabs { background: transparent !important; border: none !important; padding: 0 !important; gap: 8px !important; overflow-x: auto !important; flex-wrap: nowrap !important; margin-bottom: 16px !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
             .pc-tabs::-webkit-scrollbar { display: none; }
-            .pc-tabs button { flex: 0 0 auto !important; padding: 8px 14px !important; font-size: 12px !important; white-space: nowrap; }
+            .pc-tabs button { flex: 0 0 auto !important; padding: 8px 14px !important; font-size: 12px !important; white-space: nowrap; border: 1px solid #E8E8ED !important; }
           }
         `}</style>
 
