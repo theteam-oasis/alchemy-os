@@ -16,7 +16,7 @@ import SectionHeader from "@/components/SectionHeader";
 import { SECTION_COPY } from "@/lib/sectionCopy";
 import { BrandKitGrid } from "@/components/BrandKit";
 import ProductSwitcher from "@/components/ProductSwitcher";
-import { supabase } from "@/lib/supabase";
+import { supabase, uploadProductImage } from "@/lib/supabase";
 
 const G = {
   bg: "#FFFFFF", card: "#FFFFFF", cardBorder: "#E8E8ED",
@@ -1138,17 +1138,16 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                 onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
                 placeholder={`Headline ${i + 1}`}
                 style={{ ...inputBase, flex: 1 }} />
-              {availableRefImages.length > 0 && (
-                <RefImagePicker
-                  options={availableRefImages}
-                  value={headlineImageUrls?.[i] || ""}
-                  onChange={(url) => setHeadlineImageUrls((prev) => {
-                    const next = [...(prev || ["", "", "", "", ""])];
-                    next[i] = url;
-                    return next;
-                  })}
-                />
-              )}
+              <RefImagePicker
+                options={availableRefImages}
+                value={headlineImageUrls?.[i] || ""}
+                onChange={(url) => setHeadlineImageUrls((prev) => {
+                  const next = [...(prev || ["", "", "", "", ""])];
+                  next[i] = url;
+                  return next;
+                })}
+                clientId={client?.id}
+              />
             </div>
           ))}
         </div>
@@ -1265,12 +1264,18 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
 }
 
 // Compact dropdown thumbnail picker for the per-headline product reference
-// image. Shows the currently-selected thumbnail (or a "+" placeholder) and
-// pops a grid of the available product images on click. Stays small enough
-// to sit inline next to the headline input without breaking row height.
-function RefImagePicker({ options, value, onChange }) {
+// image. Always renders so the team can attach a reference even when the
+// brand kit hasn't seeded any product images yet. The popover offers:
+//   - existing options (from product.product_image_urls / brand_intake)
+//   - a "no reference" choice (X)
+//   - paste-a-URL field
+//   - upload-a-file button (writes to Supabase brand-assets bucket)
+function RefImagePicker({ options, value, onChange, clientId }) {
   const [open, setOpen] = useState(false);
+  const [pasteUrl, setPasteUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
+  const fileRef = useRef(null);
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
@@ -1278,10 +1283,24 @@ function RefImagePicker({ options, value, onChange }) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
+  const handleUpload = async (file) => {
+    if (!file || !clientId) return;
+    setUploading(true);
+    try {
+      const url = await uploadProductImage(clientId, file);
+      if (url) {
+        onChange(url);
+        setOpen(false);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
       <button onClick={() => setOpen((v) => !v)} type="button"
-        title={value ? "Change reference image" : "Pick a product reference image"}
+        title={value ? "Change reference image" : "Add a product reference image"}
         style={{
           width: 40, height: 40, padding: 0, borderRadius: 10,
           border: `1px solid ${G.border}`, background: value ? "#000" : G.bg,
@@ -1297,13 +1316,15 @@ function RefImagePicker({ options, value, onChange }) {
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 30,
           background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-          borderRadius: 12, padding: 10, width: 260,
+          borderRadius: 12, padding: 12, width: 280,
         }}>
           <p style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 8 }}>Reference image</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+
+          {/* No-reference + existing options grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
             <button onClick={() => { onChange(""); setOpen(false); }} type="button"
-              title="No reference (text only)"
-              style={{ aspectRatio: "1/1", borderRadius: 8, border: value === "" ? `2px solid ${G.ink}` : `1px solid ${G.border}`, background: G.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: G.textSec, fontSize: 18 }}>
+              title="No reference (text-only prompt)"
+              style={{ aspectRatio: "1/1", borderRadius: 8, border: value === "" ? `2px solid ${G.ink}` : `1px solid ${G.border}`, background: G.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: G.textSec }}>
               <X size={16} />
             </button>
             {options.map((url) => (
@@ -1313,6 +1334,38 @@ function RefImagePicker({ options, value, onChange }) {
               </button>
             ))}
           </div>
+
+          {options.length === 0 && (
+            <p style={{ fontSize: 11, color: G.textTer, marginBottom: 8, lineHeight: 1.5 }}>
+              No product images on file yet. Paste a URL or upload one — it&apos;ll be used as the visual reference for this headline&apos;s ads.
+            </p>
+          )}
+
+          {/* Paste URL */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            <input
+              value={pasteUrl}
+              onChange={(e) => setPasteUrl(e.target.value)}
+              placeholder="Paste image URL"
+              style={{ flex: 1, padding: "7px 10px", fontSize: 12, border: `1px solid ${G.border}`, borderRadius: 8, outline: "none", fontFamily: "'Inter', sans-serif" }}
+            />
+            <button type="button"
+              disabled={!pasteUrl.trim()}
+              onClick={() => { onChange(pasteUrl.trim()); setPasteUrl(""); setOpen(false); }}
+              style={{ padding: "7px 12px", fontSize: 12, fontWeight: 600, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: pasteUrl.trim() ? "pointer" : "not-allowed", opacity: pasteUrl.trim() ? 1 : 0.4, fontFamily: "'Inter', sans-serif" }}>
+              Use
+            </button>
+          </div>
+
+          {/* Upload file */}
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+          <button type="button"
+            disabled={uploading || !clientId}
+            onClick={() => fileRef.current?.click()}
+            style={{ width: "100%", padding: "8px 12px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 8, cursor: uploading ? "wait" : "pointer", fontFamily: "'Inter', sans-serif", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            {uploading ? <><Loader2 size={12} style={{ animation: "spinKf 1s linear infinite" }} /> Uploading…</> : <><ImageIcon size={12} /> Upload image</>}
+          </button>
         </div>
       )}
     </div>
