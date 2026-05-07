@@ -180,7 +180,63 @@ Style: photorealistic, premium, on-brand. NO headline text. NO CTAs.
 `.trim();
 }
 
-function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false }) {
+// Shot-specific ad-copy treatment block — mirrors the chunk worker so
+// per-tile regenerations carry the same DR copy + typography treatment.
+function shotTreatmentBlock(shot, headline) {
+  const SHOT = String(shot || "").toUpperCase();
+  if (SHOT.includes("BOLD CLAIM")) {
+    return `THIS IS A BOLD CLAIM AD (DR — full ad copy treatment):
+- MASSIVE bold sans headline (3-7 words) integrating with the subject. Headline: "${headline}"
+- Italic editorial serif subhead in extreme contrast.
+- Pill CTA with arrow ("Claim Yours →" / "Lock In →").
+- Small star badge or starburst die-cut tilted ~15° in brand accent ("★★★★★ 12K" / "60-DAY GUARANTEE").
+- Optional hand-drawn marker arrow / circle in pure white.
+- Brand corner marks: small wordmark top-left, URL or category top-right.
+BANNED WORDS: "Discover," "Introducing," "Welcome," "Premium quality," "Made with love," "We believe," "Crafted," "Experience the difference."`;
+  }
+  if (SHOT.includes("SOCIAL PROOF")) {
+    return `THIS IS A SOCIAL PROOF AD (DR — full ad copy treatment):
+- Handwritten-style or casual sans testimonial overlay. The HEADLINE TO USE is: "${headline}"
+- 5 filled stars in brand accent.
+- "12,847 reviews" / "Verified Buyer" / "10K+ five-star reviews" trust badge.
+- First name + city/state byline.
+- Specific CTA pill with arrow ("Try Risk-Free →" / "Get Mine →").
+- "Shot on iPhone" energy.
+BANNED WORDS: "Discover," "Introducing," "Welcome," "Premium quality," "Made with love," "We believe," "Crafted," "Experience the difference."`;
+  }
+  if (SHOT.includes("OFFER")) {
+    return `THIS IS AN OFFER AD (DR — full ad copy treatment):
+- Headline = offer as benefit. The HEADLINE TO USE is: "${headline}"
+- Price anchor visually shown (strikethrough → discount price).
+- Real urgency line in tracked caps.
+- Diagonal OFFER tape (T7).
+- Starburst die-cut badge tilted ~15° with discount %.
+- Big CTA pill with arrow.
+- Trust microcopy below.
+BANNED WORDS: "Discover," "Introducing," "Welcome," "Premium quality," "Made with love," "We believe," "Crafted," "Experience the difference."`;
+  }
+  return `THIS IS A BRAND SHOT (${SHOT || "Editorial"}) — minimal text treatment:
+- Single small italic editorial serif subhead at the bottom: "${headline}"
+- Headline lives like a magazine caption, not an ad. No CTA pill, no badge, no urgency, no diagonal tape, no starburst.
+- Tiny brand wordmark top-left or bottom-right is fine.
+- Editorial / luxury feel — Kinfolk / Wallpaper* / Vogue Italia / Nowness.
+BANNED WORDS: "Discover," "Introducing," "Welcome," "Premium quality," "Made with love," "We believe," "Crafted," "Experience the difference."`;
+}
+
+const TYPOGRAPHY_DEVICES = `LAYOUT & TYPOGRAPHY DEVICES — pick the ones that fit:
+T1. MASSIVE BOLD SANS HEADLINE that crops/wraps the subject.
+T2. ITALIC EDITORIAL SERIF SUBHEAD paired with the bold sans.
+T3. RULE-NUMBER FRAMING — small "RULE #2 ·" pre-headline.
+T4. CONTRAST-PAIR HEADLINE — two words joined by ×, +, =, /.
+T5. HAND-DRAWN MARKER ARROWS / CIRCLES in pure white.
+T6. CURVED TYPE wrapping along an arm or curve.
+T7. DIAGONAL TAPE BANNER — saturated stripe with tracked caps.
+T8. STARBURST DIE-CUT BADGE — tilted ~15°, brand accent.
+T9. PILL CTA WITH ARROW.
+T10. BRAND CORNER MARKS.
+LAYOUT: exact word count per line, hierarchy ratio, 5-8% safe margin.`;
+
+function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false, shot = "" }) {
   const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
   const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
   const audience = brand?.audience_description ? `Target audience: ${brand.audience_description}.` : "";
@@ -193,13 +249,15 @@ function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasRe
   ].filter(Boolean).join(", ");
   const spokes = spokesperson ? `Spokesperson: ${spokesperson}.` : "";
 
+  const treatment = shotTreatmentBlock(shot, headline);
+
   if (hasReferenceImage) {
     return `
-TASK: Create a high-converting social media ad using the provided reference image as the literal product.
+TASK: Create a high-converting social media ad using the provided reference image as the literal product. Apply the full Halbert/Hormozi-level direct-response copy treatment + Apple/Highsnobiety/Vogue typography craft.
 
 CRITICAL — PRODUCT FIDELITY:
 - The first input is a reference photo of the EXACT product to feature.
-- Render the product EXACTLY as shown in the reference: same shape, colors, packaging, label text, logo, material, finish, proportions.
+- Render the product EXACTLY as shown: same shape, colors, packaging, label text, logo, material, finish, proportions.
 - Do NOT redesign, restyle, recolor, or "improve" the product. Do NOT change the label, font, or branding on the product.
 - Place this exact product into the scene described below.
 
@@ -213,13 +271,20 @@ ${audience}
 ${voice}
 ${spokes}
 
-HEADLINE OVERLAY (bold, legible, well-placed for the ${aspectRatio} format):
-"${headline}"
+${treatment}
+
+${TYPOGRAPHY_DEVICES}
+
+DR COPY PRINCIPLES (Halbert/Hormozi-level):
+- Specific numbers + timeframes when possible.
+- Benefit-first, customer-voice, never feature-first.
+- Provocative direct headlines.
+- CTA = strong verb + outcome.
 
 FORMAT: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
-STYLE: photorealistic, premium, on-brand. Headline rendered as clean overlay text, readable and visually integrated, not a watermark.
+STYLE: photorealistic, premium, on-brand, scroll-stopping. Every text element rendered as part of the design with explicit hierarchy.
 
-Use attached image as product reference. Render that exact product, in the scene described above, with the headline overlaid.
+Use attached image as product reference. Render that exact product, in the scene described above, with the full ad treatment applied.
 `.trim();
   }
 
@@ -227,7 +292,7 @@ Use attached image as product reference. Render that exact product, in the scene
     ? `Product: ${product.name}${product.description ? ` — ${product.description}` : ""}.`
     : "";
   return `
-Create a high-converting social media ad creative.
+Create a high-converting social media ad creative with the full Halbert/Hormozi-level direct-response copy treatment + Apple/Highsnobiety/Vogue typography craft.
 
 ${productLine}
 ${colors}
@@ -238,11 +303,12 @@ ${spokes}
 
 Visual direction: ${imagePrompt}
 
-Headline overlay (bold, legible, well-placed for the ${aspectRatio} format): "${headline}"
+${treatment}
+
+${TYPOGRAPHY_DEVICES}
 
 Format: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
-Style: photorealistic, premium, on-brand, with the headline rendered cleanly as overlay text.
-The headline must be readable and visually integrated, not a watermark.
+Style: photorealistic, premium, on-brand, scroll-stopping.
 NOTE: No reference image attached. Render the product in precise visual detail based on the description above.
 `.trim();
 }
@@ -304,6 +370,7 @@ export async function POST(req) {
       : buildPrompt({
           headline, imagePrompt, brand, product, aspectRatio,
           hasReferenceImage: !!ref?.base64,
+          shot: body.shot || "",
         });
 
     const img = await generateWithRetries({
