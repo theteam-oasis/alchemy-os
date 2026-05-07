@@ -64,65 +64,111 @@ export default function TeamWorkspacePage() {
   // fallback in MarketingDashboardView.
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
 
+  // Two-phase Static Studio state. Preview job runs first (5 distinct scene
+  // images, no headline overlay). Each preview tile is then approved/revised/
+  // exited; approved scenes spawn a per-scene variants job that renders 5 ad
+  // variants (one per headline). Multiple variant jobs can run in parallel.
   const [genState, setGenState] = useState({
-    generating: false,
-    progress: { done: 0, total: 0 },
-    results: null, // { generated, failed, images, failures, portalSlug }
-    error: "",
     aspectRatio: "1:1",
     headlines: ["", "", "", "", ""],
-    prompts: ["", "", "", "", ""],
-    // One reference image URL per headline row. "" = no reference (fall back
-    // to text-only prompt). Picked by the team from activeProduct.product_image_urls.
-    headlineImageUrls: ["", "", "", "", ""],
-    jobId: null, // server-side job id; polling resumes any time we have one
+    productImageUrl: "", // single shared product reference for the whole batch
+
+    // Preview phase
+    previewJobId: null,
+    previewStatus: "idle",     // idle | running | done | error | cancelled
+    previewImages: [],          // 5 scene tiles
+    previewProgress: { done: 0, total: 0 },
+    previewError: "",
+    previewPrompts: [],         // populated by /preview-start return
+    previewShots: [],
+
+    // Per-scene state (sceneIndex -> { ... })
+    scenes: {},
+
+    error: "",
   });
 
-  // Resume polling whenever we have an active jobId. This effect lives at the
-  // PARENT level so polling runs regardless of which sidebar section is active
-  // — the team can leave Static Studio mid-generation and progress still ticks
-  // forward in the background. Even better: the orchestrator runs entirely on
-  // Vercel via waitUntil(), so the job keeps generating even if the user closes
-  // the browser tab. Coming back later, we'd need to restore jobId from URL/db
-  // to resume the UI — for now polling continues for the lifetime of the page.
+  // Poll the preview job. Lives at the parent so progress survives sidebar
+  // navigation. Server-side waitUntil() keeps the job running even after tab
+  // close — re-attaching on reload is left as future work.
   useEffect(() => {
-    if (!genState.jobId || !genState.generating) return;
+    if (!genState.previewJobId || genState.previewStatus !== "running") return;
     let cancelled = false;
     let timer = null;
     const tick = async () => {
       try {
-        const r = await fetch(`/api/static-generator/status?id=${genState.jobId}`);
+        const r = await fetch(`/api/static-generator/status?id=${genState.previewJobId}`);
         const j = await r.json();
         if (cancelled) return;
         if (!r.ok) {
-          setGenState((s) => ({ ...s, generating: false, error: j?.error || `HTTP ${r.status}` }));
+          setGenState((s) => ({ ...s, previewStatus: "error", previewError: j?.error || `HTTP ${r.status}` }));
           return;
         }
-        // Status can be: running | done | cancelled | error. Anything other
-        // than 'running' means stop polling and surface the result.
-        const isStillRunning = j.status === "running";
+        const isRunning = j.status === "running";
         setGenState((s) => ({
           ...s,
-          progress: { done: (j.completed || 0) + (j.failed || 0), total: j.total || s.progress.total },
-          results: {
-            generated: j.completed || 0,
-            failed: j.failed || 0,
-            images: j.images || [],
-            failures: j.failures || [],
-            portalSlug: j.portalSlug,
-          },
-          generating: isStillRunning,
-          error: j.error || s.error,
-          status: j.status,
+          previewProgress: { done: (j.completed || 0) + (j.failed || 0), total: j.total || s.previewProgress.total },
+          previewImages: j.images || s.previewImages,
+          previewStatus: isRunning ? "running" : (j.status || "done"),
+          previewError: j.error || s.previewError,
         }));
-        if (isStillRunning) timer = setTimeout(tick, 2500);
+        if (isRunning) timer = setTimeout(tick, 2500);
       } catch (e) {
         if (!cancelled) timer = setTimeout(tick, 4000);
       }
     };
     tick();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [genState.jobId, genState.generating]);
+  }, [genState.previewJobId, genState.previewStatus]);
+
+  // Poll each running variant job. We watch the set of jobIds and re-mount
+  // when they change — each running job gets its own setTimeout chain.
+  useEffect(() => {
+    const runningEntries = Object.entries(genState.scenes || {})
+      .filter(([, v]) => v?.variantJobId && v.variantStatus === "running");
+    if (runningEntries.length === 0) return;
+    const cancelledFlags = runningEntries.map(() => ({ v: false }));
+    const timers = [];
+    runningEntries.forEach(([sceneIndexStr, scene], i) => {
+      const sceneIndex = Number(sceneIndexStr);
+      const tick = async () => {
+        try {
+          const r = await fetch(`/api/static-generator/status?id=${scene.variantJobId}`);
+          const j = await r.json();
+          if (cancelledFlags[i].v) return;
+          if (!r.ok) {
+            setGenState((s) => ({
+              ...s,
+              scenes: { ...s.scenes, [sceneIndex]: { ...s.scenes[sceneIndex], variantStatus: "error", variantError: j?.error || `HTTP ${r.status}` } },
+            }));
+            return;
+          }
+          const isRunning = j.status === "running";
+          setGenState((s) => ({
+            ...s,
+            scenes: {
+              ...s.scenes,
+              [sceneIndex]: {
+                ...s.scenes[sceneIndex],
+                variantImages: j.images || s.scenes[sceneIndex]?.variantImages || [],
+                variantProgress: { done: (j.completed || 0) + (j.failed || 0), total: j.total || s.scenes[sceneIndex]?.variantProgress?.total || 5 },
+                variantStatus: isRunning ? "running" : (j.status || "done"),
+              },
+            },
+          }));
+          if (isRunning) timers[i] = setTimeout(tick, 2500);
+        } catch (e) {
+          if (!cancelledFlags[i].v) timers[i] = setTimeout(tick, 4000);
+        }
+      };
+      tick();
+    });
+    return () => {
+      cancelledFlags.forEach((f) => { f.v = true; });
+      timers.forEach((t) => t && clearTimeout(t));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Object.entries(genState.scenes || {}).filter(([, v]) => v?.variantJobId && v.variantStatus === "running").map(([k, v]) => `${k}:${v.variantJobId}`).join("|")]);
   const [loadingMsg, setLoadingMsg] = useState("Loading workspace...");
 
   // Step 1: Resolve slug → client + brand intake. Runs once when slug changes.
@@ -147,7 +193,7 @@ export default function TeamWorkspacePage() {
       // the most recent running job and re-attach the polling effect to it.
       const { data: runningJobs } = await supabase
         .from("static_gen_jobs")
-        .select("id, total, completed, failed, images, failures, status, portal_slug, aspect_ratio, error")
+        .select("id, total, completed, failed, images, failures, status, portal_slug, aspect_ratio, error, input")
         .eq("client_id", matched.id)
         .eq("status", "running")
         .order("created_at", { ascending: false })
@@ -155,21 +201,25 @@ export default function TeamWorkspacePage() {
       if (cancelled) return;
       const running = runningJobs?.[0];
       if (running) {
-        setGenState((s) => ({
-          ...s,
-          generating: true,
-          jobId: running.id,
-          aspectRatio: running.aspect_ratio || s.aspectRatio,
-          progress: { done: (running.completed || 0) + (running.failed || 0), total: running.total || 0 },
-          results: {
-            generated: running.completed || 0,
-            failed: running.failed || 0,
-            images: running.images || [],
-            failures: running.failures || [],
-            portalSlug: running.portal_slug,
-          },
-          error: running.error || "",
-        }));
+        // Re-attach polling to the running preview job. (Variant jobs aren't
+        // resumed on reload — they're scoped to the user's session approval
+        // decisions.) Phase info lives in `input.phase`; treat anything other
+        // than 'preview' as legacy and skip auto-attach.
+        const phase = running.input?.phase;
+        if (phase === "preview") {
+          setGenState((s) => ({
+            ...s,
+            previewJobId: running.id,
+            previewStatus: "running",
+            aspectRatio: running.aspect_ratio || s.aspectRatio,
+            previewProgress: { done: (running.completed || 0) + (running.failed || 0), total: running.total || 5 },
+            previewImages: running.images || [],
+            previewError: running.error || "",
+            previewPrompts: running.input?.scenePrompts || [],
+            previewShots: running.input?.shots || [],
+            productImageUrl: running.input?.productImageUrl || s.productImageUrl,
+          }));
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -915,20 +965,21 @@ function BrandLongRow({ label, value }) {
 // product's brand kit. Generated images land in the client's Creatives portal
 // for review.
 function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, setGenState, onGenerated }) {
-  // All generation state lives in the parent (TeamWorkspacePage) so navigating
-  // to other sections mid-generation doesn't reset progress or cancel chunks.
-  const { headlines, prompts, aspectRatio, generating, progress, results, error, headlineImageUrls = ["", "", "", "", ""] } = genState;
+  const {
+    headlines, aspectRatio, productImageUrl,
+    previewJobId, previewStatus, previewImages, previewProgress, previewError, previewPrompts, previewShots,
+    scenes, error,
+  } = genState;
+  const generating = previewStatus === "running";
+
   const patch = (p) => setGenState((s) => ({ ...s, ...p }));
   const setHeadlines = (updater) => setGenState((s) => ({ ...s, headlines: typeof updater === "function" ? updater(s.headlines) : updater }));
-  const setPrompts = (updater) => setGenState((s) => ({ ...s, prompts: typeof updater === "function" ? updater(s.prompts) : updater }));
-  const setHeadlineImageUrls = (updater) => setGenState((s) => ({ ...s, headlineImageUrls: typeof updater === "function" ? updater(s.headlineImageUrls || ["", "", "", "", ""]) : updater }));
   const setAspectRatio = (v) => patch({ aspectRatio: v });
   const setError = (v) => patch({ error: v });
+  const setProductImageUrl = (v) => patch({ productImageUrl: v });
 
-  // Available product images for the picker. Drawn from the active product's
-  // product_image_urls; falls back to brand_intake.product_image_urls when a
-  // product hasn't seeded its own list yet. Plus any user-uploaded images
-  // added during this session (so cycling through includes fresh uploads).
+  // Available product images for the single shared reference picker. Same
+  // sources as before: active product → brand intake → session uploads.
   const [sessionUploads, setSessionUploads] = useState([]);
   const availableRefImages = [
     ...((activeProduct?.product_image_urls?.length
@@ -938,168 +989,150 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
     ...sessionUploads,
   ];
 
-  // Auto-populate: when the brand kit / product has product images and the
-  // team hasn't picked anything yet, default ALL headline rows to the first
-  // image. This makes the reference image opt-out (cycle / X) instead of
-  // opt-in. Triggers when availableRefImages first becomes non-empty.
+  // Auto-populate the reference image with the first available product photo
+  // when nothing's been picked yet. Reference is opt-out (cycle / X / paste).
   useEffect(() => {
     if (availableRefImages.length === 0) return;
-    const allEmpty = (headlineImageUrls || []).every((u) => !u);
-    if (allEmpty) {
-      setHeadlineImageUrls(headlines.map(() => availableRefImages[0]));
-    }
-    // We only want this to fire when the available list itself changes, not
-    // on every keystroke in the headlines.
+    if (!productImageUrl) setProductImageUrl(availableRefImages[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableRefImages.join("|")]);
 
-  // Cycle a single row's reference image through the available list. dir = +1
-  // for next, -1 for prev. Wraps around at the ends.
-  const cycleRefImage = (rowIndex, dir) => {
-    const list = availableRefImages;
-    if (list.length === 0) return;
-    const current = headlineImageUrls?.[rowIndex] || "";
-    const idx = list.indexOf(current);
-    const nextIdx = idx < 0
-      ? (dir > 0 ? 0 : list.length - 1)
-      : (idx + dir + list.length) % list.length;
-    setHeadlineImageUrls((prev) => {
-      const next = [...(prev || ["", "", "", "", ""])];
-      next[rowIndex] = list[nextIdx];
-      return next;
-    });
+  const cycleProductImage = (dir) => {
+    if (availableRefImages.length === 0) return;
+    const idx = availableRefImages.indexOf(productImageUrl);
+    const nextIdx = idx < 0 ? (dir > 0 ? 0 : availableRefImages.length - 1) : (idx + dir + availableRefImages.length) % availableRefImages.length;
+    setProductImageUrl(availableRefImages[nextIdx]);
   };
 
-  // Per-tile regenerate state. Each tile id maps to an in-flight AbortController
-  // so a re-click cancels the previous attempt. Mirrors the proposal/create
-  // pattern: AbortError on the cancelled fetch is silently swallowed and only
-  // the latest controller's response is allowed to clear loading state.
-  const [tileRegenerating, setTileRegenerating] = useState({}); // { [imageId]: bool }
-  const tileAbortRef = useRef({});                               // { [imageId]: AbortController }
   const [stopping, setStopping] = useState(false);
+  const [revisingPreview, setRevisingPreview] = useState({}); // { [sceneIndex]: true }
+  const previewAbortRef = useRef({});
 
   const validHeadlines = headlines.map((h) => h.trim()).filter(Boolean);
-  const validPrompts = prompts.map((p) => p.trim()).filter(Boolean);
-  // If both fields empty, the API derives 5 of each from the brand kit -> 25 ads.
-  // If only one side is empty, the API still defaults the missing side to 5.
-  const effectiveHeadlines = validHeadlines.length || 5;
-  const effectivePrompts = validPrompts.length || 5;
-  const totalAds = effectiveHeadlines * effectivePrompts;
-  const usingDefaults = validHeadlines.length === 0 && validPrompts.length === 0;
 
-  // Kick off a server-orchestrated job. The /start endpoint creates a job row,
-  // returns immediately, and uses Vercel's waitUntil() to fan out chunk work
-  // server-side. That means generation continues even if the team backgrounds
-  // the tab, switches tabs, or closes the browser entirely. The parent's
-  // polling effect (in TeamWorkspacePage) reads /status?id= every ~2.5s.
-  const generate = async () => {
+  // PHASE 1 — Generate 5 distinct preview scenes via Claude + Gemini. Each
+  // preview is a clean scene (no headline, no CTAs) that the team approves
+  // before we spend credits on the variant pass.
+  const generatePreviews = async () => {
     setGenState((s) => ({
       ...s,
-      generating: true,
+      previewJobId: null,
+      previewStatus: "running",
+      previewImages: [],
+      previewProgress: { done: 0, total: 5 },
+      previewError: "",
+      previewPrompts: [],
+      previewShots: [],
+      scenes: {},
       error: "",
-      results: { generated: 0, failed: 0, images: [], failures: [], portalSlug: null },
-      progress: { done: 0, total: totalAds },
-      jobId: null,
     }));
     try {
-      // Send the full 5-position arrays for both headlines AND refs so they
-      // stay positionally aligned. Blank headlines are auto-derived server
-      // side at the matching index, and refs[i] applies to that derived
-      // headline. Without this, refs got silently dropped any time the team
-      // left headlines blank (the most common path — defaults from brand kit).
-      const fullHeadlines = [...headlines];
-      const fullRefs = [...(headlineImageUrls || ["", "", "", "", ""])];
-      while (fullRefs.length < fullHeadlines.length) fullRefs.push("");
-      const res = await fetch("/api/static-generator/start", {
+      const res = await fetch("/api/static-generator/preview-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: client.id,
           productId: activeProduct?.id || null,
-          // Send full 5-position arrays so server can pad blanks at the right
-          // index AND keep refs aligned positionally.
-          headlines: fullHeadlines,
-          imagePrompts: prompts,
-          headlineImageUrls: fullRefs,
           aspectRatio,
+          productImageUrl: productImageUrl || "",
         }),
       });
       const text = await res.text();
       let data;
-      try { data = JSON.parse(text); }
-      catch { data = { error: `Server returned non-JSON (HTTP ${res.status}).` }; }
+      try { data = JSON.parse(text); } catch { data = { error: `Server returned non-JSON (HTTP ${res.status}).` }; }
       if (!res.ok || !data.jobId) {
-        setGenState((s) => ({ ...s, generating: false, error: data?.error || `HTTP ${res.status}` }));
+        setGenState((s) => ({ ...s, previewStatus: "error", previewError: data?.error || `HTTP ${res.status}` }));
         return;
       }
-      // Hand off to the polling effect by setting jobId.
       setGenState((s) => ({
         ...s,
-        jobId: data.jobId,
-        progress: { done: 0, total: data.total || totalAds },
+        previewJobId: data.jobId,
+        previewProgress: { done: 0, total: data.total || 5 },
+        previewPrompts: data.prompts || [],
+        previewShots: data.shots || [],
       }));
     } catch (e) {
-      setGenState((s) => ({ ...s, generating: false, error: e.message || "Network error" }));
+      setGenState((s) => ({ ...s, previewStatus: "error", previewError: e.message || "Network error" }));
     }
   };
 
-  // Stop the in-flight job. Writes status='cancelled' to the job row; the
-  // chunk worker checks status at the top of each chunk and bails out.
-  // In-flight Gemini calls already mid-fetch will still finish (we don't
-  // hard-abort to avoid orphaned uploads), but no new tasks will start.
-  const stop = async () => {
-    if (!genState.jobId) return;
-    setStopping(true);
-    try {
-      await fetch("/api/static-generator/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: genState.jobId }),
-      });
-      // Optimistically flip generating off so the UI is responsive; the
-      // polling effect will pick up the real 'cancelled' status next tick.
-      setGenState((s) => ({ ...s, generating: false, status: "cancelled" }));
-    } catch (e) {
-      setError(`Stop failed: ${e.message}`);
-    } finally {
-      setStopping(false);
-    }
-  };
-
-  // Regenerate a single tile (one cell of the headline × prompt grid). Mirrors
-  // the proposal/create pattern: AbortController per tile, re-click cancels
-  // the in-flight one, only the latest controller is allowed to clear state.
-  const regenerateTile = async (img) => {
-    if (!img?.id) return;
-    // Recover headline + imagePrompt from the image name we wrote on save.
-    // Format: `${headline.slice(0,30)} - ${imagePrompt.slice(0,30)}.{ext}`
-    const baseName = String(img.name || "").replace(/\.(png|jpg|webp)$/i, "");
-    const dashIdx = baseName.indexOf(" - ");
-    const headlineSeed = dashIdx > 0 ? baseName.slice(0, dashIdx) : "";
-    const promptSeed = dashIdx > 0 ? baseName.slice(dashIdx + 3) : "";
-
-    // Find best matches in current state so the prompts are full-length, not
-    // the 30-char truncations stored in the filename.
-    const fullHeadline = headlines.find((h) => h && h.trim().startsWith(headlineSeed.trim().slice(0, 25))) || headlineSeed;
-    const fullPrompt = prompts.find((p) => p && p.trim().startsWith(promptSeed.trim().slice(0, 25))) || promptSeed;
-
-    if (!fullHeadline || !fullPrompt) {
-      setError("Couldn't recover this tile's headline/prompt to regenerate.");
+  // PHASE 2 — Approve a scene → kick off variant generation (1 image per
+  // headline overlaid on the same scene). Spawns its own job; multiple scene
+  // approvals run their variant jobs in parallel.
+  const approveScene = async (sceneImg) => {
+    const sceneIndex = sceneImg.sceneIndex ?? null;
+    const scenePrompt = sceneImg.scenePrompt || previewPrompts?.[sceneIndex] || "";
+    const shot = sceneImg.shot || previewShots?.[sceneIndex] || "";
+    if (!scenePrompt) {
+      setError("Couldn't recover scene prompt for approval.");
       return;
     }
+    // Optimistically mark scene as approving
+    setGenState((s) => ({
+      ...s,
+      scenes: {
+        ...s.scenes,
+        [sceneIndex]: {
+          ...s.scenes[sceneIndex],
+          action: "approved",
+          variantStatus: "running",
+          variantJobId: null,
+          variantImages: [],
+          variantProgress: { done: 0, total: 5 },
+          variantError: "",
+          scenePrompt, shot,
+          previewUrl: sceneImg.url,
+        },
+      },
+    }));
+    try {
+      const res = await fetch("/api/static-generator/approve-scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: client.id,
+          productId: activeProduct?.id || null,
+          scenePrompt, shot,
+          headlines: validHeadlines.length ? validHeadlines : [],
+          aspectRatio,
+          productImageUrl: productImageUrl || "",
+          parentJobId: previewJobId || null,
+          approvedSceneIndex: sceneIndex,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.jobId) {
+        setGenState((s) => ({
+          ...s,
+          scenes: { ...s.scenes, [sceneIndex]: { ...s.scenes[sceneIndex], variantStatus: "error", variantError: data?.error || `HTTP ${res.status}` } },
+        }));
+        return;
+      }
+      setGenState((s) => ({
+        ...s,
+        scenes: { ...s.scenes, [sceneIndex]: { ...s.scenes[sceneIndex], variantJobId: data.jobId } },
+      }));
+    } catch (e) {
+      setGenState((s) => ({
+        ...s,
+        scenes: { ...s.scenes, [sceneIndex]: { ...s.scenes[sceneIndex], variantStatus: "error", variantError: e.message || "Network error" } },
+      }));
+    }
+  };
 
-    // Pick the reference image for this headline (if any)
-    const headlineIndex = headlines.findIndex((h) => h && h === fullHeadline);
-    const referenceImageUrl = headlineIndex >= 0 ? (headlineImageUrls?.[headlineIndex] || "") : "";
-
-    // Cancel any in-flight regen for this tile
-    if (tileAbortRef.current[img.id]) {
-      try { tileAbortRef.current[img.id].abort(); } catch {}
+  // Revise a single preview scene — regenerate just that one preview with
+  // the same scene prompt but a fresh attempt. Uses /regenerate-one with
+  // headline="" so the preview stays scene-only.
+  const revisePreview = async (sceneImg) => {
+    const sceneIndex = sceneImg.sceneIndex;
+    const scenePrompt = sceneImg.scenePrompt || previewPrompts?.[sceneIndex] || "";
+    if (!scenePrompt) { setError("Couldn't recover scene prompt to revise."); return; }
+    if (previewAbortRef.current[sceneIndex]) {
+      try { previewAbortRef.current[sceneIndex].abort(); } catch {}
     }
     const ac = new AbortController();
-    tileAbortRef.current[img.id] = ac;
-
-    setTileRegenerating((m) => ({ ...m, [img.id]: true }));
+    previewAbortRef.current[sceneIndex] = ac;
+    setRevisingPreview((m) => ({ ...m, [sceneIndex]: true }));
     setError("");
     try {
       const res = await fetch("/api/static-generator/regenerate-one", {
@@ -1109,30 +1142,61 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
         body: JSON.stringify({
           clientId: client.id,
           productId: activeProduct?.id || null,
-          headline: fullHeadline,
-          imagePrompt: fullPrompt,
-          imageId: img.id,
+          headline: "", // preview = no headline
+          imagePrompt: scenePrompt,
+          imageId: sceneImg.id,
           aspectRatio,
-          referenceImageUrl,
-          jobId: genState.jobId || null,
+          referenceImageUrl: productImageUrl || "",
+          jobId: previewJobId,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      // Swap the tile in local state
-      setGenState((s) => {
-        const list = s.results?.images || [];
-        const next = list.map((it) => (it.id === data.image.id ? data.image : it));
-        return { ...s, results: { ...s.results, images: next } };
-      });
+      setGenState((s) => ({
+        ...s,
+        previewImages: (s.previewImages || []).map((it) => (it.id === data.image.id ? { ...data.image, sceneIndex, shot: sceneImg.shot, scenePrompt } : it)),
+      }));
     } catch (err) {
-      if (err?.name === "AbortError") return; // newer click took over
-      setError(`Regenerate failed: ${err.message}`);
+      if (err?.name === "AbortError") return;
+      setError(`Revise failed: ${err.message}`);
     } finally {
-      if (tileAbortRef.current[img.id] === ac) {
-        setTileRegenerating((m) => { const n = { ...m }; delete n[img.id]; return n; });
-        delete tileAbortRef.current[img.id];
+      if (previewAbortRef.current[sceneIndex] === ac) {
+        setRevisingPreview((m) => { const n = { ...m }; delete n[sceneIndex]; return n; });
+        delete previewAbortRef.current[sceneIndex];
       }
+    }
+  };
+
+  // Exit a scene — just mark it skipped in local state, no API call. The
+  // preview tile stays visible but greyed out; no variant job is launched.
+  const exitScene = (sceneImg) => {
+    const sceneIndex = sceneImg.sceneIndex;
+    setGenState((s) => ({
+      ...s,
+      scenes: { ...s.scenes, [sceneIndex]: { ...(s.scenes[sceneIndex] || {}), action: "exited" } },
+    }));
+  };
+
+  // Stop the in-flight job. Writes status='cancelled' to the job row; the
+  // chunk worker checks status at the top of each chunk and bails out.
+  // In-flight Gemini calls already mid-fetch will still finish (we don't
+  // hard-abort to avoid orphaned uploads), but no new tasks will start.
+  // Stop the in-flight preview job. Variant jobs (per-scene) keep running —
+  // user can stop those individually if needed (future).
+  const stop = async () => {
+    if (!previewJobId) return;
+    setStopping(true);
+    try {
+      await fetch("/api/static-generator/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: previewJobId }),
+      });
+      setGenState((s) => ({ ...s, previewStatus: "cancelled" }));
+    } catch (e) {
+      setError(`Stop failed: ${e.message}`);
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -1161,55 +1225,45 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
         </div>
       )}
 
-      {/* Headlines */}
+      {/* Reference image — single shared product photo for all 5 previews */}
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 16 }}>
-        <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Headlines <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: G.textTer, marginLeft: 6 }}>optional</span></p>
-        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 12 }}>
-          Leave blank and we&apos;ll derive 5 from the brand kit. Anything you write here gives more control.
+        <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Product reference</p>
+        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>
+          Gemini uses this as the literal product in every generated ad. Cycle through your brand-kit photos or upload your own.
         </p>
-        {/* Column headers so the per-row reference image control is unmissable */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8, paddingLeft: 2 }}>
-          <p style={{ flex: 1, fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>Headline</p>
-          <p style={{ width: 100, textAlign: "center", fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
-            Reference image
-          </p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {headlines.map((h, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "stretch" }}>
-              <input value={h}
-                onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
-                placeholder={`Headline ${i + 1}`}
-                style={{ ...inputBase, flex: 1 }} />
-              <RefImageRow
-                rowIndex={i}
-                options={availableRefImages}
-                value={headlineImageUrls?.[i] || ""}
-                onChange={(url) => setHeadlineImageUrls((prev) => {
-                  const next = [...(prev || ["", "", "", "", ""])];
-                  next[i] = url;
-                  return next;
-                })}
-                onUploaded={(url) => setSessionUploads((prev) => prev.includes(url) ? prev : [...prev, url])}
-                onCycle={(dir) => cycleRefImage(i, dir)}
-                clientId={client?.id}
-              />
-            </div>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <RefImageRow
+            rowIndex={0}
+            options={availableRefImages}
+            value={productImageUrl || ""}
+            onChange={(url) => setProductImageUrl(url)}
+            onUploaded={(url) => setSessionUploads((prev) => prev.includes(url) ? prev : [...prev, url])}
+            onCycle={cycleProductImage}
+            clientId={client?.id}
+          />
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 13, color: G.text, fontWeight: 600, marginBottom: 4 }}>
+              {productImageUrl ? "Reference set" : "No reference (text-only)"}
+            </p>
+            <p style={{ fontSize: 11, color: G.textTer }}>
+              {availableRefImages.length} image{availableRefImages.length === 1 ? "" : "s"} on file{sessionUploads.length > 0 ? ` (incl. ${sessionUploads.length} fresh upload${sessionUploads.length === 1 ? "" : "s"})` : ""}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Image prompts */}
+      {/* Headlines (used in phase 2 — one per variant) */}
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 16 }}>
-        <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Image direction <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: G.textTer, marginLeft: 6 }}>optional</span></p>
-        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>Leave blank and we&apos;ll derive 5 visuals from the brand kit (spokesperson, colors, mood). Or write your own for more control.</p>
+        <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Headlines <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: G.textTer, marginLeft: 6 }}>5 variants per approved scene</span></p>
+        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>
+          Used after you approve a preview. Each approved scene renders 5 ad variants — one per headline. Leave blank and we&apos;ll fill from the brand kit.
+        </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {prompts.map((p, i) => (
-            <textarea key={i} value={p}
-              onChange={(e) => setPrompts((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
-              placeholder={`Visual ${i + 1}`}
-              rows={2}
-              style={{ ...inputBase, resize: "vertical", lineHeight: 1.5 }} />
+          {headlines.map((h, i) => (
+            <input key={i} value={h}
+              onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
+              placeholder={`Headline ${i + 1}`}
+              style={inputBase} />
           ))}
         </div>
       </div>
@@ -1217,14 +1271,12 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       {/* Format + generate row */}
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div>
-          <p style={{ ...hd, fontSize: 18, color: G.text, marginBottom: 6 }}>Ready to generate</p>
+          <p style={{ ...hd, fontSize: 18, color: G.text, marginBottom: 6 }}>Phase 1 · Preview</p>
           <p style={{ fontSize: 12, color: G.textSec }}>
-            {effectiveHeadlines} headline{effectiveHeadlines === 1 ? "" : "s"} × {effectivePrompts} visual{effectivePrompts === 1 ? "" : "s"} = <b>{totalAds}</b> ad{totalAds === 1 ? "" : "s"}
-            {usingDefaults && <span style={{ color: G.textTer }}> · using brand-kit defaults</span>}
+            5 distinct on-brand scenes (Bold Claim · Product Hero · Social Proof · Editorial · Lifestyle) — review before spending credits on the full batch.
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {/* Aspect ratio toggle */}
           <div style={{ display: "flex", gap: 3, background: "#F5F5F7", padding: 3, borderRadius: 980, border: `1px solid ${G.border}` }}>
             {[{ v: "1:1", l: "1:1" }, { v: "9:16", l: "9:16" }, { v: "16:9", l: "16:9" }].map((r) => (
               <button key={r.v} onClick={() => setAspectRatio(r.v)}
@@ -1237,68 +1289,149 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           {generating ? (
             <>
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 980, opacity: 0.55, fontFamily: "'Inter', sans-serif" }}>
-                <Loader2 size={14} style={{ animation: "spinKf 1s linear infinite" }} /> {progress.done}/{progress.total || totalAds}...
+                <Loader2 size={14} style={{ animation: "spinKf 1s linear infinite" }} /> {previewProgress.done}/{previewProgress.total || 5}...
               </div>
               <button onClick={stop} disabled={stopping}
-                title="Stop the running generation"
+                title="Stop the preview generation"
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 18px", fontSize: 13, fontWeight: 600, background: "transparent", color: G.reject, border: `1px solid ${G.reject}40`, borderRadius: 980, cursor: stopping ? "not-allowed" : "pointer", opacity: stopping ? 0.55 : 1, fontFamily: "'Inter', sans-serif" }}>
                 <X size={14} /> {stopping ? "Stopping…" : "Stop"}
               </button>
             </>
           ) : (
-            <button onClick={generate}
+            <button onClick={generatePreviews}
               style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-              <Wand2 size={14} /> Generate {totalAds} ads
+              <Wand2 size={14} /> Generate 5 previews
             </button>
           )}
         </div>
       </div>
 
-      {error && (
+      {(error || previewError) && (
         <div style={{ padding: 16, marginBottom: 20, background: "#FEEBEC", border: `1px solid ${G.reject}40`, borderRadius: 12 }}>
-          <p style={{ fontSize: 13, color: G.reject, margin: 0 }}>❌ {error}</p>
+          <p style={{ fontSize: 13, color: G.reject, margin: 0 }}>{error || previewError}</p>
         </div>
       )}
 
-      {/* Results */}
-      {results && (
-        <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Generated</p>
-              <p style={{ fontSize: 12, color: G.textSec }}>
-                {results.generated} succeeded · {results.failed > 0 ? `${results.failed} failed · ` : ""}all queued in the client&apos;s Creatives portal.
-              </p>
-            </div>
-            {!generating && (
+      {/* Preview tiles — 5 scene previews + Approve / Revise / Exit per tile */}
+      {(previewImages?.length > 0 || generating) && (
+        <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Preview scenes</p>
+            <p style={{ fontSize: 12, color: G.textSec }}>
+              Approve a scene to render 5 ad variants (one per headline). Revise to regenerate. Exit to skip.
+            </p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
+            {Array.from({ length: 5 }).map((_, idx) => {
+              const img = previewImages.find((i) => i.sceneIndex === idx) || null;
+              const sceneState = scenes?.[idx] || {};
+              const isExited = sceneState.action === "exited";
+              const isApproved = sceneState.action === "approved";
+              const isRevising = !!revisingPreview[idx];
+              const shotLabel = img?.shot || previewShots?.[idx] || `Scene ${idx + 1}`;
+              return (
+                <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8, opacity: isExited ? 0.45 : 1 }}>
+                  <p style={{ fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shotLabel}</p>
+                  <div style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${isApproved ? G.success : G.border}` }}>
+                    {img?.url ? (
+                      <img src={img.url} alt={shotLabel} style={{ width: "100%", height: "100%", objectFit: "cover", filter: isRevising ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s" }} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer }}>
+                        <Loader2 size={20} style={{ animation: "spinKf 1s linear infinite" }} />
+                      </div>
+                    )}
+                    {isRevising && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                        Revising…
+                      </div>
+                    )}
+                    {isApproved && (
+                      <div style={{ position: "absolute", top: 6, left: 6, padding: "4px 8px", fontSize: 10, fontWeight: 700, color: "#fff", background: G.success, borderRadius: 999, letterSpacing: 0.3 }}>
+                        APPROVED
+                      </div>
+                    )}
+                  </div>
+                  {/* Action buttons */}
+                  {img?.url && !isExited && !isApproved && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => approveScene(img)}
+                        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 10px", fontSize: 12, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        <Check size={12} /> Approve · 5 ads
+                      </button>
+                      <button onClick={() => revisePreview(img)}
+                        title="Regenerate just this preview"
+                        disabled={isRevising}
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 10px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 8, cursor: isRevising ? "wait" : "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        <RefreshCw size={12} />
+                      </button>
+                      <button onClick={() => exitScene(img)}
+                        title="Skip this scene"
+                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 10px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                  {isExited && (
+                    <button onClick={() => setGenState((s) => ({ ...s, scenes: { ...s.scenes, [idx]: { ...(s.scenes[idx] || {}), action: undefined } } }))}
+                      style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px dashed ${G.border}`, borderRadius: 8, cursor: "pointer" }}>
+                      Skipped — restore
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Variant grids — one per approved scene */}
+          {Object.entries(scenes || {}).filter(([, v]) => v?.action === "approved").map(([sceneIndexStr, sceneState]) => {
+            const sceneIndex = Number(sceneIndexStr);
+            const shotLabel = previewShots?.[sceneIndex] || `Scene ${sceneIndex + 1}`;
+            const variantImages = sceneState.variantImages || [];
+            const status = sceneState.variantStatus;
+            return (
+              <div key={sceneIndex} style={{ marginTop: 32, paddingTop: 24, borderTop: `1px solid ${G.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <p style={{ ...hd, fontSize: 18, color: G.text, marginBottom: 2 }}>{shotLabel} · 5 ad variants</p>
+                    <p style={{ fontSize: 12, color: G.textSec }}>
+                      {status === "running"
+                        ? <>Rendering… <Loader2 size={11} style={{ display: "inline", verticalAlign: "middle", animation: "spinKf 1s linear infinite" }} /> {sceneState.variantProgress?.done || 0}/{sceneState.variantProgress?.total || 5}</>
+                        : status === "done"
+                          ? `${variantImages.length} variants ready in the Creatives portal.`
+                          : status === "error"
+                            ? <span style={{ color: G.reject }}>{sceneState.variantError}</span>
+                            : "—"
+                      }
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
+                  {Array.from({ length: 5 }).map((_, vi) => {
+                    const variant = variantImages.find((it) => it.headlineIndex === vi) || variantImages[vi];
+                    return (
+                      <div key={vi} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
+                        {variant?.url ? (
+                          <img src={variant.url} alt={variant.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 11 }}>
+                            {status === "running" ? <Loader2 size={16} style={{ animation: "spinKf 1s linear infinite" }} /> : "—"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* View in Creatives — surfaces once any variant work has happened */}
+          {!generating && (previewImages?.length > 0 || Object.keys(scenes || {}).length > 0) && (
+            <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => onGenerated?.()}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 12, fontWeight: 600, color: "#fff", background: G.ink, border: "none", borderRadius: 980, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
                 View in Creatives <ArrowRight size={13} />
               </button>
-            )}
-          </div>
-          {results.images?.length > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-              {results.images.map((img, i) => {
-                const busy = !!tileRegenerating[img.id];
-                return (
-                  <div key={img.id || i} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
-                    <img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover", filter: busy ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s" }} />
-                    {/* Regenerate this tile */}
-                    <button onClick={() => regenerateTile(img)}
-                      title="Regenerate this image"
-                      disabled={busy}
-                      style={{ position: "absolute", top: 6, right: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: busy ? "wait" : "pointer", backdropFilter: "blur(8px)" }}>
-                      <RefreshCw size={13} style={busy ? { animation: "spinKf 1s linear infinite" } : undefined} />
-                    </button>
-                    {busy && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                        Regenerating…
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>

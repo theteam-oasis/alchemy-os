@@ -62,6 +62,9 @@ export async function GET(req) {
       portalId: job.portal_id,
       aspectRatio: job.aspect_ratio,
       error: job.error,
+      // Phase metadata (preview / variants / cartesian + scene prompts +
+      // headlines, etc). Tolerates missing column — undefined → null.
+      input: job.input || null,
       done: job.status !== "running",
     });
   } catch (e) {

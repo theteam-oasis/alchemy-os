@@ -227,6 +227,63 @@ function deriveDefaultPrompts(brand, product) {
   ];
 }
 
+// Preview-phase prompt: scene-only, NO headline overlay, NO ad copy. The
+// approved scene gets re-run in the variants phase with each headline.
+function buildPreviewPrompt({ imagePrompt, brand, product, aspectRatio, hasReferenceImage = false, shot = "" }) {
+  const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
+  const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
+  const audience = brand?.audience_description ? `Target audience: ${brand.audience_description}.` : "";
+  const voice = brand?.voice_style?.length ? `Tone of voice: ${brand.voice_style.join(", ")}.` : "";
+  const shotLine = shot ? `Shot type: ${shot}.` : "";
+
+  if (hasReferenceImage) {
+    return `
+TASK: Create a high-quality preview scene image for static social ad approval. NO headline overlay, NO ad copy text — just the scene that an ad will be built on top of.
+
+CRITICAL — PRODUCT FIDELITY:
+- The first input is a reference photo of the EXACT product to feature.
+- Render the product EXACTLY as shown in the reference: same shape, colors, packaging, label text, logo, material, finish, proportions.
+- Do NOT redesign, restyle, recolor, or "improve" the product. Do NOT change the label, font, or branding.
+- Place this exact product into the scene described below.
+
+SCENE:
+${imagePrompt}
+
+BRAND CONTEXT:
+${shotLine}
+${colors}
+${personality}
+${audience}
+${voice}
+
+FORMAT: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+STYLE: photorealistic, premium, on-brand. NO headline text. NO CTAs. NO badges. NO ad copy of any kind. Brand wordmark in a corner is fine.
+
+Use attached image as product reference. Render that exact product in the scene described above.
+`.trim();
+  }
+
+  const productLine = product
+    ? `Product: ${product.name}${product.description ? ` — ${product.description}` : ""}.`
+    : "";
+  return `
+Create a high-quality preview scene image for static social ad approval. NO headline overlay, NO ad copy text — just the scene.
+
+${productLine}
+${shotLine}
+${colors}
+${personality}
+${audience}
+${voice}
+
+Scene: ${imagePrompt}
+
+Format: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+Style: photorealistic, premium, on-brand. NO headline text. NO CTAs. NO badges.
+NOTE: No reference image attached. Render the product in precise visual detail based on the description above.
+`.trim();
+}
+
 function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false }) {
   const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
   const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
@@ -349,22 +406,30 @@ export async function POST(req) {
       // that image as visual reference. Picked from product.product_image_urls
       // in the UI. Length matches `headlines`; "" / null = no reference.
       headlineImageUrls = [],
+      // Two-phase flow: phase = 'preview' | 'variants' | 'cartesian' (legacy).
+      phase = "cartesian",
+      // Preview-phase inputs:
+      scenePrompts = [],
+      shots = [],
+      productImageUrl = "",
+      // Variants-phase inputs:
+      scenePrompt = "",
+      shot = "",
     } = body || {};
 
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
-    // Trim but DO NOT filter out blanks — we'll fill blanks with derived /
-    // generic values at the SAME index so the headlineImageUrls array stays
-    // positionally aligned with whatever ends up at that headline slot.
-    let validHeadlines = headlines.map((h) => String(h || "").trim());
-    let validPrompts = imagePrompts.map((p) => String(p || "").trim()).filter(Boolean);
 
-    // Brand kit + product context
+    // Brand kit + product context (used by every phase)
     const [{ data: brand }, { data: product }] = await Promise.all([
       supabase.from("brand_intake").select("*").eq("client_id", clientId).maybeSingle(),
       productId
         ? supabase.from("products").select("*").eq("id", productId).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
+
+    // ─── Phase-aware variables (cartesian path populates them below) ───
+    let validHeadlines = headlines.map((h) => String(h || "").trim());
+    let validPrompts = imagePrompts.map((p) => String(p || "").trim()).filter(Boolean);
 
     // Fill in defaults from the brand kit when the team hasn't provided
     // headlines or prompts. Then PAD to exactly 5 with generic fallbacks so
@@ -386,26 +451,29 @@ export async function POST(req) {
       "In-context use shot, candid feel, golden hour",
     ];
 
-    // Fill blank headline slots in place from brand-kit / generics so
-    // positions 0..4 are preserved and headlineImageUrls[i] still refers to
-    // the same slot. Pad to 5 if the array came in short.
-    const derivedHeadlines = deriveDefaultHeadlines(brand, product);
-    const derivedQueue = [...derivedHeadlines, ...GENERIC_HEADLINES.filter((g) => !derivedHeadlines.includes(g))];
-    while (validHeadlines.length < 5) validHeadlines.push("");
-    for (let i = 0; i < validHeadlines.length; i++) {
-      if (!validHeadlines[i]) {
-        const used = new Set(validHeadlines.filter(Boolean));
-        const next = derivedQueue.find((g) => !used.has(g)) || GENERIC_HEADLINES[i % GENERIC_HEADLINES.length];
-        validHeadlines[i] = next;
+    // Cartesian-only padding: fill blank headline slots in place + pad
+    // imagePrompts to 5 from brand kit / generics. Skipped for the two
+    // phase-specific flows (preview / variants), which arrive with their own
+    // explicit prompt + headline lists from the orchestrator.
+    if (phase === "cartesian") {
+      const derivedHeadlines = deriveDefaultHeadlines(brand, product);
+      const derivedQueue = [...derivedHeadlines, ...GENERIC_HEADLINES.filter((g) => !derivedHeadlines.includes(g))];
+      while (validHeadlines.length < 5) validHeadlines.push("");
+      for (let i = 0; i < validHeadlines.length; i++) {
+        if (!validHeadlines[i]) {
+          const used = new Set(validHeadlines.filter(Boolean));
+          const next = derivedQueue.find((g) => !used.has(g)) || GENERIC_HEADLINES[i % GENERIC_HEADLINES.length];
+          validHeadlines[i] = next;
+        }
       }
+      if (validPrompts.length === 0) validPrompts = deriveDefaultPrompts(brand, product);
+      while (validPrompts.length < 5) {
+        const next = GENERIC_PROMPTS.find((g) => !validPrompts.includes(g));
+        if (!next) break;
+        validPrompts.push(next);
+      }
+      if (validPrompts.length === 0) validPrompts = [...GENERIC_PROMPTS];
     }
-    if (validPrompts.length === 0) validPrompts = deriveDefaultPrompts(brand, product);
-    while (validPrompts.length < 5) {
-      const next = GENERIC_PROMPTS.find((g) => !validPrompts.includes(g));
-      if (!next) break;
-      validPrompts.push(next);
-    }
-    if (validPrompts.length === 0) validPrompts = [...GENERIC_PROMPTS];
 
     // Find or create the portal_project for this product so we can drop the
     // generated images into the client's Creatives review surface.
@@ -444,22 +512,60 @@ export async function POST(req) {
     }
     if (!portalRow) return Response.json({ error: "Could not find or create portal project" }, { status: 500 });
 
-    // Build the full cartesian product of headlines × imagePrompts.
-    // The client decides how many to process per chunk via offset+limit.
-    // If headlineImageUrls[i] is set, every task built from headline[i]
-    // carries that URL so the chunk worker can fetch + attach it as a
-    // visual reference for Gemini.
+    // ─── Build tasks based on phase ─────────────────────────────────
     const tasks = [];
-    for (let hi = 0; hi < validHeadlines.length; hi++) {
-      const headline = validHeadlines[hi];
-      const refUrl = headlineImageUrls[hi] || "";
-      const hasRef = !!refUrl;
-      for (const imagePrompt of validPrompts) {
+    if (phase === "preview") {
+      // 5 preview scenes, no headline overlay. Each task uses the SAME
+      // productImageUrl as the visual reference (one product → 5 scenes).
+      const hasRef = !!productImageUrl;
+      const arr = Array.isArray(scenePrompts) ? scenePrompts : [];
+      for (let i = 0; i < arr.length; i++) {
         tasks.push({
-          headline, imagePrompt,
-          referenceImageUrl: refUrl,
-          prompt: buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage: hasRef }),
+          headline: "",
+          imagePrompt: arr[i],
+          shot: shots?.[i] || "",
+          sceneIndex: i,
+          referenceImageUrl: productImageUrl,
+          prompt: buildPreviewPrompt({
+            imagePrompt: arr[i],
+            brand, product, aspectRatio,
+            hasReferenceImage: hasRef,
+            shot: shots?.[i] || "",
+          }),
         });
+      }
+    } else if (phase === "variants") {
+      // 5 ad variants of the SAME approved scene, one per headline.
+      const hasRef = !!productImageUrl;
+      const variantHeadlines = (Array.isArray(headlines) ? headlines : []).map((h) => String(h || "").trim()).filter(Boolean);
+      for (let i = 0; i < variantHeadlines.length; i++) {
+        tasks.push({
+          headline: variantHeadlines[i],
+          imagePrompt: scenePrompt,
+          shot,
+          headlineIndex: i,
+          referenceImageUrl: productImageUrl,
+          prompt: buildPrompt({
+            headline: variantHeadlines[i],
+            imagePrompt: scenePrompt,
+            brand, product, aspectRatio,
+            hasReferenceImage: hasRef,
+          }),
+        });
+      }
+    } else {
+      // Cartesian (legacy): full headlines × imagePrompts grid.
+      for (let hi = 0; hi < validHeadlines.length; hi++) {
+        const headline = validHeadlines[hi];
+        const refUrl = headlineImageUrls[hi] || "";
+        const hasRef = !!refUrl;
+        for (const imagePrompt of validPrompts) {
+          tasks.push({
+            headline, imagePrompt,
+            referenceImageUrl: refUrl,
+            prompt: buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage: hasRef }),
+          });
+        }
       }
     }
 
@@ -518,7 +624,25 @@ export async function POST(req) {
         const upload = await uploadBase64(img.base64, img.mime, portalRow.id);
         return {
           ok: true,
-          image: { id: crypto.randomUUID(), url: upload.url, name: `${t.headline.slice(0, 30)} - ${t.imagePrompt.slice(0, 30)}.${img.mime?.includes("png") ? "png" : "jpg"}` },
+          image: {
+            id: crypto.randomUUID(),
+            url: upload.url,
+            // Phase-aware naming + metadata. Preview tiles get the shot label
+            // and sceneIndex so the UI can match Approve/Revise back to the
+            // matching scene prompt. Variant tiles get headlineIndex for
+            // the same matching purpose.
+            name: phase === "preview"
+              ? `Preview ${t.shot || `#${(t.sceneIndex ?? 0) + 1}`}.${img.mime?.includes("png") ? "png" : "jpg"}`
+              : phase === "variants"
+                ? `${t.shot || "Scene"} - ${(t.headline || "").slice(0, 40)}.${img.mime?.includes("png") ? "png" : "jpg"}`
+                : `${(t.headline || "").slice(0, 30)} - ${(t.imagePrompt || "").slice(0, 30)}.${img.mime?.includes("png") ? "png" : "jpg"}`,
+            phase,
+            shot: t.shot || null,
+            sceneIndex: t.sceneIndex ?? null,
+            headlineIndex: t.headlineIndex ?? null,
+            scenePrompt: phase === "variants" ? t.imagePrompt : (phase === "preview" ? t.imagePrompt : null),
+            headline: t.headline || null,
+          },
         };
       } catch (e) {
         console.error("[generator] failed", t.headline, e.message);
@@ -584,6 +708,10 @@ export async function POST(req) {
             body: JSON.stringify({
               clientId, productId, headlines, imagePrompts, aspectRatio,
               headlineImageUrls,
+              // Carry phase-specific fields to the next chunk in this lane
+              phase,
+              scenePrompts, shots, productImageUrl,
+              scenePrompt, shot,
               offset: laneNext, limit: limit,
               jobId, chain: body.chain,
             }),
