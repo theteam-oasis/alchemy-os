@@ -52,10 +52,11 @@ async function generateImageOnce(prompt, productImageBase64, productMimeType, ti
   // is undocumented but reproducibly affects reliability.
   const parts = productImageBase64
     ? [
-        { inlineData: { mimeType: productMimeType || "image/jpeg", data: productImageBase64 } },
+        { inlineData: { mimeType: productMimeType || "image/png", data: productImageBase64 } },
         { text: prompt },
       ]
     : [{ text: prompt }];
+  console.log(`[gemini call] hasRef=${!!productImageBase64} mime=${productMimeType || "none"} parts=${parts.length} promptLen=${prompt.length}`);
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
@@ -303,19 +304,25 @@ NOTE: No reference image attached. Render the product in precise visual detail b
 
 // Fetch a remote URL and return { base64, mime }. Used to attach a chosen
 // product image from product.product_image_urls as a Gemini visual reference.
-// Cached in the chunk worker via `refCache` so we don't re-fetch the same
-// URL once per task in a chunk.
+// Mirrors /samples' approach (which ships 400s on fetch failure) but here we
+// throw and let the chunk's per-task try/catch surface the error in the
+// failures[] array, so the team SEES that the reference image couldn't be
+// loaded instead of silently getting text-only generations.
 async function fetchUrlAsBase64(url) {
-  try {
-    const res = await fetch(url, { redirect: "follow" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    const mime = res.headers.get("content-type") || "image/jpeg";
-    return { base64: buf.toString("base64"), mime };
-  } catch (e) {
-    console.error("[refImage] fetch failed", url, e?.message);
-    return null;
+  if (!url) return null;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) {
+    throw new Error(`Reference image fetch ${res.status} ${res.statusText} for ${url.slice(0, 80)}`);
   }
+  const buf = Buffer.from(await res.arrayBuffer());
+  const mime = res.headers.get("content-type") || "image/png";
+  // Sanity: empty body or HTML response means the URL didn't resolve to an image
+  if (buf.length === 0) throw new Error(`Reference image empty body for ${url.slice(0, 80)}`);
+  if (mime.includes("text/html")) {
+    throw new Error(`Reference image returned HTML (likely 401/redirect) for ${url.slice(0, 80)}`);
+  }
+  console.log(`[refImage] fetched ${buf.length}B mime=${mime} url=${url.slice(0, 80)}`);
+  return { base64: buf.toString("base64"), mime };
 }
 
 async function uploadBase64(base64, mime, projectId) {
@@ -345,7 +352,10 @@ export async function POST(req) {
     } = body || {};
 
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
-    let validHeadlines = headlines.map((h) => String(h || "").trim()).filter(Boolean);
+    // Trim but DO NOT filter out blanks — we'll fill blanks with derived /
+    // generic values at the SAME index so the headlineImageUrls array stays
+    // positionally aligned with whatever ends up at that headline slot.
+    let validHeadlines = headlines.map((h) => String(h || "").trim());
     let validPrompts = imagePrompts.map((p) => String(p || "").trim()).filter(Boolean);
 
     // Brand kit + product context
@@ -376,26 +386,25 @@ export async function POST(req) {
       "In-context use shot, candid feel, golden hour",
     ];
 
-    if (validHeadlines.length === 0) {
-      validHeadlines = deriveDefaultHeadlines(brand, product);
+    // Fill blank headline slots in place from brand-kit / generics so
+    // positions 0..4 are preserved and headlineImageUrls[i] still refers to
+    // the same slot. Pad to 5 if the array came in short.
+    const derivedHeadlines = deriveDefaultHeadlines(brand, product);
+    const derivedQueue = [...derivedHeadlines, ...GENERIC_HEADLINES.filter((g) => !derivedHeadlines.includes(g))];
+    while (validHeadlines.length < 5) validHeadlines.push("");
+    for (let i = 0; i < validHeadlines.length; i++) {
+      if (!validHeadlines[i]) {
+        const used = new Set(validHeadlines.filter(Boolean));
+        const next = derivedQueue.find((g) => !used.has(g)) || GENERIC_HEADLINES[i % GENERIC_HEADLINES.length];
+        validHeadlines[i] = next;
+      }
     }
-    if (validPrompts.length === 0) {
-      validPrompts = deriveDefaultPrompts(brand, product);
-    }
-    // Pad up to 5 — append generics for any missing slots, dedupe so we don't
-    // repeat a derived headline that happens to match a generic.
-    while (validHeadlines.length < 5) {
-      const next = GENERIC_HEADLINES.find((g) => !validHeadlines.includes(g));
-      if (!next) break;
-      validHeadlines.push(next);
-    }
+    if (validPrompts.length === 0) validPrompts = deriveDefaultPrompts(brand, product);
     while (validPrompts.length < 5) {
       const next = GENERIC_PROMPTS.find((g) => !validPrompts.includes(g));
       if (!next) break;
       validPrompts.push(next);
     }
-    // Hard floor: if everything was somehow still empty, use the full generics.
-    if (validHeadlines.length === 0) validHeadlines = [...GENERIC_HEADLINES];
     if (validPrompts.length === 0) validPrompts = [...GENERIC_PROMPTS];
 
     // Find or create the portal_project for this product so we can drop the

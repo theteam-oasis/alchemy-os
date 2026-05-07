@@ -1002,22 +1002,25 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       jobId: null,
     }));
     try {
-      // Trim headlineImageUrls to match the validHeadlines we're actually
-      // sending, so positions line up server-side. If the user filled fewer
-      // headlines than the slot count, the missing positions just get "".
-      const refsForValid = [];
-      headlines.forEach((h, i) => {
-        if (String(h || "").trim()) refsForValid.push(headlineImageUrls?.[i] || "");
-      });
+      // Send the full 5-position arrays for both headlines AND refs so they
+      // stay positionally aligned. Blank headlines are auto-derived server
+      // side at the matching index, and refs[i] applies to that derived
+      // headline. Without this, refs got silently dropped any time the team
+      // left headlines blank (the most common path — defaults from brand kit).
+      const fullHeadlines = [...headlines];
+      const fullRefs = [...(headlineImageUrls || ["", "", "", "", ""])];
+      while (fullRefs.length < fullHeadlines.length) fullRefs.push("");
       const res = await fetch("/api/static-generator/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: client.id,
           productId: activeProduct?.id || null,
-          headlines: validHeadlines,
-          imagePrompts: validPrompts,
-          headlineImageUrls: refsForValid,
+          // Send full 5-position arrays so server can pad blanks at the right
+          // index AND keep refs aligned positionally.
+          headlines: fullHeadlines,
+          imagePrompts: prompts,
+          headlineImageUrls: fullRefs,
           aspectRatio,
         }),
       });

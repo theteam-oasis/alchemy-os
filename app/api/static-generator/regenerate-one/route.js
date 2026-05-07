@@ -196,16 +196,14 @@ NOTE: No reference image attached. Render the product in precise visual detail b
 }
 
 async function fetchUrlAsBase64(url) {
-  try {
-    const res = await fetch(url, { redirect: "follow" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
-    const mime = res.headers.get("content-type") || "image/jpeg";
-    return { base64: buf.toString("base64"), mime };
-  } catch (e) {
-    console.error("[regen-one refImage] fetch failed", url, e?.message);
-    return null;
-  }
+  if (!url) return null;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`Reference image fetch ${res.status} ${res.statusText} for ${url.slice(0, 80)}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const mime = res.headers.get("content-type") || "image/png";
+  if (buf.length === 0) throw new Error(`Reference image empty body for ${url.slice(0, 80)}`);
+  if (mime.includes("text/html")) throw new Error(`Reference image returned HTML (likely 401/redirect) for ${url.slice(0, 80)}`);
+  return { base64: buf.toString("base64"), mime };
 }
 
 async function uploadBase64(base64, mime, projectId) {
