@@ -9,49 +9,167 @@
 
 import { supabase } from "@/lib/supabase";
 import { waitUntil } from "@vercel/functions";
+import Anthropic from "@anthropic-ai/sdk";
 
 export const runtime = "nodejs";
-// Each call processes a small chunk (5 images). The UI loops to do all 25.
-// Keeps each invocation under Vercel's function timeout.
-export const maxDuration = 60;
+// Bumped from 60 → 300 so a single image can use the full 180s patient
+// timeout (mirroring the proven Python batch script) without the function
+// being killed mid-generation. The chunked-lanes architecture still keeps
+// wall time low because lanes run in parallel.
+export const maxDuration = 300;
 
 const MODEL = "gemini-3.1-flash-image-preview";
 
-async function generateOne(prompt, aspectRatio = "1:1") {
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// 8-attempt retry table mirroring /samples reliability strategy.
+// Pairs of two: first try + same-prompt retry catches transient flakes
+// (timeout, 503, network blip, rate limit). On the second pair onward we
+// ask Claude for a fresh prompt rewrite — handles safety-filter trips on
+// offer/discount language and complexity-induced "no image returned" cases.
+const ATTEMPTS = [
+  { timeout: 180000, rewritePrompt: false }, // 1: original
+  { timeout: 180000, rewritePrompt: false }, // 2: original retry
+  { timeout: 180000, rewritePrompt: true  }, // 3: Claude rewrite #1
+  { timeout: 180000, rewritePrompt: false }, // 4: rewrite #1 retry
+  { timeout: 180000, rewritePrompt: true  }, // 5: Claude rewrite #2
+  { timeout: 180000, rewritePrompt: false }, // 6: rewrite #2 retry
+  { timeout: 180000, rewritePrompt: true  }, // 7: Claude rewrite #3
+  { timeout: 180000, rewritePrompt: false }, // 8: rewrite #3 retry
+];
+
+// Single Gemini call with patient 180s timeout via AbortController. No
+// imageSize parameter — that param is undocumented for nano-banana-2 and
+// silently causes "no image returned" responses where the API returns
+// text-only candidates with no inline image data. The proven batch script
+// at agent2_creative.py never set it.
+async function generateImageOnce(prompt, productImageBase64, productMimeType, timeoutMs = 180000, aspectRatio = "1:1") {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) throw new Error("GOOGLE_API_KEY not set");
-  for (let attempt = 0; attempt < 3; attempt++) {
+
+  // Image-first parts order (mirroring batch script's parts.insert(0, image)):
+  // when a reference image is present, inlineData goes BEFORE the text. Order
+  // is undocumented but reproducibly affects reliability.
+  const parts = productImageBase64
+    ? [
+        { inlineData: { mimeType: productMimeType || "image/jpeg", data: productImageBase64 } },
+        { text: prompt },
+      ]
+    : [{ text: prompt }];
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts }],
           generationConfig: {
             responseModalities: ["TEXT", "IMAGE"],
-            // 1K keeps cost ~$0.04/image (~$1 per batch of 25). 2K quadruples
-            // both pixels and price; bump back to "2K" only for final approved
-            // ads that need high-res for CTV/OOH placements.
-            imageConfig: { imageSize: "1K", aspectRatio },
+            // No imageSize. See note above.
+            imageConfig: { aspectRatio },
           },
         }),
       }
     );
     if (!res.ok) {
-      if (attempt < 2 && (res.status === 429 || res.status >= 500)) {
-        const wait = (attempt + 1) * (res.status === 429 ? 8000 : 3000);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
       const txt = await res.text().catch(() => "");
       throw new Error(`Gemini ${res.status}: ${txt.slice(0, 200)}`);
     }
     const data = await res.json();
     const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
-    if (!part) throw new Error("No image returned");
+    if (!part) throw new Error("No image returned from Gemini");
     return { mime: part.inlineData.mimeType, base64: part.inlineData.data };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+// Ask Claude for a fresh visual-prompt variation: same shot intent, same
+// brand voice, but different angle/composition/lighting/background. Used
+// only on attempts 3, 5, 7 of the 8-attempt loop. ~$0.005 per call; worst
+// case 3 calls per task = ~$0.015 added.
+async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, aspectRatio }) {
+  const ctx = [
+    product?.name ? `Product: ${product.name}` : null,
+    product?.description ? `Description: ${product.description}` : null,
+    brand?.brand_colors ? `Brand colors: ${brand.brand_colors}` : null,
+    brand?.personality_tags?.length ? `Personality: ${brand.personality_tags.join(", ")}` : null,
+    brand?.audience_description ? `Audience: ${brand.audience_description}` : null,
+    brand?.voice_style?.length ? `Voice: ${brand.voice_style.join(", ")}` : null,
+  ].filter(Boolean).join("\n");
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 600,
+      messages: [
+        {
+          role: "user",
+          content: `You are rewriting a single image-generation prompt for a static social ad. The previous prompt failed (likely safety filter, complexity, or transient API issue). Write a NEW visual variation: same shot intent, same brand voice, but different angle / composition / lighting / background / framing. Keep it photorealistic and premium.
+
+Brand context:
+${ctx}
+
+Headline that will be overlaid on the image: "${headline}"
+Aspect ratio: ${aspectRatio}
+Previous (failed) prompt:
+${prevPrompt}
+
+Return ONLY a JSON object: {"imagePrompt": "..."} — no markdown, no preamble.`,
+        },
+      ],
+    });
+    const text = msg?.content?.[0]?.text || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.imagePrompt) return String(parsed.imagePrompt);
+    }
+  } catch (e) {
+    console.error("[regenerateStaticPrompt] failed", e?.message);
+  }
+  // Fall through: return previous prompt so the loop still progresses.
+  return prevPrompt;
+}
+
+// 8-attempt wrapper. Catches transient errors with same-prompt retries and
+// prompt-dependent errors with Claude rewrites between pairs.
+async function generateWithRetries({ initialPrompt, productImageBase64, productMimeType, aspectRatio, brand, product, headline }) {
+  let activePrompt = initialPrompt;
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= ATTEMPTS.length; attempt++) {
+    const cfg = ATTEMPTS[attempt - 1];
+
+    if (cfg.rewritePrompt) {
+      activePrompt = await regenerateStaticPrompt({
+        brand, product, headline,
+        prevPrompt: activePrompt,
+        aspectRatio,
+      });
+    }
+
+    try {
+      const img = await generateImageOnce(activePrompt, productImageBase64, productMimeType, cfg.timeout, aspectRatio);
+      return img;
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      const is429 = /429|rate limit|quota/i.test(msg);
+      // 60s on 429 (Google's rate-limit window) so the quota actually resets.
+      // 5s otherwise. No exponential ramp — that just stays inside the window.
+      if (attempt < ATTEMPTS.length) {
+        const backoff = is429 ? 60000 : 5000;
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+    }
+  }
+  throw lastErr || new Error("Image generation failed after 8 attempts");
 }
 
 // Headlines auto-derived from the brand kit when the team hasn't supplied any.
@@ -237,22 +355,30 @@ export async function POST(req) {
     }
 
     // Chunked processing: only handle a slice of `tasks` per request, so each
-    // Vercel function invocation completes well under its timeout (60s).
+    // Vercel function invocation completes well under its timeout (300s after
+    // the bump). Still keep chunks small so a slow image doesn't starve siblings.
     const jobId = body.jobId || null;
     const offset = Number.isFinite(body.offset) ? Math.max(0, body.offset) : 0;
-    // Cap at 3 so a single invocation never times out even if Gemini retries
-    // multiple images. Client default is 2 (see StaticStudio CHUNK).
+    // Cap at 3 so a single invocation never times out even with 8-attempt
+    // retries firing on multiple tasks. Client default is 2 (see StaticStudio CHUNK).
     const limit = Number.isFinite(body.limit) ? Math.min(3, Math.max(1, body.limit)) : 2;
     const slice = tasks.slice(offset, offset + limit);
 
     const generated = [];
     const failed = [];
     // Run all images in this chunk in parallel - the chunk is small enough
-    // (max 8) that we won't hit rate limits. Each image ~5-15s, so a chunk
-    // of 5 finishes in ~10-20s.
+    // (max 3) that we won't overwhelm the rate limit. Each image uses the
+    // 8-attempt retry strategy internally.
     const results = await Promise.all(slice.map(async (t) => {
       try {
-        const img = await generateOne(t.prompt, aspectRatio);
+        const img = await generateWithRetries({
+          initialPrompt: t.prompt,
+          productImageBase64: null, // future: attach product reference image here
+          productMimeType: null,
+          aspectRatio,
+          brand, product,
+          headline: t.headline,
+        });
         const upload = await uploadBase64(img.base64, img.mime, portalRow.id);
         return {
           ok: true,

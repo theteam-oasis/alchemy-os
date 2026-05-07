@@ -15,11 +15,31 @@ The user message will tell you whether a product reference image is attached or 
 • MODE B — NO REFERENCE IMAGE (fallback): The user couldn't get a clean product photo. You MUST describe the product in vivid visual detail in every prompt — exact color, shape, packaging, label, finish, scale relative to a hand, any visible logo or text. Pull these details from the brand's website (product page photos, descriptions, ingredient/component callouts). The image generator has nothing else to go on, so your description IS the product. Be precise: "a 3-inch matte forest-green glass jar with a flat black screw-top lid, bold off-white serif Seed wordmark centered, 'DS-01 DAILY SYNBIOTIC' in small caps below" beats "a probiotic jar."
 
 STEP 1 — READ THE BRAND. THIS COMES FIRST.
-Before anything else, parse the brand site for its actual aesthetic. Identify:
+Before anything else, parse the brand site and identify TWO things:
+
+A. TARGET AUDIENCE (most important):
+• Demographics: age range, gender, income level, family status, geography
+• Psychographics: pain points, daily life, aspirations, what they're afraid of, what they secretly want, what they envy
+• Real-life specifics: do they have kids, commute, lift weights, scroll TikTok, drink wine, golf, train for marathons, work from home, manage a team, etc.
+This audience is THE PERSON who will see the ad. Every casting choice, environment, wardrobe, prop, headline angle, and pain-point reference in the next 6 prompts must speak DIRECTLY to them. If the brand sells supplements to 50-something women, NEVER cast a 25-year-old male model. If it sells to executives, the environment is the corner office or first-class cabin, not a dorm room.
+
+B. BRAND TONE / BUCKET:
 • Tone: clinical, luxurious, gritty, playful, minimalist, heritage, Gen-Z, premium-wellness, etc.
 • Visual cues: typography style, color palette, photography style on their site, packaging finish.
 • Customer aspiration: who does this brand make their customer feel like?
-The brand's DNA is the master directive. Everything below — surrealism, casting, lighting — is a TOOL to express that DNA, never to override it.
+
+The audience drives WHO is in the frame. The brand bucket drives HOW it's shot. Together they're the master directive — surrealism, casting, lighting, copy are tools to express both, never to override either.
+
+AUDIENCE → VISUAL TRANSLATION (examples):
+• 50-something women, perimenopause/menopause-focused → cast 45-60 women with real skin texture (laugh lines, silver streaks), kitchen / yoga studio / Sunday morning bedroom environments, cashmere/linen wardrobe, soft daylight, copy that addresses brain fog / sleep / energy specifically
+• 25-35 male performance athletes → cast lean muscular men with stubble, gym/track/outdoor environments, technical fabrics, hard cinematic light, copy about reps/PRs/recovery
+• 45-65 executives → cast distinguished 50-something professionals, corner-office / private jet / boardroom environments, tailored wool, dramatic single-source light, copy about decision fatigue / sleep / clarity
+• 30-45 high-income wellness moms → cast natural-beauty 30-something mothers, kitchen island / SUV / yoga mat environments, neutral palette wardrobe, golden-hour light, copy about energy / immunity / kids
+• 18-25 Gen-Z college students → cast diverse expressive young adults, dorm / coffee shop / festival environments, Y2K or thrifted styling, harsh flash or natural daylight, copy in their native voice (no millennial corporate speak)
+• 35-55 health-conscious biohackers → cast lean disciplined types of any age, modern minimalist home / cold plunge / red-light room, athleisure/Lululemon, clinical-but-warm light, copy with specific numbers (mg, hours, %)
+
+AUDIENCE → COPY TRANSLATION:
+DR ad headlines must mirror the EXACT pain or aspiration the audience already feels. "Sleep through the night again" speaks to a 50-year-old mother with insomnia. "Hit your PR" speaks to an athlete. "Brain fog gone in 30 days" speaks to a perimenopausal exec. Pull the specific language the audience would use — not the brand's marketing speak.
 
 STEP 2 — APPLY SURREALISM IN SERVICE OF THE BRAND, NEVER AGAINST IT.
 
@@ -101,7 +121,7 @@ CRITICAL RULE — TEXT vs NO TEXT:
 
 3. SOCIAL PROOF AD (DR — has text): iPhone-style real-customer feel, scene can be slightly elevated/cinematic. 26mm f/1.8, JPEG warmth. Real customer in real-life environment matching the brand customer (kitchen, bathroom, gym, car, café). Handwritten-style testimonial overlay: before-state + specific result with number + emotional payoff. First name + location. 5 filled brand-color stars + "12,847 reviews" or "Verified Buyer" badge. Specific CTA. End with "Shot on iPhone energy."
 
-4. EDITORIAL (brand — NO TEXT): Magazine-cover portrait of a stunning model on-brand. Casting matches the brand bucket (clinical = sharp/groomed Vogue-style scientist; luxury = refined heritage face; playful = eccentric character; performance = strong archetype). Direct eye contact. Product held or interacting with the figure. Background: bold saturated brand color, blown gradient, or moody dark — match brand palette. Single hard key, sculptural shadow, brand-color rim. Optional small surreal element ON-BRAND. Real skin texture, on-brand wardrobe (premium brands → crisp/groomed; never dirty/disheveled unless that IS the brand). Camera: 85mm f/1.2. NO TEXT OVERLAYS.
+4. EDITORIAL (brand — NO TEXT, PRODUCT-FOCUSED): High-end luxury magazine cover product shot. Think Kinfolk / Wallpaper* / Cereal Magazine / Vogue Italia / Nowness. The PRODUCT is the hero — no models, no portraits, no people holding it (the previous batch was monotonous "serious model holding product" — break that pattern entirely). Compose like a still life: product placed in a refined editorial scene with luxurious materials and intentional props. Specify: surface (raw linen drape, weathered marble slab, hand-thrown ceramic platter, charred oak, polished concrete, brushed brass tray, silk-lined velvet box, tonal stone, fresh-cut botanicals, dripping wax). Single sculptural light source — hard sidelight, golden-hour rim, painterly window light, candlelit glow, color-gel cinematic. Real textural detail (paper grain, fabric weave, surface scratches, dewy moisture, condensation, smoke wisps). Refined supporting props in the brand's color story. Mood: luxury catalog, museum-piece, "the product is art." Tight or medium composition — product fills 50-70% of frame, off-center if dramatic. Camera: 100mm macro at f/4-5.6 OR 85mm at f/2.8 depending on composition. NO TEXT OVERLAYS.
 
 5. OFFER AD (DR — has text): Editorial or surreal hero shot + offer-stack overlay. Headline = offer as benefit ("Save $40 On Your First Order" / "Your First Month $1"). Price anchor visually shown (strikethrough $89 → $49 in brand accent). Real urgency line ("Ends Sunday" / "Only 47 left"). Diagonal OFFER tape (T7). Starburst badge with discount % (T8). Big CTA ("Claim 40% Off" / "Lock In My Price"). Trust microcopy below ("60-day guarantee · ★★★★★ 12K"). Camera: 85mm f/1.4.
 
@@ -285,19 +305,19 @@ async function generateImageOnce(prompt, productImageBase64, productMimeType, ti
       signal: controller.signal,
       body: JSON.stringify({
         contents: [{
+          // Working batch script puts inlineData FIRST, then text. Mirror that.
           parts: productImageBase64
             ? [
-                { text: prompt },
                 { inlineData: { mimeType: productMimeType, data: productImageBase64 } },
+                { text: prompt },
               ]
             : [{ text: prompt }],
         }],
         generationConfig: {
           responseModalities: ['TEXT', 'IMAGE'],
+          // Proven working config: ONLY aspectRatio, no imageSize.
+          // Setting imageSize was triggering failures.
           imageConfig: {
-            // 1K is ~4x faster than 2K and plenty for ad creative.
-            // Flow uses 1K by default, which is why it feels snappy.
-            imageSize: '1K',
             aspectRatio: '1:1',
           },
         },
@@ -324,20 +344,19 @@ async function generateImageOnce(prompt, productImageBase64, productMimeType, ti
   }
 }
 
-// Gemini Nano Banana 2 only — 8 attempts in sets of 2. Every other set gets a
-// freshly rewritten prompt from Claude. Attempts 1-2 use original. Attempts 3-4
-// use fresh rewrite #1. Attempts 5-6 use fresh rewrite #2. Attempts 7-8 use
-// fresh rewrite #3. Maximizes success even when Google's API is overloaded.
+// Gemini Nano Banana 2. Mirrors the proven-working batch-script config:
+// generous 180s timeouts, 60s wait on 429s, fewer aggressive retries.
+// 8 attempts in sets of 2 — every other set gets a fresh prompt rewrite.
 async function generateImage(prompt, productImageBase64, productMimeType, onAttempt, ctx = {}) {
   const ATTEMPTS = [
-    { timeout: 30000, rewritePrompt: false }, // attempt 1: original prompt
-    { timeout: 25000, rewritePrompt: false }, // attempt 2: original prompt (one retry)
-    { timeout: 25000, rewritePrompt: true },  // attempt 3: fresh rewrite #1
-    { timeout: 25000, rewritePrompt: false }, // attempt 4: same fresh rewrite #1 (one retry)
-    { timeout: 20000, rewritePrompt: true },  // attempt 5: fresh rewrite #2
-    { timeout: 20000, rewritePrompt: false }, // attempt 6: same fresh rewrite #2
-    { timeout: 20000, rewritePrompt: true },  // attempt 7: fresh rewrite #3
-    { timeout: 20000, rewritePrompt: false }, // attempt 8: same fresh rewrite #3 (last shot)
+    { timeout: 180000, rewritePrompt: false }, // attempt 1: original prompt, 180s patience
+    { timeout: 180000, rewritePrompt: false }, // attempt 2: original prompt (one retry)
+    { timeout: 180000, rewritePrompt: true },  // attempt 3: fresh rewrite #1
+    { timeout: 180000, rewritePrompt: false }, // attempt 4: same fresh rewrite #1
+    { timeout: 180000, rewritePrompt: true },  // attempt 5: fresh rewrite #2
+    { timeout: 180000, rewritePrompt: false }, // attempt 6: same fresh rewrite #2
+    { timeout: 180000, rewritePrompt: true },  // attempt 7: fresh rewrite #3
+    { timeout: 180000, rewritePrompt: false }, // attempt 8: same fresh rewrite #3
   ]
   const MAX_ATTEMPTS = ATTEMPTS.length
   let lastErr = null
@@ -366,6 +385,7 @@ async function generateImage(prompt, productImageBase64, productMimeType, onAtte
       const msg = err?.message || ''
       lastUnderlyingMsg = msg.slice(0, 250)
       const isAbort = err?.name === 'AbortError'
+      const is429 = /429|rate limit/i.test(msg)
       const isRetryable =
         isAbort ||
         /timeout|abort|no image returned|5\d\d|network|ECONN|ETIMEDOUT|fetch failed|429|rate limit|model.*not.*found|model.*does.*not.*exist|invalid_model|access|verify|verified|tier|safety|content_policy/i.test(msg)
@@ -376,7 +396,11 @@ async function generateImage(prompt, productImageBase64, productMimeType, onAtte
         }
         throw new Error(`Failed after ${MAX_ATTEMPTS} attempts. Last: ${lastUnderlyingMsg}`)
       }
-      const backoff = 800 * Math.pow(2, attempt - 1)
+      // Match the proven batch-script behavior:
+      //   - On 429 (rate limit), wait 60 SECONDS — Google's quota window is wide
+      //   - On other retryable errors, short 5s wait (mirrors GEMINI_RETRY_WAIT)
+      const backoff = is429 ? 60000 : 5000
+      console.log(`[generateImage] backing off ${backoff}ms before attempt ${attempt + 1} (${is429 ? '429 cooldown' : 'normal retry'})`)
       await new Promise(r => setTimeout(r, backoff))
     }
   }
@@ -471,11 +495,11 @@ export async function POST(request) {
           prompts = await generatePrompts(brandUrl, hasReferenceImage)
         }
         send({ type: 'prompts', prompts })
-        send({ type: 'status', message: 'Generating 6 images (Nano Banana 2, 3 at a time)...' })
+        send({ type: 'status', message: 'Generating 6 images...' })
 
-        // Gemini's preview API rate-limits hard at 6 concurrent. 3 is the
-        // sweet spot between wall-clock speed and reliability.
-        const CONCURRENCY = 3
+        // All 6 at once — push wall-clock speed. With our new 60s 429 backoff
+        // a rate-limit hit isn't catastrophic, just costs 60s on a slot.
+        const CONCURRENCY = 6
         let completed = 0
         const total = 6
         let inFlight = 0

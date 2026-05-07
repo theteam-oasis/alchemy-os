@@ -119,21 +119,64 @@ function extractCandidates(html, baseUrl) {
     } catch {}
   }
 
-  // 4. Shopify product page hint: og-image fallback (often first large img)
-  // Skip — og:image already covers Shopify
+  // 4. Shopify product gallery — common pattern: data-product-id images, .product__media img
+  const shopifyMatches = html.matchAll(/<img[^>]+(?:class=["'][^"']*product[^"']*["']|data-product[^=]*)[^>]+(?:src|data-src|srcset)=["']([^"']+)["']/gi)
+  for (const m of shopifyMatches) {
+    const u = m[1].split(/\s+/)[0] // first URL if srcset
+    const abs = absolutize(decodeEntities(u), baseUrl)
+    if (abs && /\.(jpe?g|png|webp)/i.test(abs)) candidates.push({ url: abs, source: "shopify product img", priority: 80 })
+  }
 
-  // Deduplicate
+  // 5. All <img> tags on the page that look like product photos.
+  // Heuristic: filter out tiny icons (less than 200px width if specified) and
+  // common non-product paths (logo, icon, badge, sprite, payment, social).
+  const allImgMatches = html.matchAll(/<img[^>]+(?:src|data-src|data-zoom-image|data-large-image)=["']([^"']+)["'][^>]*>/gi)
+  for (const m of allImgMatches) {
+    const u = m[0]
+    const srcMatch = m[1]
+    if (!srcMatch) continue
+    // Skip obvious non-product images
+    if (/logo|icon|sprite|favicon|payment|social|cart|menu|nav|footer|header|avatar|profile/i.test(srcMatch)) continue
+    if (/\.svg($|\?)/i.test(srcMatch)) continue
+    // Skip tiny images (if width attribute present and small)
+    const widthMatch = u.match(/width=["']?(\d+)/i)
+    if (widthMatch && parseInt(widthMatch[1]) < 200) continue
+    const abs = absolutize(decodeEntities(srcMatch.split(/\s+/)[0]), baseUrl)
+    if (!abs) continue
+    if (!/\.(jpe?g|png|webp)/i.test(abs)) continue
+    // Boost priority if URL hints at product
+    let priority = 50
+    if (/product|main|hero|primary|featured/i.test(abs)) priority = 70
+    candidates.push({ url: abs, source: "page img", priority })
+  }
+
+  // 6. srcset entries from picture/source tags (high-res versions)
+  const srcsetMatches = html.matchAll(/<source[^>]+srcset=["']([^"']+)["'][^>]*>/gi)
+  for (const m of srcsetMatches) {
+    const urls = m[1].split(",").map(s => s.trim().split(/\s+/)[0])
+    for (const u of urls) {
+      if (/logo|icon|sprite|favicon/i.test(u)) continue
+      const abs = absolutize(decodeEntities(u), baseUrl)
+      if (abs && /\.(jpe?g|png|webp)/i.test(abs)) {
+        candidates.push({ url: abs, source: "picture srcset", priority: 60 })
+      }
+    }
+  }
+
+  // Deduplicate (and also dedupe near-duplicates with different size suffixes)
   const seen = new Set()
   const unique = []
   for (const c of candidates) {
-    if (!seen.has(c.url)) {
-      seen.add(c.url)
+    // Strip query strings and common Shopify size suffixes for dedup
+    const stripped = c.url.split("?")[0].replace(/_(?:small|medium|large|grande|master|x?\d+x\d*|\d+x)\.(jpe?g|png|webp)$/i, ".$1")
+    if (!seen.has(stripped)) {
+      seen.add(stripped)
       unique.push(c)
     }
   }
-  // Sort by priority
   unique.sort((a, b) => b.priority - a.priority)
-  return unique
+  // Cap at 20 candidates so we don't ship a huge payload
+  return unique.slice(0, 20)
 }
 
 export async function POST(request) {

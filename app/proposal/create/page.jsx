@@ -60,6 +60,63 @@ function slugify(str) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Strip common tracking / affiliate / analytics query params from a URL.
+// Keeps meaningful product params (variant, sku, etc.). If parsing fails,
+// returns the original input unchanged.
+const TRACKING_PARAMS = new Set([
+  // UTM (Google standard)
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+  "utm_name", "utm_brand", "utm_social", "utm_social-type",
+  // Click IDs
+  "gclid", "gbraid", "wbraid", "dclid", "fbclid", "msclkid", "yclid", "twclid",
+  "ttclid", "li_fat_id", "epik", "igshid",
+  // Email / marketing
+  "mc_cid", "mc_eid", "_kx", "ml_subscriber", "ml_subscriber_hash",
+  "ck_subscriber_id", "vero_id", "vero_conv",
+  // Affiliate
+  "ref", "referrer", "referer", "aff", "affiliate", "affid", "subid",
+  "irclickid", "irgwc", "tap_a", "tap_s", "rfsn",
+  // Analytics
+  "_ga", "_gl", "_hsenc", "_hsmi", "hsCtaTracking",
+  "trk_msg", "trk_contact", "trk_module", "trk_sid",
+  // Common Shopify/site-side trackers
+  "shop", "redirect_source", "redirect_medium", "campaign_id",
+  "yt_source", "pscd", "pcrid", "pkw",
+]);
+
+function cleanUrl(input) {
+  if (!input || typeof input !== "string") return input;
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  // Try to parse; if no protocol, prepend https:// for parsing only
+  let parsed;
+  try {
+    parsed = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+  } catch {
+    return trimmed; // not a parseable URL, leave alone
+  }
+  // Strip tracking params
+  let stripped = false;
+  for (const key of [...parsed.searchParams.keys()]) {
+    if (TRACKING_PARAMS.has(key.toLowerCase()) || key.toLowerCase().startsWith("utm_")) {
+      parsed.searchParams.delete(key);
+      stripped = true;
+    }
+  }
+  // Strip common tracking-only hash fragments
+  if (parsed.hash && /^#?(utm_|fbclid|gclid|ref=)/i.test(parsed.hash.replace(/^#/, ""))) {
+    parsed.hash = "";
+    stripped = true;
+  }
+  if (!stripped) return trimmed; // no tracking found, keep original formatting
+  // Rebuild a clean URL. Preserve whether user originally had protocol.
+  const rebuilt = parsed.toString().replace(/\?$/, "");
+  if (!trimmed.startsWith("http")) {
+    return rebuilt.replace(/^https?:\/\//, "");
+  }
+  return rebuilt;
+}
+
 // ─── Component ───
 
 
@@ -110,10 +167,15 @@ export default function ProposalCreatePage() {
   const slotTimersRef = useRef([]);
   // AbortController for the in-flight auto-generate stream so user can cancel
   const abortRef = useRef(null);
+  // Per-slot AbortControllers so a fresh regen click cancels the in-flight one
+  const slotAbortRef = useRef([]);
   // Per-slot error messages from failed generations
   const [slotErrors, setSlotErrors] = useState(Array(6).fill(null));
   // Per-slot retry attempt number (1 = first try, 2+ = retrying)
   const [slotAttempts, setSlotAttempts] = useState(Array(6).fill(1));
+  // How many times the user has manually clicked Regenerate on this slot
+  // (resets to 0 on each new auto-gen). Lets us show "(restarted)" feedback.
+  const [slotManualRetries, setSlotManualRetries] = useState(Array(6).fill(0));
   // Tracks which prompt was just copied (for the small "Copied" toast)
   const [copiedPromptIdx, setCopiedPromptIdx] = useState(null);
   // Tracks which prompts are currently being rewritten by Claude
@@ -399,7 +461,6 @@ export default function ProposalCreatePage() {
   // Cycle to the next image candidate (different image from same page)
   async function handleTryNextImage() {
     if (imageCandidates.length === 0) {
-      // No candidates cached yet — re-scrape
       return handleAutoFetchAll();
     }
     const nextIdx = (candidateIndex + 1) % imageCandidates.length;
@@ -418,12 +479,19 @@ export default function ProposalCreatePage() {
 
   // Convert base64 data URL to a public Supabase URL
   async function uploadGeneratedImage(dataUrl, slotIndex) {
-    const blob = await fetch(dataUrl).then(r => r.blob());
-    const path = `proposals/${slug}/gen-${Date.now()}-${slotIndex}.png`;
-    const { error: uploadError } = await supabase.storage.from("brand-assets").upload(path, blob, { contentType: "image/png" });
-    if (uploadError) throw uploadError;
-    const { data: { publicUrl } } = supabase.storage.from("brand-assets").getPublicUrl(path);
-    return publicUrl;
+    // 45s hard timeout on the entire upload — prevents stuck "uploading" loops
+    // when Supabase is slow or the data URL is too large.
+    return Promise.race([
+      (async () => {
+        const blob = await fetch(dataUrl).then(r => r.blob());
+        const path = `proposals/${slug}/gen-${Date.now()}-${slotIndex}.png`;
+        const { error: uploadError } = await supabase.storage.from("brand-assets").upload(path, blob, { contentType: "image/png" });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from("brand-assets").getPublicUrl(path);
+        return publicUrl;
+      })(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase upload timed out after 45s — hit Regenerate to try again")), 45000)),
+    ]);
   }
 
   // ─── Auto-Generate All 6 ───
@@ -449,6 +517,7 @@ export default function ProposalCreatePage() {
     setSlotProgress(Array(6).fill(0));
     setSlotErrors(Array(6).fill(null));
     setSlotAttempts(Array(6).fill(1));
+    setSlotManualRetries(Array(6).fill(0));
     // Clear any leftover timers
     slotTimersRef.current.forEach(t => t && clearInterval(t));
     slotTimersRef.current = [];
@@ -537,12 +606,14 @@ export default function ProposalCreatePage() {
               slotTimersRef.current[evt.slotIndex] = null;
             }
             setSlotProgress(prev => { const u = [...prev]; u[evt.slotIndex] = 100; return u; });
-            // Upload to Supabase, then fill the slot
+            // Upload to Supabase (45s timeout inside), then fill the slot
             try {
               const publicUrl = await uploadGeneratedImage(evt.dataUrl, evt.slotIndex);
               setImageUrls(prev => { const u = [...prev]; u[evt.slotIndex] = publicUrl; return u; });
             } catch (e) {
               console.error(`Slot ${evt.slotIndex} upload failed`, e);
+              // Surface upload failures as slot errors so the user can hit Retry
+              setSlotErrors(prev => { const u = [...prev]; u[evt.slotIndex] = e?.message || "Upload failed"; return u; });
             } finally {
               setUploading(prev => { const u = [...prev]; u[evt.slotIndex] = false; return u; });
               setGenProgress(p => ({ ...p, completed: evt.completed, total: evt.total }));
@@ -647,23 +718,31 @@ export default function ProposalCreatePage() {
       setError("No prompt available for this slot. Run auto-generate first or enter custom prompts.");
       return;
     }
+
+    // Cancel any in-flight regen for THIS slot (so a re-click restarts cleanly)
+    const wasAlreadyRegenerating = !!slotAbortRef.current[slotIndex];
+    if (slotAbortRef.current[slotIndex]) {
+      try { slotAbortRef.current[slotIndex].abort(); } catch {}
+    }
+    const ac = new AbortController();
+    slotAbortRef.current[slotIndex] = ac;
+
+    // Bump the manual retry counter so the loader text reflects the click
+    setSlotManualRetries(prev => { const u = [...prev]; u[slotIndex] = (u[slotIndex] || 0) + 1; return u; });
     setRegenerating(prev => { const u = [...prev]; u[slotIndex] = true; return u; });
     setError(null);
-    // Clear this slot's prior error if any
     setSlotErrors(prev => { const u = [...prev]; u[slotIndex] = null; return u; });
     try {
       const res = await fetch("/api/generate-samples-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
         body: JSON.stringify({
           brandUrl: brandUrl || "custom",
           productImageUrl: productRefUrl || "",
           mode: "single",
           slotIndex,
           prompts: promptsToUse,
-          // Manual retries get a FRESH prompt variation from Claude — different
-          // angle, different copy phrasing — so retries actually try something
-          // new instead of hitting the same prompt over again.
           freshPrompt: true,
         }),
       });
@@ -682,11 +761,20 @@ export default function ProposalCreatePage() {
       const publicUrl = await uploadGeneratedImage(data.image, slotIndex);
       setImageUrls(prev => { const u = [...prev]; u[slotIndex] = publicUrl; return u; });
     } catch (err) {
+      // If this regen got cancelled by a newer click, swallow it silently
+      if (err?.name === 'AbortError' || /aborted/i.test(err?.message || '')) {
+        return;
+      }
       const msg = err.message || "Generation failed";
       setSlotErrors(prev => { const u = [...prev]; u[slotIndex] = msg; return u; });
       setError(`Regenerate failed: ${msg}`);
     } finally {
-      setRegenerating(prev => { const u = [...prev]; u[slotIndex] = false; return u; });
+      // Only clear regenerating state if this is still the active controller
+      // (a newer click may have already overwritten it and we shouldn't stomp)
+      if (slotAbortRef.current[slotIndex] === ac) {
+        setRegenerating(prev => { const u = [...prev]; u[slotIndex] = false; return u; });
+        slotAbortRef.current[slotIndex] = null;
+      }
     }
   }
 
@@ -960,7 +1048,7 @@ export default function ProposalCreatePage() {
             <input
               type="text"
               value={brandUrl}
-              onChange={(e) => setBrandUrl(e.target.value)}
+              onChange={(e) => setBrandUrl(cleanUrl(e.target.value))}
               placeholder="brandurl.com/products/the-specific-product"
               style={inputStyle}
             />
@@ -1583,9 +1671,11 @@ export default function ProposalCreatePage() {
                         color={G.text}
                         style={{ animation: "spin 1s linear infinite", zIndex: 1 }}
                       />
-                      <span style={{ ...mono, fontSize: 10, fontWeight: 600, color: G.textSec, zIndex: 1, textAlign: "center" }}>
+                      <span style={{ ...mono, fontSize: 10, fontWeight: 600, color: G.textSec, zIndex: 1, textAlign: "center", padding: "0 4px" }}>
                         {regenerating[i]
-                          ? "Regenerating with fresh prompt…"
+                          ? slotManualRetries[i] > 1
+                            ? `Regenerating (try #${slotManualRetries[i]})…`
+                            : "Regenerating with fresh prompt…"
                           : autoGenerating
                           ? slotAttempts[i] > 1
                             ? `Retry ${slotAttempts[i]}/8 · ${Math.round(slotProgress[i])}%`
@@ -1605,6 +1695,50 @@ export default function ProposalCreatePage() {
                           />
                         </div>
                       )}
+                      {/* Always-available action cluster: cancel + regenerate
+                          (so a stuck upload/regen can always be broken out of) */}
+                      <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4, zIndex: 3 }}>
+                        {(generatedPrompts || customPrompts[i]) && productRefUrl && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Reset stuck state then fire fresh regenerate
+                              setUploading(prev => { const u = [...prev]; u[i] = false; return u; });
+                              setRegenerating(prev => { const u = [...prev]; u[i] = false; return u; });
+                              handleRegenerate(i);
+                            }}
+                            title="Force regenerate this slot"
+                            style={{
+                              width: 24, height: 24, borderRadius: 6,
+                              background: G.text, color: "#fff", border: "none",
+                              cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              padding: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                            }}
+                          >
+                            <RefreshCw size={12} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Cancel the stuck slot — reset to empty
+                            setUploading(prev => { const u = [...prev]; u[i] = false; return u; });
+                            setRegenerating(prev => { const u = [...prev]; u[i] = false; return u; });
+                          }}
+                          title="Cancel and reset this slot"
+                          style={{
+                            width: 24, height: 24, borderRadius: 6,
+                            background: "rgba(255,255,255,0.92)", color: G.text, border: "none",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            padding: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                            backdropFilter: "blur(8px)",
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     </div>
                   ) : slotErrors[i] ? (
                     // ── Failed slot: show error + retry + manual upload fallback ──
@@ -1814,6 +1948,40 @@ export default function ProposalCreatePage() {
             );
           })()}
         </form>
+
+        {/* Persistent "Create Another Proposal" link — opens in new tab so the
+            team can run multiple proposals in parallel without losing state on
+            this page. Visible from the start, not only after success. */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
+          <a
+            href="/proposal/create"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...mono,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              padding: "12px 28px",
+              fontSize: 13,
+              fontWeight: 600,
+              letterSpacing: "0.01em",
+              background: G.text,
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 980,
+              cursor: "pointer",
+              textDecoration: "none",
+              transition: "opacity 0.15s, transform 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Create Another Proposal
+          </a>
+        </div>
 
         {/* Success Result */}
         {result && (
