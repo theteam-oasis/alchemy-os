@@ -70,7 +70,7 @@ async function generateImageOnce(prompt, productImageBase64, productMimeType, ti
   }
 }
 
-async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, aspectRatio }) {
+async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, aspectRatio, hasReferenceImage = false }) {
   const ctx = [
     product?.name ? `Product: ${product.name}` : null,
     product?.description ? `Description: ${product.description}` : null,
@@ -79,6 +79,9 @@ async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, as
     brand?.audience_description ? `Audience: ${brand.audience_description}` : null,
     brand?.voice_style?.length ? `Voice: ${brand.voice_style.join(", ")}` : null,
   ].filter(Boolean).join("\n");
+  const refRules = hasReferenceImage
+    ? `\nIMPORTANT — REFERENCE IMAGE IS ATTACHED:\nThe new prompt MUST keep these rules:\n- Treat the inline reference image as the EXACT product.\n- Do NOT describe the product visually — let the image handle it.\n- Do NOT instruct Gemini to redesign or restyle the product.\n- End with: "Use attached image as product reference."`
+    : `\nNOTE: No reference image attached. Describe the product in precise visual detail.`;
   try {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
@@ -86,7 +89,7 @@ async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, as
       messages: [
         {
           role: "user",
-          content: `You are rewriting a single image-generation prompt for a static social ad. The previous prompt failed (likely safety filter, complexity, or transient API issue). Write a NEW visual variation: same shot intent, same brand voice, but different angle / composition / lighting / background / framing. Keep it photorealistic and premium.\n\nBrand context:\n${ctx}\n\nHeadline that will be overlaid on the image: "${headline}"\nAspect ratio: ${aspectRatio}\nPrevious (failed) prompt:\n${prevPrompt}\n\nReturn ONLY a JSON object: {"imagePrompt": "..."} — no markdown, no preamble.`,
+          content: `You are rewriting a single image-generation prompt for a static social ad. The previous prompt failed (likely safety filter, complexity, or transient API issue). Write a NEW visual variation: same shot intent, same brand voice, but different angle / composition / lighting / background / framing. Keep it photorealistic and premium.${refRules}\n\nBrand context:\n${ctx}\n\nHeadline that will be overlaid on the image: "${headline}"\nAspect ratio: ${aspectRatio}\nPrevious (failed) prompt:\n${prevPrompt}\n\nReturn ONLY a JSON object: {"imagePrompt": "..."} — no markdown, no preamble.`,
         },
       ],
     });
@@ -105,10 +108,11 @@ async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, as
 async function generateWithRetries({ initialPrompt, productImageBase64, productMimeType, aspectRatio, brand, product, headline }) {
   let activePrompt = initialPrompt;
   let lastErr = null;
+  const hasReferenceImage = !!productImageBase64;
   for (let attempt = 1; attempt <= ATTEMPTS.length; attempt++) {
     const cfg = ATTEMPTS[attempt - 1];
     if (cfg.rewritePrompt) {
-      activePrompt = await regenerateStaticPrompt({ brand, product, headline, prevPrompt: activePrompt, aspectRatio });
+      activePrompt = await regenerateStaticPrompt({ brand, product, headline, prevPrompt: activePrompt, aspectRatio, hasReferenceImage });
     }
     try {
       return await generateImageOnce(activePrompt, productImageBase64, productMimeType, cfg.timeout, aspectRatio);
@@ -124,7 +128,7 @@ async function generateWithRetries({ initialPrompt, productImageBase64, productM
   throw lastErr || new Error("Image generation failed after 8 attempts");
 }
 
-function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }) {
+function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false }) {
   const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
   const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
   const audience = brand?.audience_description ? `Target audience: ${brand.audience_description}.` : "";
@@ -136,8 +140,39 @@ function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }) {
     brand?.influencer_style ? `${brand.influencer_style} style` : null,
   ].filter(Boolean).join(", ");
   const spokes = spokesperson ? `Spokesperson: ${spokesperson}.` : "";
+
+  if (hasReferenceImage) {
+    return `
+TASK: Create a high-converting social media ad using the provided reference image as the literal product.
+
+CRITICAL — PRODUCT FIDELITY:
+- The first input is a reference photo of the EXACT product to feature.
+- Render the product EXACTLY as shown in the reference: same shape, colors, packaging, label text, logo, material, finish, proportions.
+- Do NOT redesign, restyle, recolor, or "improve" the product. Do NOT change the label, font, or branding on the product.
+- Place this exact product into the scene described below.
+
+SCENE / VISUAL DIRECTION:
+${imagePrompt}
+
+BRAND CONTEXT:
+${colors}
+${personality}
+${audience}
+${voice}
+${spokes}
+
+HEADLINE OVERLAY (bold, legible, well-placed for the ${aspectRatio} format):
+"${headline}"
+
+FORMAT: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+STYLE: photorealistic, premium, on-brand. Headline rendered as clean overlay text, readable and visually integrated, not a watermark.
+
+Use attached image as product reference. Render that exact product, in the scene described above, with the headline overlaid.
+`.trim();
+  }
+
   const productLine = product
-    ? `Product: ${product.name}${product.description ? ` - ${product.description}` : ""}.`
+    ? `Product: ${product.name}${product.description ? ` — ${product.description}` : ""}.`
     : "";
   return `
 Create a high-converting social media ad creative.
@@ -156,6 +191,7 @@ Headline overlay (bold, legible, well-placed for the ${aspectRatio} format): "${
 Format: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
 Style: photorealistic, premium, on-brand, with the headline rendered cleanly as overlay text.
 The headline must be readable and visually integrated, not a watermark.
+NOTE: No reference image attached. Render the product in precise visual detail based on the description above.
 `.trim();
 }
 
@@ -205,8 +241,11 @@ export async function POST(req) {
         : Promise.resolve({ data: null }),
     ]);
 
-    const initialPrompt = buildPrompt({ headline, imagePrompt, brand, product, aspectRatio });
     const ref = referenceImageUrl ? await fetchUrlAsBase64(referenceImageUrl) : null;
+    const initialPrompt = buildPrompt({
+      headline, imagePrompt, brand, product, aspectRatio,
+      hasReferenceImage: !!ref?.base64,
+    });
 
     const img = await generateWithRetries({
       initialPrompt,

@@ -93,7 +93,7 @@ async function generateImageOnce(prompt, productImageBase64, productMimeType, ti
 // brand voice, but different angle/composition/lighting/background. Used
 // only on attempts 3, 5, 7 of the 8-attempt loop. ~$0.005 per call; worst
 // case 3 calls per task = ~$0.015 added.
-async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, aspectRatio }) {
+async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, aspectRatio, hasReferenceImage = false }) {
   const ctx = [
     product?.name ? `Product: ${product.name}` : null,
     product?.description ? `Description: ${product.description}` : null,
@@ -103,6 +103,12 @@ async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, as
     brand?.voice_style?.length ? `Voice: ${brand.voice_style.join(", ")}` : null,
   ].filter(Boolean).join("\n");
 
+  // When a reference image is attached, the rewrite MUST preserve the
+  // product-fidelity instructions or Gemini will start inventing products.
+  const refRules = hasReferenceImage
+    ? `\nIMPORTANT — REFERENCE IMAGE IS ATTACHED:\nThe new prompt MUST keep these rules:\n- Treat the inline reference image as the EXACT product (same shape, colors, label, logo, finish).\n- Do NOT describe the product visually in your rewrite — let the image handle it.\n- Do NOT instruct Gemini to redesign, restyle, or recolor the product.\n- End the rewritten prompt with the exact phrase: "Use attached image as product reference."`
+    : `\nNOTE: No reference image attached. Describe the product in precise visual detail (color, shape, packaging, label, finish, scale).`;
+
   try {
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
@@ -110,7 +116,7 @@ async function regenerateStaticPrompt({ brand, product, headline, prevPrompt, as
       messages: [
         {
           role: "user",
-          content: `You are rewriting a single image-generation prompt for a static social ad. The previous prompt failed (likely safety filter, complexity, or transient API issue). Write a NEW visual variation: same shot intent, same brand voice, but different angle / composition / lighting / background / framing. Keep it photorealistic and premium.
+          content: `You are rewriting a single image-generation prompt for a static social ad. The previous prompt failed (likely safety filter, complexity, or transient API issue). Write a NEW visual variation: same shot intent, same brand voice, but different angle / composition / lighting / background / framing. Keep it photorealistic and premium.${refRules}
 
 Brand context:
 ${ctx}
@@ -142,6 +148,7 @@ Return ONLY a JSON object: {"imagePrompt": "..."} — no markdown, no preamble.`
 async function generateWithRetries({ initialPrompt, productImageBase64, productMimeType, aspectRatio, brand, product, headline }) {
   let activePrompt = initialPrompt;
   let lastErr = null;
+  const hasReferenceImage = !!productImageBase64;
 
   for (let attempt = 1; attempt <= ATTEMPTS.length; attempt++) {
     const cfg = ATTEMPTS[attempt - 1];
@@ -151,6 +158,7 @@ async function generateWithRetries({ initialPrompt, productImageBase64, productM
         brand, product, headline,
         prevPrompt: activePrompt,
         aspectRatio,
+        hasReferenceImage,
       });
     }
 
@@ -218,7 +226,7 @@ function deriveDefaultPrompts(brand, product) {
   ];
 }
 
-function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }) {
+function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false }) {
   const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
   const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
   const audience = brand?.audience_description ? `Target audience: ${brand.audience_description}.` : "";
@@ -230,8 +238,46 @@ function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }) {
     brand?.influencer_style ? `${brand.influencer_style} style` : null,
   ].filter(Boolean).join(", ");
   const spokes = spokesperson ? `Spokesperson: ${spokesperson}.` : "";
+
+  // MODE A vs MODE B (mirroring /samples). With a reference image attached,
+  // we explicitly forbid Gemini from inventing or restyling the product —
+  // it must render the EXACT product from the inline image, just placed in
+  // the new scene with the requested visual direction. Without a reference,
+  // we fall back to a precise textual product description.
+  if (hasReferenceImage) {
+    return `
+TASK: Create a high-converting social media ad using the provided reference image as the literal product.
+
+CRITICAL — PRODUCT FIDELITY:
+- The first input is a reference photo of the EXACT product to feature.
+- Render the product EXACTLY as shown in the reference: same shape, colors, packaging, label text, logo, material, finish, proportions.
+- Do NOT redesign, restyle, recolor, or "improve" the product. Do NOT change the label, font, or branding on the product.
+- Do NOT add or remove product elements. Treat the reference as ground truth.
+- Place this exact product into the scene described below.
+
+SCENE / VISUAL DIRECTION:
+${imagePrompt}
+
+BRAND CONTEXT:
+${colors}
+${personality}
+${audience}
+${voice}
+${spokes}
+
+HEADLINE OVERLAY (bold, legible, well-placed for the ${aspectRatio} format):
+"${headline}"
+
+FORMAT: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+STYLE: photorealistic, premium, on-brand. Headline rendered as clean overlay text, readable and visually integrated, not a watermark.
+
+Use attached image as product reference. Render that exact product, in the scene described above, with the headline overlaid.
+`.trim();
+  }
+
+  // MODE B — no reference image. We must describe the product textually.
   const productLine = product
-    ? `Product: ${product.name}${product.description ? ` - ${product.description}` : ""}.`
+    ? `Product: ${product.name}${product.description ? ` — ${product.description}` : ""}.`
     : "";
 
   return `
@@ -251,6 +297,7 @@ Headline overlay (bold, legible, well-placed for the ${aspectRatio} format): "${
 Format: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
 Style: photorealistic, premium, on-brand, with the headline rendered cleanly as overlay text.
 The headline must be readable and visually integrated, not a watermark.
+NOTE: No reference image attached. Render the product in precise visual detail based on the description above.
 `.trim();
 }
 
@@ -310,22 +357,46 @@ export async function POST(req) {
     ]);
 
     // Fill in defaults from the brand kit when the team hasn't provided
-    // headlines or prompts. The whole point: Static Studio should be able to
-    // generate on-brand ads with one click, no manual input required.
-    if (validHeadlines.length === 0) {
-      validHeadlines = deriveDefaultHeadlines(brand, product);
-    }
-    if (validPrompts.length === 0) {
-      validPrompts = deriveDefaultPrompts(brand, product);
-    }
-    if (validHeadlines.length === 0) validHeadlines = ["Designed for you.", "Built different.", "Try it once.", "Made better.", "The everyday upgrade."];
-    if (validPrompts.length === 0) validPrompts = [
+    // headlines or prompts. Then PAD to exactly 5 with generic fallbacks so
+    // every batch is 5 × 5 = 25 ads, never 4 × 5 = 20 because the brand kit
+    // only had 4 usable headlines (e.g. tagline + key_message + audience +
+    // brand_name and no problems_solved or unique_features).
+    const GENERIC_HEADLINES = [
+      "Designed for you.",
+      "Built different.",
+      "Try it once.",
+      "Made better.",
+      "The everyday upgrade.",
+    ];
+    const GENERIC_PROMPTS = [
       "Hero product shot on a clean editorial background, soft cinematic lighting",
       "Lifestyle scene with a real person using the product naturally",
       "Premium close-up of the product with subtle brand color tones",
       "Spokesperson portrait holding the product, warm natural light",
       "In-context use shot, candid feel, golden hour",
     ];
+
+    if (validHeadlines.length === 0) {
+      validHeadlines = deriveDefaultHeadlines(brand, product);
+    }
+    if (validPrompts.length === 0) {
+      validPrompts = deriveDefaultPrompts(brand, product);
+    }
+    // Pad up to 5 — append generics for any missing slots, dedupe so we don't
+    // repeat a derived headline that happens to match a generic.
+    while (validHeadlines.length < 5) {
+      const next = GENERIC_HEADLINES.find((g) => !validHeadlines.includes(g));
+      if (!next) break;
+      validHeadlines.push(next);
+    }
+    while (validPrompts.length < 5) {
+      const next = GENERIC_PROMPTS.find((g) => !validPrompts.includes(g));
+      if (!next) break;
+      validPrompts.push(next);
+    }
+    // Hard floor: if everything was somehow still empty, use the full generics.
+    if (validHeadlines.length === 0) validHeadlines = [...GENERIC_HEADLINES];
+    if (validPrompts.length === 0) validPrompts = [...GENERIC_PROMPTS];
 
     // Find or create the portal_project for this product so we can drop the
     // generated images into the client's Creatives review surface.
@@ -373,11 +444,12 @@ export async function POST(req) {
     for (let hi = 0; hi < validHeadlines.length; hi++) {
       const headline = validHeadlines[hi];
       const refUrl = headlineImageUrls[hi] || "";
+      const hasRef = !!refUrl;
       for (const imagePrompt of validPrompts) {
         tasks.push({
           headline, imagePrompt,
           referenceImageUrl: refUrl,
-          prompt: buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }),
+          prompt: buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage: hasRef }),
         });
       }
     }
