@@ -44,6 +44,119 @@ function FeedbackBadge({ status, comments }) {
 // Per-script video upload + preview + replace. Default ratio is 9:16 (vertical),
 // since most UGC and Reel/Story ad formats are portrait. Team can flip to 16:9
 // per video using the same pill toggle pattern as the image aspect-ratio chooser.
+// Renders a row of 5 compact upload slots — one for each "final variant" of
+// this script's rendered video. Source of truth is `script.videoVariants[]`,
+// an array of up to 5 entries: { id, url, name, uploading?, uploadProgress?,
+// uploadBytes?, uploadTotalBytes?, uploadEtaSec?, uploadCanceller? }.
+// Empty index = empty upload slot.
+function ScriptVideoSlots({ type, script, onUpload, onRemove, onSetRatio }) {
+  const ratio = script.videoRatio || "9/16";
+  const variants = script.videoVariants || [];
+  const filledCount = variants.filter(v => v?.url).length;
+  // 5 slots, regardless of how many are filled
+  const slots = Array.from({ length: 5 }).map((_, i) => variants[i] || null);
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${G.border}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Video size={14} color={G.textSec} />
+          <span style={{ ...mono, fontSize: 12, fontWeight: 700, color: G.text, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Final Hooks
+          </span>
+          <span style={{ ...mono, fontSize: 11, color: G.textTer }}>{filledCount}/5</span>
+        </div>
+        {/* Aspect ratio toggle controls every slot in this row */}
+        <div style={{ display: "flex", gap: 3, background: "#F5F5F7", padding: 3, borderRadius: 980, border: `1px solid ${G.border}` }}>
+          {[{ v: "9/16", l: "9:16" }, { v: "16/9", l: "16:9" }].map(r => (
+            <button key={r.v} onClick={() => onSetRatio(r.v)}
+              style={{ ...mono, padding: "4px 10px", borderRadius: 980, fontSize: 11, fontWeight: ratio === r.v ? 600 : 500, cursor: "pointer", border: "none",
+                background: ratio === r.v ? G.gold : "transparent",
+                color: ratio === r.v ? "#fff" : G.textSec,
+              }}>{r.l}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: ratio === "9/16" ? "repeat(5, minmax(0, 140px))" : "repeat(5, minmax(0, 1fr))",
+        gap: 10,
+      }}>
+        {slots.map((variant, idx) => (
+          <VariantSlot key={idx} idx={idx} variant={variant} ratio={ratio} onUpload={onUpload} onRemove={onRemove} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VariantSlot({ idx, variant, ratio, onUpload, onRemove }) {
+  const inputRef = useRef(null);
+  const replaceRef = useRef(null);
+  const url = variant?.url;
+  const uploading = !!variant?.videoUploading;
+
+  if (uploading) {
+    const pct = variant.videoUploadProgress || 0;
+    const sentMB = ((variant.videoUploadBytes || 0) / 1024 / 1024).toFixed(1);
+    const totalMB = ((variant.videoUploadTotalBytes || 0) / 1024 / 1024).toFixed(1);
+    const eta = variant.videoUploadEtaSec;
+    const etaText = eta == null ? "..." : eta < 60 ? `${eta}s` : `${Math.ceil(eta / 60)}m`;
+    return (
+      <div style={{ aspectRatio: ratio, borderRadius: 10, border: `1px solid ${G.border}`, background: "#FAFAFA", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, padding: 10, position: "relative" }}>
+        <RefreshCw size={16} color={G.textSec} style={{ animation: "spinKf 1s linear infinite" }} />
+        <span style={{ ...mono, fontSize: 10, color: G.text, fontWeight: 600 }}>{pct}%</span>
+        <div style={{ width: "85%", height: 4, background: "#E8E8ED", borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: G.gold, transition: "width 0.2s ease" }} />
+        </div>
+        <span style={{ ...mono, fontSize: 9, color: G.textSec, fontVariantNumeric: "tabular-nums" }}>{sentMB}/{totalMB}MB · {etaText}</span>
+        {variant.videoUploadCanceller && (
+          <button onClick={() => variant.videoUploadCanceller()}
+            style={{ ...mono, marginTop: 2, padding: "3px 10px", fontSize: 9, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+            Cancel
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (url) {
+    return (
+      <div style={{ position: "relative" }}>
+        <div style={{ aspectRatio: ratio, borderRadius: 10, overflow: "hidden", background: "#000" }}>
+          <video src={url} controls preload="metadata"
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+        </div>
+        <div style={{ display: "flex", gap: 4, justifyContent: "center", marginTop: 6 }}>
+          <button onClick={() => replaceRef.current?.click()}
+            title="Replace this variant"
+            style={{ ...mono, padding: "4px 8px", fontSize: 9, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 3 }}>
+            <RefreshCw size={9} /> Replace
+          </button>
+          <button onClick={() => { if (confirm("Remove Hook " + (idx + 1) + "?")) onRemove(idx); }}
+            title="Remove"
+            style={{ ...mono, padding: "4px 8px", fontSize: 9, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 980, cursor: "pointer" }}>
+            <X size={9} />
+          </button>
+        </div>
+        <span style={{ ...mono, position: "absolute", top: 6, left: 6, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 980, background: "rgba(0,0,0,0.7)", color: "#fff" }}>Hook {idx + 1}</span>
+        <input ref={replaceRef} type="file" accept="video/*" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(idx, f); e.target.value = ""; }} />
+      </div>
+    );
+  }
+
+  return (
+    <div onClick={() => inputRef.current?.click()}
+      style={{ aspectRatio: ratio, borderRadius: 10, border: `1.5px dashed ${G.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: G.textTer, cursor: "pointer", background: "#FAFAFA", padding: 8, textAlign: "center", boxSizing: "border-box" }}>
+      <Upload size={14} />
+      <span style={{ ...mono, fontSize: 10, fontWeight: 600 }}>Hook {idx + 1}</span>
+      <input ref={inputRef} type="file" accept="video/*" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(idx, f); e.target.value = ""; }} />
+    </div>
+  );
+}
+
 function ScriptVideo({ type, script, onUpload, onRemove, onSetRatio }) {
   const inputRef = useRef(null);
   const replaceRef = useRef(null);
@@ -278,14 +391,12 @@ function CreateProject() {
   const [heroScripts, setHeroScripts] = useState([{ id: "1", title: "Hero Video 1", content: "" }]);
   const [ugcScripts, setUgcScripts] = useState([{ id: "1", title: "UGC Video 1", content: "" }]);
   // Loops: 3 standalone video slots, no script. Used for ambient brand films,
-  // looping product demos, hero scene loops. Slots are fixed at 5 so the
+  // looping product demos, hero scene loops. Slots are fixed at 3 so the
   // team always has the same number of upload spots regardless of what's filled.
   const [loopVideos, setLoopVideos] = useState([
     { id: "loop-1", title: "Loop 1" },
     { id: "loop-2", title: "Loop 2" },
     { id: "loop-3", title: "Loop 3" },
-    { id: "loop-4", title: "Loop 4" },
-    { id: "loop-5", title: "Loop 5" },
   ]);
   // Tab nav so the team can jump between asset types (mirrors the client portal UX)
   const [activeTab, setActiveTab] = useState("statics");
@@ -310,13 +421,26 @@ function CreateProject() {
       setProject(data);
       if (data.images?.length) setImages(data.images);
       if (data.imageRatio) setImageRatio(data.imageRatio);
-      if (data.heroScripts?.length) setHeroScripts(data.heroScripts);
-      if (data.ugcScripts?.length) setUgcScripts(data.ugcScripts);
+      // Migrate legacy single-video schema to the new variants array. If a
+      // script has videoUrl but no videoVariants, fold the legacy fields
+      // into Hook 1 so existing clients see their old upload exactly where
+      // they expect it.
+      const migrate = (s) => {
+        if (s.videoVariants && s.videoVariants.length > 0) return s;
+        if (s.videoUrl) {
+          return { ...s, videoVariants: [{ id: `v-0`, url: s.videoUrl, name: s.videoName || "" }] };
+        }
+        return s;
+      };
+      if (data.heroScripts?.length) setHeroScripts(data.heroScripts.map(migrate));
+      if (data.ugcScripts?.length) setUgcScripts(data.ugcScripts.map(migrate));
       if (data.loopVideos?.length) {
-        // Pad with empty slots up to 5 if fewer were saved.
-        const padded = [...data.loopVideos];
-        while (padded.length < 5) padded.push({ id: `loop-${padded.length + 1}`, title: `Loop ${padded.length + 1}` });
-        setLoopVideos(padded.slice(0, 5));
+        // Pad with empty slots up to 3 if fewer were saved + migrate legacy
+        // videoUrl into videoVariants[0] for each loop so existing uploads
+        // surface in the new Hook 1 slot.
+        const padded = data.loopVideos.map(migrate);
+        while (padded.length < 3) padded.push({ id: `loop-${padded.length + 1}`, title: `Loop ${padded.length + 1}` });
+        setLoopVideos(padded.slice(0, 3));
       }
       // mark hydrated on the next tick so the auto-save effect picks up future changes only
       setTimeout(() => { hydratedRef.current = true; }, 50);
@@ -515,7 +639,7 @@ function CreateProject() {
   const addScript = (type) => {
     const setter = type === "hero" ? setHeroScripts : setUgcScripts;
     const label = type === "hero" ? "Hero Video" : "UGC Video";
-    setter(prev => prev.length >= 5 ? prev : [...prev, { id: crypto.randomUUID(), title: `${label} ${prev.length + 1}`, content: "" }]);
+    setter(prev => prev.length >= 3 ? prev : [...prev, { id: crypto.randomUUID(), title: `${label} ${prev.length + 1}`, content: "" }]);
   };
 
   const updateScript = (type, id, content) => {
@@ -586,31 +710,39 @@ function CreateProject() {
     }));
   };
 
-  // Upload (or replace) the rendered video for a script. Uses Supabase's TUS
-  // resumable upload protocol with 6MB chunks - handles multi-GB renders cleanly.
-  const uploadScriptVideo = async (type, scriptId, file) => {
+  // Upload one video into a specific Hook slot (variantIdx 0-4) under a
+  // script. Uses Supabase TUS resumable upload (6MB chunks). Each slot has
+  // its own progress + cancel state, so the team can upload Hook 1 and
+  // Hook 2 in parallel without their progress bars cross-talking.
+  const uploadScriptVideo = async (type, scriptId, variantIdx, file) => {
     if (!file) return;
     if (!projectId || !supabase) { alert("Storage not ready."); return; }
     const setter = type === "hero" ? setHeroScripts : type === "ugc" ? setUgcScripts : setLoopVideos;
-    const list = type === "hero" ? heroScripts : type === "ugc" ? ugcScripts : loopVideos;
-    const current = list.find(s => s.id === scriptId);
-    if (!current) return;
 
     const ext = (file.name.split(".").pop() || "mp4").toLowerCase();
     const path = `portal/${projectId}/videos/${crypto.randomUUID()}.${ext}`;
     const totalBytes = file.size;
     const startedAt = Date.now();
 
-    // Initialize upload status with file size + ETA placeholder
-    setter(prev => prev.map(s => s.id !== scriptId ? s : ({
-      ...s,
+    // Helper: write a partial update into variants[variantIdx] without
+    // disturbing the other slots in the row.
+    const patchVariant = (scripts, patch) => scripts.map(s => {
+      if (s.id !== scriptId) return s;
+      const variants = [...(s.videoVariants || [])];
+      while (variants.length <= variantIdx) variants.push(null);
+      variants[variantIdx] = { ...(variants[variantIdx] || { id: `v-${variantIdx}` }), ...patch };
+      return { ...s, videoVariants: variants };
+    });
+
+    // Initialize upload state
+    setter(prev => patchVariant(prev, {
       videoUploading: true,
       videoUploadProgress: 0,
       videoUploadBytes: 0,
       videoUploadTotalBytes: totalBytes,
       videoUploadEtaSec: null,
       videoUploadCanceller: null,
-    })));
+    }));
 
     try {
       const tus = await import("tus-js-client");
@@ -637,78 +769,80 @@ function CreateProject() {
             contentType: file.type,
             cacheControl: "3600",
           },
-          chunkSize: 6 * 1024 * 1024, // Supabase requires exactly 6MB chunks
+          chunkSize: 6 * 1024 * 1024,
           onError: (e) => { console.error("[video tus] error", e); reject(e); },
           onProgress: (sent, total) => {
             const pct = Math.round((sent / total) * 100);
             const elapsed = (Date.now() - startedAt) / 1000;
-            const speed = sent / Math.max(elapsed, 0.5); // bytes per second
+            const speed = sent / Math.max(elapsed, 0.5);
             const remaining = total - sent;
             const eta = speed > 0 ? Math.ceil(remaining / speed) : null;
-            setter(prev => prev.map(s => s.id !== scriptId ? s : ({
-              ...s,
+            setter(prev => patchVariant(prev, {
               videoUploadProgress: pct,
               videoUploadBytes: sent,
               videoUploadTotalBytes: total,
               videoUploadEtaSec: eta,
-            })));
+            }));
           },
           onSuccess: () => resolve(),
         });
-        // Make the upload cancellable from the UI
-        setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, videoUploadCanceller: () => uploadInstance.abort(true) })));
+        setter(prev => patchVariant(prev, { videoUploadCanceller: () => uploadInstance.abort(true) }));
         uploadInstance.start();
       });
 
       const { data: { publicUrl } } = supabase.storage.from("brand-assets").getPublicUrl(path);
-
-      const archive = current.videoUrl ? [{
-        version: (current.videoVersionHistory?.length || 0) + 1,
-        url: current.videoUrl,
-        name: current.videoName || "video",
-        replacedAt: new Date().toISOString(),
-        feedbackStatus: feedback[scriptId]?.status || null,
-        feedbackComments: (feedback[scriptId]?.comments || []).map(c => ({ ...c })),
-      }] : [];
-
-      setter(prev => prev.map(s => s.id !== scriptId ? s : ({
-        ...s,
-        videoUrl: publicUrl,
-        videoName: file.name,
-        videoVersionHistory: [...(s.videoVersionHistory || []), ...archive],
-        videoUploading: false,
-        videoUploadProgress: 100,
-      })));
-
-      if (current.videoUrl) {
-        try {
-          await fetch("/api/portal/feedback", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId, itemId: scriptId, status: null }),
-          });
-        } catch (e) { /* non-critical */ }
-      }
+      setter(prev => {
+        const next = patchVariant(prev, {
+          url: publicUrl,
+          name: file.name,
+          videoUploading: false,
+          videoUploadProgress: 100,
+          videoUploadCanceller: null,
+        });
+        // Keep legacy videoUrl/videoName synced to the first filled variant
+        // so the client review surface (which still reads script.videoUrl)
+        // shows at least Hook 1 until that side is upgraded to render all
+        // variants explicitly.
+        return next.map(s => {
+          if (s.id !== scriptId) return s;
+          const first = (s.videoVariants || []).find(v => v?.url);
+          return first
+            ? { ...s, videoUrl: first.url, videoName: first.name || "" }
+            : { ...s, videoUrl: null, videoName: null };
+        });
+      });
     } catch (e) {
       const aborted = String(e?.message || "").toLowerCase().includes("abort");
       console.error("[video upload] threw", e);
-      setter(prev => prev.map(s => s.id !== scriptId ? s : ({
-        ...s,
+      setter(prev => patchVariant(prev, {
         videoUploading: false,
         videoUploadProgress: 0,
         videoUploadBytes: 0,
         videoUploadTotalBytes: 0,
         videoUploadEtaSec: null,
         videoUploadCanceller: null,
-      })));
+      }));
       if (!aborted) {
         alert(`Video upload failed: ${e?.message || "Unknown error"}\n\nIf the file is over your Supabase bucket's size limit, bump it: Supabase Dashboard → Storage → brand-assets bucket → Edit → File size limit → set to 5368709120 (5 GB) → Save.`);
       }
     }
   };
 
-  const removeScriptVideo = (type, scriptId) => {
+  const removeScriptVideo = (type, scriptId, variantIdx) => {
     const setter = type === "hero" ? setHeroScripts : type === "ugc" ? setUgcScripts : setLoopVideos;
-    setter(prev => prev.map(s => s.id !== scriptId ? s : ({ ...s, videoUrl: null, videoName: null })));
+    setter(prev => prev.map(s => {
+      if (s.id !== scriptId) return s;
+      const variants = [...(s.videoVariants || [])];
+      if (variants[variantIdx]) variants[variantIdx] = null;
+      // Re-sync legacy videoUrl to the new "first filled" variant.
+      const first = variants.find(v => v?.url);
+      return {
+        ...s,
+        videoVariants: variants,
+        videoUrl: first?.url || null,
+        videoName: first?.name || null,
+      };
+    }));
   };
 
   const setScriptVideoRatio = (type, scriptId, ratio) => {
@@ -930,9 +1064,9 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Film size={14} color={G.textSec} />
-              Hero Videos ({heroScripts.length}/5)
+              Hero Videos ({heroScripts.length}/3)
             </label>
-            {heroScripts.length < 5 && (
+            {heroScripts.length < 3 && (
               <button onClick={() => addScript("hero")} style={{ ...mono, padding: "6px 16px", fontSize: 13, fontWeight: 500, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer" }}>+ Add</button>
             )}
           </div>
@@ -963,9 +1097,9 @@ function CreateProject() {
                     onSetRatio={(r) => setScriptMoodBoardRatio("hero", s.id, r)}
                     feedback={feedback[`moodboard-${s.id}`]}
                   />
-                  <ScriptVideo type="hero" script={s}
-                    onUpload={(file) => uploadScriptVideo("hero", s.id, file)}
-                    onRemove={() => removeScriptVideo("hero", s.id)}
+                  <ScriptVideoSlots type="hero" script={s}
+                    onUpload={(idx, file) => uploadScriptVideo("hero", s.id, idx, file)}
+                    onRemove={(idx) => removeScriptVideo("hero", s.id, idx)}
                     onSetRatio={(r) => setScriptVideoRatio("hero", s.id, r)}
                   />
                   {bd.sections.length > 0 && (
@@ -992,9 +1126,9 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Video size={14} color={G.textSec} />
-              UGC Videos ({ugcScripts.length}/5)
+              UGC Videos ({ugcScripts.length}/3)
             </label>
-            {ugcScripts.length < 5 && (
+            {ugcScripts.length < 3 && (
               <button onClick={() => addScript("ugc")} style={{ ...mono, padding: "6px 16px", fontSize: 13, fontWeight: 500, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer" }}>+ Add</button>
             )}
           </div>
@@ -1025,9 +1159,9 @@ function CreateProject() {
                     onSetRatio={(r) => setScriptMoodBoardRatio("ugc", s.id, r)}
                     feedback={feedback[`moodboard-${s.id}`]}
                   />
-                  <ScriptVideo type="ugc" script={s}
-                    onUpload={(file) => uploadScriptVideo("ugc", s.id, file)}
-                    onRemove={() => removeScriptVideo("ugc", s.id)}
+                  <ScriptVideoSlots type="ugc" script={s}
+                    onUpload={(idx, file) => uploadScriptVideo("ugc", s.id, idx, file)}
+                    onRemove={(idx) => removeScriptVideo("ugc", s.id, idx)}
                     onSetRatio={(r) => setScriptVideoRatio("ugc", s.id, r)}
                   />
                   {bd.sections.length > 0 && (
@@ -1054,7 +1188,7 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Video size={14} color={G.textSec} />
-              Loops ({loopVideos.filter(v => v.videoUrl).length}/5)
+              Loops ({loopVideos.filter(v => v.videoUrl).length}/3)
             </label>
             <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Standalone clips. No script needed.</span>
           </div>
@@ -1067,9 +1201,9 @@ function CreateProject() {
                     <FeedbackBadge status={feedback[v.id]?.status} comments={feedback[v.id]?.comments} />
                   </div>
                 </div>
-                <ScriptVideo type="loop" script={v}
-                  onUpload={(file) => uploadScriptVideo("loop", v.id, file)}
-                  onRemove={() => removeScriptVideo("loop", v.id)}
+                <ScriptVideoSlots type="loop" script={v}
+                  onUpload={(idx, file) => uploadScriptVideo("loop", v.id, idx, file)}
+                  onRemove={(idx) => removeScriptVideo("loop", v.id, idx)}
                   onSetRatio={(r) => setScriptVideoRatio("loop", v.id, r)}
                 />
               </div>
