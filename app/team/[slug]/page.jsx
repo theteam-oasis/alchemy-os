@@ -1007,6 +1007,15 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   const [stopping, setStopping] = useState(false);
   const [revisingPreview, setRevisingPreview] = useState({}); // { [sceneIndex]: true }
   const previewAbortRef = useRef({});
+  // Click-any-image lightbox (mirrors /proposal/create pattern). Esc / click-
+  // anywhere / click X all dismiss.
+  const [enlargedImage, setEnlargedImage] = useState(null);
+  useEffect(() => {
+    if (!enlargedImage) return;
+    const onKey = (e) => { if (e.key === "Escape") setEnlargedImage(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enlargedImage]);
 
   const validHeadlines = headlines.map((h) => h.trim()).filter(Boolean);
 
@@ -1334,7 +1343,9 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                   <p style={{ fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shotLabel}</p>
                   <div style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${isApproved ? G.success : G.border}` }}>
                     {img?.url ? (
-                      <img src={img.url} alt={shotLabel} style={{ width: "100%", height: "100%", objectFit: "cover", filter: isRevising ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s" }} />
+                      <img src={img.url} alt={shotLabel}
+                        onClick={() => setEnlargedImage(img.url)}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", filter: isRevising ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s", cursor: "zoom-in" }} />
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer }}>
                         <Loader2 size={20} style={{ animation: "spinKf 1s linear infinite" }} />
@@ -1411,7 +1422,9 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     return (
                       <div key={vi} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
                         {variant?.url ? (
-                          <img src={variant.url} alt={variant.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img src={variant.url} alt={variant.name}
+                            onClick={() => setEnlargedImage(variant.url)}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} />
                         ) : (
                           <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 11 }}>
                             {status === "running" ? <Loader2 size={16} style={{ animation: "spinKf 1s linear infinite" }} /> : "—"}
@@ -1434,6 +1447,39 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Lightbox — click any image to enlarge, click anywhere / Esc to close */}
+      {enlargedImage && (
+        <div
+          onClick={() => setEnlargedImage(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 32, cursor: "zoom-out",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setEnlargedImage(null)}
+            style={{
+              position: "absolute", top: 20, right: 20,
+              width: 36, height: 36, borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)", color: "#fff",
+              border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <X size={18} />
+          </button>
+          <img
+            src={enlargedImage}
+            alt="Enlarged"
+            style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 80px rgba(0,0,0,0.5)", cursor: "zoom-out" }}
+          />
         </div>
       )}
 
