@@ -484,6 +484,7 @@ export async function POST(req) {
       scenePrompts = [],
       shots = [],
       productImageUrl = "",
+      previewHeadline = "",
       // Variants-phase inputs:
       scenePrompt = "",
       shot = "",
@@ -527,6 +528,9 @@ export async function POST(req) {
     // imagePrompts to 5 from brand kit / generics. Skipped for the two
     // phase-specific flows (preview / variants), which arrive with their own
     // explicit prompt + headline lists from the orchestrator.
+    // (GENERIC_HEADLINES + GENERIC_PROMPTS are referenced from the preview
+    // task builder for fallback text — they're defined just above and live
+    // at function scope, so no hoisting needed.)
     if (phase === "cartesian") {
       const derivedHeadlines = deriveDefaultHeadlines(brand, product);
       const derivedQueue = [...derivedHeadlines, ...GENERIC_HEADLINES.filter((g) => !derivedHeadlines.includes(g))];
@@ -587,22 +591,30 @@ export async function POST(req) {
     // ─── Build tasks based on phase ─────────────────────────────────
     const tasks = [];
     if (phase === "preview") {
-      // 5 preview scenes, no headline overlay. Each task uses the SAME
-      // productImageUrl as the visual reference (one product → 5 scenes).
+      // Preview = full ad with DR copy + typography treatment using the FIRST
+      // headline (so the team approves a finished-looking ad, not a blank
+      // scene). When previewHeadline is empty, fall back to a brand-derived
+      // headline so we still render text. Variants generate 4 MORE headlines
+      // on the approved scene → preview + 4 variants = 5 ads per scene.
       const hasRef = !!productImageUrl;
       const arr = Array.isArray(scenePrompts) ? scenePrompts : [];
+      const derivedHeadlines = deriveDefaultHeadlines(brand, product);
+      const fallbackHeadline = derivedHeadlines[0] || GENERIC_HEADLINES[0];
+      const effectivePreviewHeadline = String(previewHeadline || "").trim() || fallbackHeadline;
       for (let i = 0; i < arr.length; i++) {
+        const shotName = shots?.[i] || "";
         tasks.push({
-          headline: "",
+          headline: effectivePreviewHeadline,
           imagePrompt: arr[i],
-          shot: shots?.[i] || "",
+          shot: shotName,
           sceneIndex: i,
           referenceImageUrl: productImageUrl,
-          prompt: buildPreviewPrompt({
+          prompt: buildPrompt({
+            headline: effectivePreviewHeadline,
             imagePrompt: arr[i],
             brand, product, aspectRatio,
             hasReferenceImage: hasRef,
-            shot: shots?.[i] || "",
+            shot: shotName,
           }),
         });
       }

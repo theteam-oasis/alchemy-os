@@ -19,8 +19,14 @@ const LANES = 5; // all 5 previews fan out in parallel
 export async function POST(req) {
   try {
     const body = await req.json();
-    const { clientId, productId, aspectRatio = "1:1", productImageUrl = "" } = body || {};
+    const { clientId, productId, aspectRatio = "1:1", productImageUrl = "", headlines = [] } = body || {};
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
+
+    // Pick the FIRST headline for previews. The team wants previews to show
+    // the full ad with DR copy treatment so they're approving a finished ad,
+    // not a blank scene. Variants then render the OTHER 4 headlines on the
+    // same approved scene → preview + 4 variants = 5 ads per scene.
+    const previewHeadline = (headlines || []).map((h) => String(h || "").trim()).find(Boolean) || "";
 
     // Step 1: ask Claude for 5 distinct scene prompts.
     const baseUrl = new URL(req.url);
@@ -59,7 +65,7 @@ export async function POST(req) {
     // or variants job and which scene it belongs to.
     try {
       await supabase.from("static_gen_jobs").update({
-        input: { phase: "preview", scenePrompts, productImageUrl, shots },
+        input: { phase: "preview", scenePrompts, productImageUrl, shots, previewHeadline, headlines },
       }).eq("id", job.id);
     } catch (e) { console.error("[preview-start] input column update failed", e?.message); }
 
@@ -77,6 +83,7 @@ export async function POST(req) {
             scenePrompts,
             shots,
             productImageUrl,
+            previewHeadline,
             offset: startOffset, limit: CHUNK,
             jobId: job.id,
             chain: { stride, total },

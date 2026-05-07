@@ -1051,6 +1051,10 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           productId: activeProduct?.id || null,
           aspectRatio,
           productImageUrl: productImageUrl || "",
+          // Send the team's headlines so previews render with the FIRST
+          // headline + full DR copy treatment. If empty, server falls back
+          // to brand-kit-derived headlines.
+          headlines: headlines || [],
         }),
       });
       const text = await res.text();
@@ -1094,14 +1098,20 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           variantStatus: "running",
           variantJobId: null,
           variantImages: [],
-          variantProgress: { done: 0, total: 5 },
+          // 4 variants now (preview already covers headline[0])
+          variantProgress: { done: 0, total: 4 },
           variantError: "",
           scenePrompt, shot,
           previewUrl: sceneImg.url,
+          previewImg: sceneImg, // stash so the variant row can render preview as tile 0
         },
       },
     }));
     try {
+      // Send headlines[1..] for variants — the preview already has headline[0]
+      // baked in, so variants are the OTHER 4 headlines. Result: preview + 4
+      // variants = 5 ads per scene, all on one line in the UI.
+      const variantHeadlines = (validHeadlines.length ? validHeadlines : []).slice(1);
       const res = await fetch("/api/static-generator/approve-scene", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1109,7 +1119,7 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           clientId: client.id,
           productId: activeProduct?.id || null,
           scenePrompt, shot,
-          headlines: validHeadlines.length ? validHeadlines : [],
+          headlines: variantHeadlines,
           aspectRatio,
           productImageUrl: productImageUrl || "",
           parentJobId: previewJobId || null,
@@ -1504,7 +1514,7 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => approveScene(img)}
                         style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 10px", fontSize: 12, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                        <Check size={12} /> Approve · 5 ads
+                        <Check size={12} /> Approve · 4 more
                       </button>
                       <button onClick={() => revisePreview(img)}
                         title="Regenerate just this preview"
@@ -1543,12 +1553,12 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
               <div key={sceneIndex} style={{ marginTop: 32, paddingTop: 24, borderTop: `1px solid ${G.border}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
                   <div>
-                    <p style={{ ...hd, fontSize: 18, color: G.text, marginBottom: 2 }}>{shotLabel} · 5 ad variants</p>
+                    <p style={{ ...hd, fontSize: 18, color: G.text, marginBottom: 2 }}>{shotLabel} · 5 ads</p>
                     <p style={{ fontSize: 12, color: G.textSec }}>
                       {status === "running"
-                        ? <>Rendering… <Loader2 size={11} style={{ display: "inline", verticalAlign: "middle", animation: "spinKf 1s linear infinite" }} /> {sceneState.variantProgress?.done || 0}/{sceneState.variantProgress?.total || 5}</>
+                        ? <>Rendering 4 more… <Loader2 size={11} style={{ display: "inline", verticalAlign: "middle", animation: "spinKf 1s linear infinite" }} /> {sceneState.variantProgress?.done || 0}/{sceneState.variantProgress?.total || 4}</>
                         : status === "done"
-                          ? `${variantImages.length} variants ready in the Creatives portal.`
+                          ? `Preview + ${variantImages.length} variants ready in the Creatives portal.`
                           : status === "error"
                             ? <span style={{ color: G.reject }}>{sceneState.variantError}</span>
                             : "—"
@@ -1556,10 +1566,28 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     </p>
                   </div>
                 </div>
-                {/* Uniform 5-column row — all 5 variants on one line so the
-                    scene's headline-overlay set reads as a coherent group */}
+                {/* 5-column row — preview tile (column 0) + 4 variant tiles
+                    (columns 1-4) so the scene's full headline set reads as
+                    a coherent group of 5 ads on one line. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
-                  {Array.from({ length: 5 }).map((_, vi) => {
+                  {/* Column 0: the approved preview itself (uses headline[0]) */}
+                  {(() => {
+                    const previewImg = sceneState.previewImg || previewImages.find((it) => it.sceneIndex === sceneIndex);
+                    return (
+                      <div style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.success}` }}>
+                        {previewImg?.url ? (
+                          <img src={previewImg.url} alt="" onClick={() => setEnlargedImage(previewImg.url)}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 11 }}>—</div>
+                        )}
+                        <div style={{ position: "absolute", top: 6, left: 6, padding: "3px 7px", fontSize: 9, fontWeight: 700, color: "#fff", background: G.success, borderRadius: 999, letterSpacing: 0.3 }}>
+                          PREVIEW
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {Array.from({ length: 4 }).map((_, vi) => {
                     const variant = variantImages.find((it) => it.headlineIndex === vi) || variantImages[vi];
                     const key = `${sceneIndex}:${vi}`;
                     const busy = !!variantBusy[key];
