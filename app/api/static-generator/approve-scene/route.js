@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const CHUNK = 1;
-const LANES = 4;
+const LANES = 5;
 
 export async function POST(req) {
   try {
@@ -36,19 +36,18 @@ export async function POST(req) {
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
     if (!scenePrompt) return Response.json({ error: "scenePrompt required" }, { status: 400 });
 
-    // Filter + pad to exactly 4 variants (preview has headline[0]; variants
-    // cover the OTHER 4). If the team didn't supply enough, fall back to
-    // generic-but-not-the-preview-one fallbacks.
+    // Filter + pad headlines so we ALWAYS render exactly 5 variants per
+    // approved scene, displayed on one line in the UI.
     const validHeadlines = headlines.map((h) => String(h || "").trim()).filter(Boolean);
-    const GENERIC_HEADLINES = ["Built different.", "Try it once.", "Made better.", "The everyday upgrade.", "Worth it.", "Designed for you."];
-    while (validHeadlines.length < 4) {
+    const GENERIC_HEADLINES = ["Designed for you.", "Built different.", "Try it once.", "Made better.", "The everyday upgrade."];
+    while (validHeadlines.length < 5) {
       const next = GENERIC_HEADLINES.find((g) => !validHeadlines.includes(g));
       if (!next) break;
       validHeadlines.push(next);
     }
-    validHeadlines.length = 4; // hard cap
+    validHeadlines.length = 5; // hard cap
 
-    const total = 4;
+    const total = 5;
     const { data: job, error: jobErr } = await supabase
       .from("static_gen_jobs")
       .insert({
