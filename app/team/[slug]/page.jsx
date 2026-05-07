@@ -1457,7 +1457,10 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
               Approve a scene to render 5 ad variants (one per headline). Revise to regenerate. Exit to skip.
             </p>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
+          {/* Force 5 columns so all 5 preview scenes stay on ONE line at any
+              viewport width. min-width: 0 on each cell lets them actually
+              shrink to share the row instead of overflowing. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
             {Array.from({ length: 5 }).map((_, idx) => {
               const img = previewImages.find((i) => i.sceneIndex === idx) || null;
               const sceneState = scenes?.[idx] || {};
@@ -1468,8 +1471,8 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
               const shotLabel = img?.shot || previewShots?.[idx] || `Scene ${idx + 1}`;
               const showImage = img?.url && !isCancelled;
               return (
-                <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8, opacity: isExited || isCancelled ? 0.45 : 1 }}>
-                  <p style={{ fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shotLabel}</p>
+                <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 6, opacity: isExited || isCancelled ? 0.45 : 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shotLabel}</p>
                   <div style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${isApproved ? G.success : G.border}` }}>
                     {showImage ? (
                       <img src={img.url} alt={shotLabel}
@@ -1511,21 +1514,21 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                   </div>
                   {/* Action buttons */}
                   {showImage && !isExited && !isApproved && (
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 4, minWidth: 0 }}>
                       <button onClick={() => approveScene(img)}
-                        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 10px", fontSize: 12, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                        <Check size={12} /> Approve · 5 ads
+                        style={{ flex: 1, minWidth: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "7px 6px", fontSize: 11, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif", whiteSpace: "nowrap", overflow: "hidden" }}>
+                        <Check size={11} /> Approve
                       </button>
                       <button onClick={() => revisePreview(img)}
                         title="Regenerate just this preview"
                         disabled={isRevising}
-                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 10px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 8, cursor: isRevising ? "wait" : "pointer", fontFamily: "'Inter', sans-serif" }}>
-                        <RefreshCw size={12} />
+                        style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "7px 8px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 8, cursor: isRevising ? "wait" : "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        <RefreshCw size={11} />
                       </button>
                       <button onClick={() => exitScene(img)}
                         title="Skip this scene"
-                        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "8px 10px", fontSize: 12, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
-                        <X size={12} />
+                        style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "7px 8px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px solid ${G.border}`, borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                        <X size={11} />
                       </button>
                     </div>
                   )}
@@ -1566,10 +1569,10 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     </p>
                   </div>
                 </div>
-                {/* 5-column row — all 5 ad variants on one line. Preview
-                    sits above as the reference scene; this row is the
-                    finished ads with each headline. */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+                {/* 5-column row — all 5 ad variants on one line. minmax(0,1fr)
+                    lets cells shrink to share the row instead of overflowing
+                    when the parent is narrower than 5 × min-content. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 8 }}>
                   {Array.from({ length: 5 }).map((_, vi) => {
                     const variant = variantImages.find((it) => it.headlineIndex === vi) || variantImages[vi];
                     const key = `${sceneIndex}:${vi}`;
