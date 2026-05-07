@@ -1007,6 +1007,13 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   const [stopping, setStopping] = useState(false);
   const [revisingPreview, setRevisingPreview] = useState({}); // { [sceneIndex]: true }
   const previewAbortRef = useRef({});
+  // Per-tile state for variants: regen-in-flight + locally-cancelled. Local
+  // cancel hides the tile from the polling-driven render; the underlying
+  // server job keeps running for the OTHER tiles in that variant batch.
+  const [variantBusy, setVariantBusy] = useState({}); // { [`${sceneIdx}:${variantIdx}`]: true }
+  const variantAbortRef = useRef({});                  // { [key]: AbortController }
+  const [cancelledPreviewSlots, setCancelledPreviewSlots] = useState({});         // { [sceneIndex]: true }
+  const [cancelledVariantSlots, setCancelledVariantSlots] = useState({});         // { [`${sceneIdx}:${variantIdx}`]: true }
   // Click-any-image lightbox (mirrors /proposal/create pattern). Esc / click-
   // anywhere / click X all dismiss.
   const [enlargedImage, setEnlargedImage] = useState(null);
@@ -1186,6 +1193,84 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
     }));
   };
 
+  // Regenerate ONE variant in an approved scene. Same /regenerate-one endpoint,
+  // with the scene prompt + that variant's headline. AbortController per tile
+  // mirrors the proposal/create pattern (re-click cancels the in-flight call).
+  const regenerateVariant = async (sceneIndex, variantIndex, variantImg) => {
+    const sceneState = genState.scenes?.[sceneIndex];
+    const scenePrompt = variantImg?.scenePrompt || sceneState?.scenePrompt || "";
+    const headline = variantImg?.headline || validHeadlines[variantIndex] || "";
+    const key = `${sceneIndex}:${variantIndex}`;
+    if (!scenePrompt) { setError("Couldn't recover scene prompt for variant regen."); return; }
+
+    if (variantAbortRef.current[key]) {
+      try { variantAbortRef.current[key].abort(); } catch {}
+    }
+    const ac = new AbortController();
+    variantAbortRef.current[key] = ac;
+    setVariantBusy((m) => ({ ...m, [key]: true }));
+    setError("");
+    try {
+      const res = await fetch("/api/static-generator/regenerate-one", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
+        body: JSON.stringify({
+          clientId: client.id,
+          productId: activeProduct?.id || null,
+          headline,
+          imagePrompt: scenePrompt,
+          imageId: variantImg?.id, // may be undefined → server appends instead of swapping
+          aspectRatio,
+          referenceImageUrl: productImageUrl || "",
+          jobId: sceneState?.variantJobId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      // Swap the variant in local state — match by id; if not present, replace
+      // by index (covers cancel-then-regen-empty-slot flow).
+      setGenState((s) => {
+        const list = s.scenes[sceneIndex]?.variantImages || [];
+        const matched = list.findIndex((it) => it.id === data.image.id);
+        const updated = [...list];
+        if (matched >= 0) updated[matched] = { ...data.image, headlineIndex: variantIndex, sceneIndex, scenePrompt };
+        else updated[variantIndex] = { ...data.image, headlineIndex: variantIndex, sceneIndex, scenePrompt };
+        return {
+          ...s,
+          scenes: { ...s.scenes, [sceneIndex]: { ...s.scenes[sceneIndex], variantImages: updated } },
+        };
+      });
+      // Clear any local-cancel mark for this slot so the new image renders.
+      setCancelledVariantSlots((m) => { const n = { ...m }; delete n[key]; return n; });
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      setError(`Variant regen failed: ${err.message}`);
+    } finally {
+      if (variantAbortRef.current[key] === ac) {
+        setVariantBusy((m) => { const n = { ...m }; delete n[key]; return n; });
+        delete variantAbortRef.current[key];
+      }
+    }
+  };
+
+  // Locally cancel an in-flight slot (preview or variant). The server job
+  // keeps generating other tiles; this one just gets greyed out so the user
+  // can move on. If the actual image lands later, we suppress it via the
+  // cancelled-flag set so the placeholder stays.
+  const cancelPreviewSlot = (sceneIndex) => {
+    setCancelledPreviewSlots((m) => ({ ...m, [sceneIndex]: true }));
+  };
+  const cancelVariantSlot = (sceneIndex, variantIndex) => {
+    const key = `${sceneIndex}:${variantIndex}`;
+    if (variantAbortRef.current[key]) {
+      try { variantAbortRef.current[key].abort(); } catch {}
+      delete variantAbortRef.current[key];
+    }
+    setCancelledVariantSlots((m) => ({ ...m, [key]: true }));
+    setVariantBusy((m) => { const n = { ...m }; delete n[key]; return n; });
+  };
+
   // Stop the in-flight job. Writes status='cancelled' to the job row; the
   // chunk worker checks status at the top of each chunk and bails out.
   // In-flight Gemini calls already mid-fetch will still finish (we don't
@@ -1337,19 +1422,30 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
               const isExited = sceneState.action === "exited";
               const isApproved = sceneState.action === "approved";
               const isRevising = !!revisingPreview[idx];
+              const isCancelled = !!cancelledPreviewSlots[idx];
               const shotLabel = img?.shot || previewShots?.[idx] || `Scene ${idx + 1}`;
+              const showImage = img?.url && !isCancelled;
               return (
-                <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8, opacity: isExited ? 0.45 : 1 }}>
+                <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 8, opacity: isExited || isCancelled ? 0.45 : 1 }}>
                   <p style={{ fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>{shotLabel}</p>
                   <div style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${isApproved ? G.success : G.border}` }}>
-                    {img?.url ? (
+                    {showImage ? (
                       <img src={img.url} alt={shotLabel}
                         onClick={() => setEnlargedImage(img.url)}
                         style={{ width: "100%", height: "100%", objectFit: "cover", filter: isRevising ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s", cursor: "zoom-in" }} />
+                    ) : isCancelled ? (
+                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 11, letterSpacing: 0.4, textTransform: "uppercase" }}>Cancelled</div>
                     ) : (
                       <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer }}>
                         <Loader2 size={20} style={{ animation: "spinKf 1s linear infinite" }} />
                       </div>
+                    )}
+                    {/* Top-right buttons during loading: cancel-this-tile (X) */}
+                    {!showImage && !isCancelled && (
+                      <button onClick={() => cancelPreviewSlot(idx)} title="Cancel this tile"
+                        style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <X size={12} />
+                      </button>
                     )}
                     {isRevising && (
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
@@ -1363,7 +1459,7 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     )}
                   </div>
                   {/* Action buttons */}
-                  {img?.url && !isExited && !isApproved && (
+                  {showImage && !isExited && !isApproved && (
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => approveScene(img)}
                         style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "8px 10px", fontSize: 12, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
@@ -1382,10 +1478,13 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                       </button>
                     </div>
                   )}
-                  {isExited && (
-                    <button onClick={() => setGenState((s) => ({ ...s, scenes: { ...s.scenes, [idx]: { ...(s.scenes[idx] || {}), action: undefined } } }))}
+                  {(isExited || isCancelled) && (
+                    <button onClick={() => {
+                      if (isExited) setGenState((s) => ({ ...s, scenes: { ...s.scenes, [idx]: { ...(s.scenes[idx] || {}), action: undefined } } }));
+                      if (isCancelled) setCancelledPreviewSlots((m) => { const n = { ...m }; delete n[idx]; return n; });
+                    }}
                       style={{ padding: "6px 10px", fontSize: 11, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px dashed ${G.border}`, borderRadius: 8, cursor: "pointer" }}>
-                      Skipped — restore
+                      {isCancelled ? "Cancelled — restore" : "Skipped — restore"}
                     </button>
                   )}
                 </div>
@@ -1416,19 +1515,56 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                     </p>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
+                {/* Uniform 5-column row — all 5 variants on one line so the
+                    scene's headline-overlay set reads as a coherent group */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
                   {Array.from({ length: 5 }).map((_, vi) => {
                     const variant = variantImages.find((it) => it.headlineIndex === vi) || variantImages[vi];
+                    const key = `${sceneIndex}:${vi}`;
+                    const busy = !!variantBusy[key];
+                    const cancelled = !!cancelledVariantSlots[key];
+                    const showImage = variant?.url && !cancelled;
                     return (
-                      <div key={vi} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
-                        {variant?.url ? (
+                      <div key={vi} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 10, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}`, opacity: cancelled ? 0.45 : 1 }}>
+                        {showImage ? (
                           <img src={variant.url} alt={variant.name}
                             onClick={() => setEnlargedImage(variant.url)}
-                            style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} />
+                            style={{ width: "100%", height: "100%", objectFit: "cover", filter: busy ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s", cursor: "zoom-in" }} />
+                        ) : cancelled ? (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase" }}>Cancelled</div>
                         ) : (
                           <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: G.textTer, fontSize: 11 }}>
-                            {status === "running" ? <Loader2 size={16} style={{ animation: "spinKf 1s linear infinite" }} /> : "—"}
+                            {status === "running" || busy ? <Loader2 size={16} style={{ animation: "spinKf 1s linear infinite" }} /> : "—"}
                           </div>
+                        )}
+                        {busy && showImage && (
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                            Regenerating…
+                          </div>
+                        )}
+                        {/* Top-right action cluster: refresh + cancel */}
+                        {!cancelled && (
+                          <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
+                            {showImage && (
+                              <button onClick={() => regenerateVariant(sceneIndex, vi, variant)} title="Regenerate this variant"
+                                disabled={busy}
+                                style={{ width: 24, height: 24, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: busy ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <RefreshCw size={11} style={busy ? { animation: "spinKf 1s linear infinite" } : undefined} />
+                              </button>
+                            )}
+                            {(showImage || status === "running" || busy) && (
+                              <button onClick={() => cancelVariantSlot(sceneIndex, vi)} title="Cancel this tile"
+                                style={{ width: 24, height: 24, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <X size={11} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {cancelled && (
+                          <button onClick={() => regenerateVariant(sceneIndex, vi, variant)} title="Re-render this variant"
+                            style={{ position: "absolute", inset: "auto 6px 6px 6px", padding: "4px 8px", fontSize: 10, fontWeight: 600, background: "transparent", color: G.textSec, border: `1px dashed ${G.border}`, borderRadius: 6, cursor: "pointer" }}>
+                            Re-render
+                          </button>
                         )}
                       </div>
                     );
