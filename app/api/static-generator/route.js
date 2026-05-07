@@ -254,6 +254,23 @@ The headline must be readable and visually integrated, not a watermark.
 `.trim();
 }
 
+// Fetch a remote URL and return { base64, mime }. Used to attach a chosen
+// product image from product.product_image_urls as a Gemini visual reference.
+// Cached in the chunk worker via `refCache` so we don't re-fetch the same
+// URL once per task in a chunk.
+async function fetchUrlAsBase64(url) {
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mime = res.headers.get("content-type") || "image/jpeg";
+    return { base64: buf.toString("base64"), mime };
+  } catch (e) {
+    console.error("[refImage] fetch failed", url, e?.message);
+    return null;
+  }
+}
+
 async function uploadBase64(base64, mime, projectId) {
   const ext = mime?.includes("png") ? "png" : mime?.includes("webp") ? "webp" : "jpg";
   const path = `portal/${projectId}/static-gen/${crypto.randomUUID()}.${ext}`;
@@ -273,6 +290,11 @@ export async function POST(req) {
       clientId, productId,
       headlines = [], imagePrompts = [],
       aspectRatio = "1:1",
+      // Optional: one product reference image URL per headline. When set for a
+      // given headline, every (headline × imagePrompt) task in that row uses
+      // that image as visual reference. Picked from product.product_image_urls
+      // in the UI. Length matches `headlines`; "" / null = no reference.
+      headlineImageUrls = [],
     } = body || {};
 
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
@@ -344,11 +366,17 @@ export async function POST(req) {
 
     // Build the full cartesian product of headlines × imagePrompts.
     // The client decides how many to process per chunk via offset+limit.
+    // If headlineImageUrls[i] is set, every task built from headline[i]
+    // carries that URL so the chunk worker can fetch + attach it as a
+    // visual reference for Gemini.
     const tasks = [];
-    for (const headline of validHeadlines) {
+    for (let hi = 0; hi < validHeadlines.length; hi++) {
+      const headline = validHeadlines[hi];
+      const refUrl = headlineImageUrls[hi] || "";
       for (const imagePrompt of validPrompts) {
         tasks.push({
           headline, imagePrompt,
+          referenceImageUrl: refUrl,
           prompt: buildPrompt({ headline, imagePrompt, brand, product, aspectRatio }),
         });
       }
@@ -364,17 +392,44 @@ export async function POST(req) {
     const limit = Number.isFinite(body.limit) ? Math.min(3, Math.max(1, body.limit)) : 2;
     const slice = tasks.slice(offset, offset + limit);
 
+    // Cancel check: if the user hit Stop while this chunk was waiting in the
+    // chain queue, bail before doing any Gemini work. We still keep the row
+    // tidy by short-circuiting the `done` math at the bottom — when status
+    // is 'cancelled' we don't fire the next chunk in the lane either.
+    let cancelled = false;
+    if (jobId) {
+      const { data: jobNow } = await supabase
+        .from("static_gen_jobs")
+        .select("status")
+        .eq("id", jobId)
+        .maybeSingle();
+      if (jobNow?.status && jobNow.status !== "running") cancelled = true;
+    }
+
     const generated = [];
     const failed = [];
+
+    // Cache fetched reference images per chunk so multi-task chunks that
+    // share a headline (and thus a reference URL) only download it once.
+    const refCache = new Map();
+    async function getRef(url) {
+      if (!url) return null;
+      if (refCache.has(url)) return refCache.get(url);
+      const got = await fetchUrlAsBase64(url);
+      refCache.set(url, got);
+      return got;
+    }
+
     // Run all images in this chunk in parallel - the chunk is small enough
     // (max 3) that we won't overwhelm the rate limit. Each image uses the
     // 8-attempt retry strategy internally.
-    const results = await Promise.all(slice.map(async (t) => {
+    const results = cancelled ? [] : await Promise.all(slice.map(async (t) => {
       try {
+        const ref = await getRef(t.referenceImageUrl);
         const img = await generateWithRetries({
           initialPrompt: t.prompt,
-          productImageBase64: null, // future: attach product reference image here
-          productMimeType: null,
+          productImageBase64: ref?.base64 || null,
+          productMimeType: ref?.mime || null,
           aspectRatio,
           brand, product,
           headline: t.headline,
@@ -435,7 +490,7 @@ export async function POST(req) {
     // Each chunk hand-off uses waitUntil to keep the dispatch alive past the
     // function's response, so the next invocation always receives its request.
     // When the lane runs out, we mark the job done iff we're the last chunk.
-    if (jobId && body.chain && Number.isFinite(body.chain.stride)) {
+    if (jobId && !cancelled && body.chain && Number.isFinite(body.chain.stride)) {
       const { stride } = body.chain;
       const laneNext = offset + stride;
       if (laneNext < tasks.length) {
@@ -447,6 +502,7 @@ export async function POST(req) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               clientId, productId, headlines, imagePrompts, aspectRatio,
+              headlineImageUrls,
               offset: laneNext, limit: limit,
               jobId, chain: body.chain,
             }),

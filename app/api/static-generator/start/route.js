@@ -27,6 +27,10 @@ export async function POST(req) {
       clientId, productId,
       headlines = [], imagePrompts = [],
       aspectRatio = "1:1",
+      // Optional: per-headline product reference image URLs (length matches
+      // headlines). Forwarded to every chunk worker so a row's reference
+      // image is consistent across all of that headline's prompt cells.
+      headlineImageUrls = [],
     } = body || {};
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
 
@@ -79,6 +83,7 @@ export async function POST(req) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             clientId, productId, headlines, imagePrompts, aspectRatio,
+            headlineImageUrls,
             offset: startOffset, limit: CHUNK,
             jobId: job.id,
             chain: { stride, total },

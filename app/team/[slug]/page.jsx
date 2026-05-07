@@ -3,7 +3,7 @@
 // (/client/[slug]) but the iframes load the team's upload/edit views so the
 // team builds content while the client reviews it. Auto-provisions a creatives
 // portal and an analytics dashboard so there are no "Generate" buttons.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Sparkles, MessageSquare, Palette, BarChart3, FileText, ArrowRight,
@@ -72,6 +72,9 @@ export default function TeamWorkspacePage() {
     aspectRatio: "1:1",
     headlines: ["", "", "", "", ""],
     prompts: ["", "", "", "", ""],
+    // One reference image URL per headline row. "" = no reference (fall back
+    // to text-only prompt). Picked by the team from activeProduct.product_image_urls.
+    headlineImageUrls: ["", "", "", "", ""],
     jobId: null, // server-side job id; polling resumes any time we have one
   });
 
@@ -95,6 +98,9 @@ export default function TeamWorkspacePage() {
           setGenState((s) => ({ ...s, generating: false, error: j?.error || `HTTP ${r.status}` }));
           return;
         }
+        // Status can be: running | done | cancelled | error. Anything other
+        // than 'running' means stop polling and surface the result.
+        const isStillRunning = j.status === "running";
         setGenState((s) => ({
           ...s,
           progress: { done: (j.completed || 0) + (j.failed || 0), total: j.total || s.progress.total },
@@ -105,10 +111,11 @@ export default function TeamWorkspacePage() {
             failures: j.failures || [],
             portalSlug: j.portalSlug,
           },
-          generating: !j.done,
+          generating: isStillRunning,
           error: j.error || s.error,
+          status: j.status,
         }));
-        if (!j.done) timer = setTimeout(tick, 2500);
+        if (isStillRunning) timer = setTimeout(tick, 2500);
       } catch (e) {
         if (!cancelled) timer = setTimeout(tick, 4000);
       }
@@ -910,15 +917,30 @@ function BrandLongRow({ label, value }) {
 function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, setGenState, onGenerated }) {
   // All generation state lives in the parent (TeamWorkspacePage) so navigating
   // to other sections mid-generation doesn't reset progress or cancel chunks.
-  const { headlines, prompts, aspectRatio, generating, progress, results, error } = genState;
+  const { headlines, prompts, aspectRatio, generating, progress, results, error, headlineImageUrls = ["", "", "", "", ""] } = genState;
   const patch = (p) => setGenState((s) => ({ ...s, ...p }));
   const setHeadlines = (updater) => setGenState((s) => ({ ...s, headlines: typeof updater === "function" ? updater(s.headlines) : updater }));
   const setPrompts = (updater) => setGenState((s) => ({ ...s, prompts: typeof updater === "function" ? updater(s.prompts) : updater }));
+  const setHeadlineImageUrls = (updater) => setGenState((s) => ({ ...s, headlineImageUrls: typeof updater === "function" ? updater(s.headlineImageUrls || ["", "", "", "", ""]) : updater }));
   const setAspectRatio = (v) => patch({ aspectRatio: v });
-  const setGenerating = (v) => patch({ generating: v });
-  const setProgress = (v) => patch({ progress: v });
-  const setResults = (v) => patch({ results: typeof v === "function" ? v(results) : v });
   const setError = (v) => patch({ error: v });
+
+  // Available product images for the picker. Drawn from the active product's
+  // product_image_urls; falls back to brand_intake.product_image_urls when a
+  // product hasn't seeded its own list yet.
+  const availableRefImages = (
+    activeProduct?.product_image_urls?.length
+      ? activeProduct.product_image_urls
+      : intake?.product_image_urls || []
+  ).filter(Boolean);
+
+  // Per-tile regenerate state. Each tile id maps to an in-flight AbortController
+  // so a re-click cancels the previous attempt. Mirrors the proposal/create
+  // pattern: AbortError on the cancelled fetch is silently swallowed and only
+  // the latest controller's response is allowed to clear loading state.
+  const [tileRegenerating, setTileRegenerating] = useState({}); // { [imageId]: bool }
+  const tileAbortRef = useRef({});                               // { [imageId]: AbortController }
+  const [stopping, setStopping] = useState(false);
 
   const validHeadlines = headlines.map((h) => h.trim()).filter(Boolean);
   const validPrompts = prompts.map((p) => p.trim()).filter(Boolean);
@@ -944,6 +966,13 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       jobId: null,
     }));
     try {
+      // Trim headlineImageUrls to match the validHeadlines we're actually
+      // sending, so positions line up server-side. If the user filled fewer
+      // headlines than the slot count, the missing positions just get "".
+      const refsForValid = [];
+      headlines.forEach((h, i) => {
+        if (String(h || "").trim()) refsForValid.push(headlineImageUrls?.[i] || "");
+      });
       const res = await fetch("/api/static-generator/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -952,6 +981,7 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           productId: activeProduct?.id || null,
           headlines: validHeadlines,
           imagePrompts: validPrompts,
+          headlineImageUrls: refsForValid,
           aspectRatio,
         }),
       });
@@ -971,6 +1001,99 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       }));
     } catch (e) {
       setGenState((s) => ({ ...s, generating: false, error: e.message || "Network error" }));
+    }
+  };
+
+  // Stop the in-flight job. Writes status='cancelled' to the job row; the
+  // chunk worker checks status at the top of each chunk and bails out.
+  // In-flight Gemini calls already mid-fetch will still finish (we don't
+  // hard-abort to avoid orphaned uploads), but no new tasks will start.
+  const stop = async () => {
+    if (!genState.jobId) return;
+    setStopping(true);
+    try {
+      await fetch("/api/static-generator/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: genState.jobId }),
+      });
+      // Optimistically flip generating off so the UI is responsive; the
+      // polling effect will pick up the real 'cancelled' status next tick.
+      setGenState((s) => ({ ...s, generating: false, status: "cancelled" }));
+    } catch (e) {
+      setError(`Stop failed: ${e.message}`);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  // Regenerate a single tile (one cell of the headline × prompt grid). Mirrors
+  // the proposal/create pattern: AbortController per tile, re-click cancels
+  // the in-flight one, only the latest controller is allowed to clear state.
+  const regenerateTile = async (img) => {
+    if (!img?.id) return;
+    // Recover headline + imagePrompt from the image name we wrote on save.
+    // Format: `${headline.slice(0,30)} - ${imagePrompt.slice(0,30)}.{ext}`
+    const baseName = String(img.name || "").replace(/\.(png|jpg|webp)$/i, "");
+    const dashIdx = baseName.indexOf(" - ");
+    const headlineSeed = dashIdx > 0 ? baseName.slice(0, dashIdx) : "";
+    const promptSeed = dashIdx > 0 ? baseName.slice(dashIdx + 3) : "";
+
+    // Find best matches in current state so the prompts are full-length, not
+    // the 30-char truncations stored in the filename.
+    const fullHeadline = headlines.find((h) => h && h.trim().startsWith(headlineSeed.trim().slice(0, 25))) || headlineSeed;
+    const fullPrompt = prompts.find((p) => p && p.trim().startsWith(promptSeed.trim().slice(0, 25))) || promptSeed;
+
+    if (!fullHeadline || !fullPrompt) {
+      setError("Couldn't recover this tile's headline/prompt to regenerate.");
+      return;
+    }
+
+    // Pick the reference image for this headline (if any)
+    const headlineIndex = headlines.findIndex((h) => h && h === fullHeadline);
+    const referenceImageUrl = headlineIndex >= 0 ? (headlineImageUrls?.[headlineIndex] || "") : "";
+
+    // Cancel any in-flight regen for this tile
+    if (tileAbortRef.current[img.id]) {
+      try { tileAbortRef.current[img.id].abort(); } catch {}
+    }
+    const ac = new AbortController();
+    tileAbortRef.current[img.id] = ac;
+
+    setTileRegenerating((m) => ({ ...m, [img.id]: true }));
+    setError("");
+    try {
+      const res = await fetch("/api/static-generator/regenerate-one", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
+        body: JSON.stringify({
+          clientId: client.id,
+          productId: activeProduct?.id || null,
+          headline: fullHeadline,
+          imagePrompt: fullPrompt,
+          imageId: img.id,
+          aspectRatio,
+          referenceImageUrl,
+          jobId: genState.jobId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      // Swap the tile in local state
+      setGenState((s) => {
+        const list = s.results?.images || [];
+        const next = list.map((it) => (it.id === data.image.id ? data.image : it));
+        return { ...s, results: { ...s.results, images: next } };
+      });
+    } catch (err) {
+      if (err?.name === "AbortError") return; // newer click took over
+      setError(`Regenerate failed: ${err.message}`);
+    } finally {
+      if (tileAbortRef.current[img.id] === ac) {
+        setTileRegenerating((m) => { const n = { ...m }; delete n[img.id]; return n; });
+        delete tileAbortRef.current[img.id];
+      }
     }
   };
 
@@ -1002,13 +1125,31 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       {/* Headlines */}
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 16 }}>
         <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Headlines <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: G.textTer, marginLeft: 6 }}>optional</span></p>
-        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>Leave blank and we&apos;ll derive 5 from the brand kit. Anything you write here gives more control.</p>
+        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>
+          Leave blank and we&apos;ll derive 5 from the brand kit. Anything you write here gives more control.
+          {availableRefImages.length > 0 && (
+            <> Optionally pick a product reference image per row — Gemini will use it as visual reference for that headline&apos;s ads.</>
+          )}
+        </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {headlines.map((h, i) => (
-            <input key={i} value={h}
-              onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
-              placeholder={`Headline ${i + 1}`}
-              style={inputBase} />
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
+              <input value={h}
+                onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                placeholder={`Headline ${i + 1}`}
+                style={{ ...inputBase, flex: 1 }} />
+              {availableRefImages.length > 0 && (
+                <RefImagePicker
+                  options={availableRefImages}
+                  value={headlineImageUrls?.[i] || ""}
+                  onChange={(url) => setHeadlineImageUrls((prev) => {
+                    const next = [...(prev || ["", "", "", "", ""])];
+                    next[i] = url;
+                    return next;
+                  })}
+                />
+              )}
+            </div>
           ))}
         </div>
       </div>
@@ -1048,12 +1189,23 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                 }}>{r.l}</button>
             ))}
           </div>
-          <button onClick={generate} disabled={generating}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 980, cursor: generating ? "not-allowed" : "pointer", opacity: generating ? 0.55 : 1, fontFamily: "'Inter', sans-serif" }}>
-            {generating
-              ? <><Loader2 size={14} style={{ animation: "spinKf 1s linear infinite" }} /> {progress.done}/{progress.total || totalAds}...</>
-              : <><Wand2 size={14} /> Generate {totalAds} ads</>}
-          </button>
+          {generating ? (
+            <>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 980, opacity: 0.55, fontFamily: "'Inter', sans-serif" }}>
+                <Loader2 size={14} style={{ animation: "spinKf 1s linear infinite" }} /> {progress.done}/{progress.total || totalAds}...
+              </div>
+              <button onClick={stop} disabled={stopping}
+                title="Stop the running generation"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "12px 18px", fontSize: 13, fontWeight: 600, background: "transparent", color: G.reject, border: `1px solid ${G.reject}40`, borderRadius: 980, cursor: stopping ? "not-allowed" : "pointer", opacity: stopping ? 0.55 : 1, fontFamily: "'Inter', sans-serif" }}>
+                <X size={14} /> {stopping ? "Stopping…" : "Stop"}
+              </button>
+            </>
+          ) : (
+            <button onClick={generate}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, background: G.ink, color: "#fff", border: "none", borderRadius: 980, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+              <Wand2 size={14} /> Generate {totalAds} ads
+            </button>
+          )}
         </div>
       </div>
 
@@ -1082,17 +1234,87 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           </div>
           {results.images?.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-              {results.images.map((img, i) => (
-                <div key={i} style={{ aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
-                  <img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-              ))}
+              {results.images.map((img, i) => {
+                const busy = !!tileRegenerating[img.id];
+                return (
+                  <div key={img.id || i} style={{ position: "relative", aspectRatio: aspectRatio.replace(":", "/"), borderRadius: 12, overflow: "hidden", background: "#F5F5F7", border: `1px solid ${G.border}` }}>
+                    <img src={img.url} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover", filter: busy ? "blur(2px) brightness(0.6)" : "none", transition: "filter 0.2s" }} />
+                    {/* Regenerate this tile */}
+                    <button onClick={() => regenerateTile(img)}
+                      title="Regenerate this image"
+                      disabled={busy}
+                      style={{ position: "absolute", top: 6, right: 6, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: busy ? "wait" : "pointer", backdropFilter: "blur(8px)" }}>
+                      <RefreshCw size={13} style={busy ? { animation: "spinKf 1s linear infinite" } : undefined} />
+                    </button>
+                    {busy && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                        Regenerating…
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       <style>{`@keyframes spinKf { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// Compact dropdown thumbnail picker for the per-headline product reference
+// image. Shows the currently-selected thumbnail (or a "+" placeholder) and
+// pops a grid of the available product images on click. Stays small enough
+// to sit inline next to the headline input without breaking row height.
+function RefImagePicker({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button onClick={() => setOpen((v) => !v)} type="button"
+        title={value ? "Change reference image" : "Pick a product reference image"}
+        style={{
+          width: 40, height: 40, padding: 0, borderRadius: 10,
+          border: `1px solid ${G.border}`, background: value ? "#000" : G.bg,
+          cursor: "pointer", overflow: "hidden",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+        {value
+          ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <ImageIcon size={16} color={G.textTer} />
+        }
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 30,
+          background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          borderRadius: 12, padding: 10, width: 260,
+        }}>
+          <p style={{ fontSize: 11, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 8 }}>Reference image</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            <button onClick={() => { onChange(""); setOpen(false); }} type="button"
+              title="No reference (text only)"
+              style={{ aspectRatio: "1/1", borderRadius: 8, border: value === "" ? `2px solid ${G.ink}` : `1px solid ${G.border}`, background: G.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: G.textSec, fontSize: 18 }}>
+              <X size={16} />
+            </button>
+            {options.map((url) => (
+              <button key={url} onClick={() => { onChange(url); setOpen(false); }} type="button"
+                style={{ aspectRatio: "1/1", borderRadius: 8, border: value === url ? `2px solid ${G.ink}` : `1px solid ${G.border}`, padding: 0, overflow: "hidden", cursor: "pointer", background: "#000" }}>
+                <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
