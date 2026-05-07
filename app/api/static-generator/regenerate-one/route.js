@@ -411,6 +411,7 @@ export async function POST(req) {
       headlineIndex: Number.isFinite(body.headlineIndex) ? body.headlineIndex : null,
       scenePrompt: imagePrompt,
       headline: safeHeadline || null,
+      aspectRatio,
     };
 
     // Swap in portal_projects.images by id

@@ -1309,19 +1309,38 @@ export default function ClientReview({ projectId: serverProjectId }) {
         {activeTab === "images" && (
           <div>
             <style>{`
-              .portal-img-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-              @media (max-width: 768px) { .portal-img-grid { grid-template-columns: 1fr; gap: 16px; } }
+              /* Responsive grid: collapses gracefully on smaller widths instead
+                 of forcing 5 columns at every viewport. minmax(180px, 1fr)
+                 keeps each card readable while letting the row count shrink. */
+              .portal-img-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; max-width: 100%; box-sizing: border-box; }
+              @media (max-width: 768px) { .portal-img-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; } }
+              @media (max-width: 480px) { .portal-img-grid { grid-template-columns: 1fr; gap: 16px; } }
+              .portal-img-grid > div { min-width: 0; }
             `}</style>
             {(!project.images || project.images.length === 0) ? (
               <div style={{ textAlign: "center", padding: 60, color: G.textTer }}><p>No images uploaded yet.</p></div>
-            ) : (
+            ) : (() => {
+              // Pick a single uniform aspect ratio for ALL cards in this grid
+              // so rows line up cleanly. Computed as the dominant ratio across
+              // the rendered set — covers the common case where everything
+              // was generated at the same size, and only mildly crops the
+              // outliers when batches mix 1:1 / 9:16 / 16:9.
+              const visibleImages = project.images.filter(img => {
+                if (statusFilter === "all") return true;
+                const st = feedback[img.id]?.status || null;
+                if (statusFilter === "pending") return !st;
+                return st === statusFilter;
+              });
+              const ratioCounts = visibleImages.reduce((acc, img) => {
+                const r = img.aspectRatio || project.imageRatio || "1:1";
+                acc[r] = (acc[r] || 0) + 1;
+                return acc;
+              }, {});
+              const dominantRatio = (Object.entries(ratioCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "1:1");
+              const cardAspectRatio = String(dominantRatio).replace(":", "/");
+              return (
               <div className="portal-img-grid">
-                {project.images.filter(img => {
-                  if (statusFilter === "all") return true;
-                  const st = feedback[img.id]?.status || null;
-                  if (statusFilter === "pending") return !st;
-                  return st === statusFilter;
-                }).map((img, idx) => {
+                {visibleImages.map((img, idx) => {
                   const st = feedback[img.id]?.status;
                   const borderColor = st === "approved" ? clr.approve : st === "rejected" ? clr.reject : st === "revision" ? clr.revision : G.cardBorder;
                   const shadow = st ? `0 0 0 2px ${borderColor}` : G.cardShadow;
@@ -1339,7 +1358,15 @@ export default function ClientReview({ projectId: serverProjectId }) {
                         >
                           <Download size={14} />
                         </a>
-                        <img src={img.url} alt="" style={{ width: "100%", aspectRatio: project.imageRatio || "1/1", objectFit: "cover", display: "block" }} />
+                        <img src={img.url} alt="" style={{
+                          width: "100%",
+                          // Uniform across the grid — see dominantRatio calc
+                          // above. Mixed-ratio batches get a slight crop on
+                          // outliers but the grid stays visually clean.
+                          aspectRatio: cardAspectRatio,
+                          objectFit: "cover",
+                          display: "block",
+                        }} />
                         {commentCount > 0 && (
                           <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.6)", borderRadius: 980, padding: "3px 8px", display: "flex", alignItems: "center", gap: 4 }}>
                             <MessageSquare size={10} color="#fff" />
@@ -1380,7 +1407,8 @@ export default function ClientReview({ projectId: serverProjectId }) {
                   );
                 })}
               </div>
-            )}
+              );
+            })()}
             {project.images && project.images.length > 0 && (
               <div style={{ textAlign: "center", marginTop: 32, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button

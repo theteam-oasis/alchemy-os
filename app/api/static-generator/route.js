@@ -715,6 +715,11 @@ export async function POST(req) {
             headlineIndex: t.headlineIndex ?? null,
             scenePrompt: phase === "variants" ? t.imagePrompt : (phase === "preview" ? t.imagePrompt : null),
             headline: t.headline || null,
+            // Stash the aspect ratio used to generate this tile so the client
+            // portal can render each card at the correct shape. Without this,
+            // mixed-ratio batches (1:1 + 9:16 + 16:9) all get crammed into
+            // project.imageRatio and look cropped / uneven.
+            aspectRatio,
           },
         };
       } catch (e) {
