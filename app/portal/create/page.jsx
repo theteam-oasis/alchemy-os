@@ -278,12 +278,14 @@ function CreateProject() {
   const [heroScripts, setHeroScripts] = useState([{ id: "1", title: "Hero Video 1", content: "" }]);
   const [ugcScripts, setUgcScripts] = useState([{ id: "1", title: "UGC Video 1", content: "" }]);
   // Loops: 3 standalone video slots, no script. Used for ambient brand films,
-  // looping product demos, hero scene loops. Slots are fixed (1, 2, 3) so the
+  // looping product demos, hero scene loops. Slots are fixed at 5 so the
   // team always has the same number of upload spots regardless of what's filled.
   const [loopVideos, setLoopVideos] = useState([
     { id: "loop-1", title: "Loop 1" },
     { id: "loop-2", title: "Loop 2" },
     { id: "loop-3", title: "Loop 3" },
+    { id: "loop-4", title: "Loop 4" },
+    { id: "loop-5", title: "Loop 5" },
   ]);
   // Tab nav so the team can jump between asset types (mirrors the client portal UX)
   const [activeTab, setActiveTab] = useState("statics");
@@ -311,10 +313,10 @@ function CreateProject() {
       if (data.heroScripts?.length) setHeroScripts(data.heroScripts);
       if (data.ugcScripts?.length) setUgcScripts(data.ugcScripts);
       if (data.loopVideos?.length) {
-        // Pad with empty slots up to 3 if fewer were saved.
+        // Pad with empty slots up to 5 if fewer were saved.
         const padded = [...data.loopVideos];
-        while (padded.length < 3) padded.push({ id: `loop-${padded.length + 1}`, title: `Loop ${padded.length + 1}` });
-        setLoopVideos(padded.slice(0, 3));
+        while (padded.length < 5) padded.push({ id: `loop-${padded.length + 1}`, title: `Loop ${padded.length + 1}` });
+        setLoopVideos(padded.slice(0, 5));
       }
       // mark hydrated on the next tick so the auto-save effect picks up future changes only
       setTimeout(() => { hydratedRef.current = true; }, 50);
@@ -513,7 +515,7 @@ function CreateProject() {
   const addScript = (type) => {
     const setter = type === "hero" ? setHeroScripts : setUgcScripts;
     const label = type === "hero" ? "Hero Video" : "UGC Video";
-    setter(prev => prev.length >= 3 ? prev : [...prev, { id: crypto.randomUUID(), title: `${label} ${prev.length + 1}`, content: "" }]);
+    setter(prev => prev.length >= 5 ? prev : [...prev, { id: crypto.randomUUID(), title: `${label} ${prev.length + 1}`, content: "" }]);
   };
 
   const updateScript = (type, id, content) => {
@@ -928,9 +930,9 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Film size={14} color={G.textSec} />
-              Hero Videos ({heroScripts.length}/3)
+              Hero Videos ({heroScripts.length}/5)
             </label>
-            {heroScripts.length < 3 && (
+            {heroScripts.length < 5 && (
               <button onClick={() => addScript("hero")} style={{ ...mono, padding: "6px 16px", fontSize: 13, fontWeight: 500, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer" }}>+ Add</button>
             )}
           </div>
@@ -990,9 +992,9 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Video size={14} color={G.textSec} />
-              UGC Videos ({ugcScripts.length}/3)
+              UGC Videos ({ugcScripts.length}/5)
             </label>
-            {ugcScripts.length < 3 && (
+            {ugcScripts.length < 5 && (
               <button onClick={() => addScript("ugc")} style={{ ...mono, padding: "6px 16px", fontSize: 13, fontWeight: 500, background: "transparent", color: G.text, border: `1px solid ${G.goldBorder}`, borderRadius: 980, cursor: "pointer" }}>+ Add</button>
             )}
           </div>
@@ -1052,7 +1054,7 @@ function CreateProject() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               <Video size={14} color={G.textSec} />
-              Loops ({loopVideos.filter(v => v.videoUrl).length}/3)
+              Loops ({loopVideos.filter(v => v.videoUrl).length}/5)
             </label>
             <span style={{ ...mono, fontSize: 11, color: G.textTer }}>Standalone clips. No script needed.</span>
           </div>
