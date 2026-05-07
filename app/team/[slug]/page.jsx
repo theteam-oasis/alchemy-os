@@ -1164,6 +1164,8 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           aspectRatio,
           referenceImageUrl: productImageUrl || "",
           jobId: previewJobId,
+          shot: sceneImg.shot || previewShots?.[sceneIndex] || "",
+          sceneIndex,
         }),
       });
       const data = await res.json();
@@ -1199,7 +1201,21 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   const regenerateVariant = async (sceneIndex, variantIndex, variantImg) => {
     const sceneState = genState.scenes?.[sceneIndex];
     const scenePrompt = variantImg?.scenePrompt || sceneState?.scenePrompt || "";
-    const headline = variantImg?.headline || validHeadlines[variantIndex] || "";
+    // Recover the headline for this slot in priority order:
+    //   1. The image's own stored headline (most accurate — comes from the
+    //      chunk worker that actually rendered it)
+    //   2. The matching headline from the variant batch (which may include
+    //      server-derived defaults — peek at any sibling's image to learn it)
+    //   3. The user-typed headline at this index
+    //   4. A generic fallback so /regenerate-one never gets empty input
+    const sibling = (sceneState?.variantImages || []).find((it) => it?.headlineIndex === variantIndex && it?.headline);
+    const headline =
+      variantImg?.headline
+      || sibling?.headline
+      || (validHeadlines[variantIndex] || "")
+      || ["Designed for you.", "Built different.", "Try it once.", "Made better.", "The everyday upgrade."][variantIndex]
+      || "Designed for you.";
+    const shot = variantImg?.shot || sceneState?.shot || previewShots?.[sceneIndex] || "";
     const key = `${sceneIndex}:${variantIndex}`;
     if (!scenePrompt) { setError("Couldn't recover scene prompt for variant regen."); return; }
 
@@ -1224,6 +1240,9 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           aspectRatio,
           referenceImageUrl: productImageUrl || "",
           jobId: sceneState?.variantJobId || null,
+          shot,
+          sceneIndex,
+          headlineIndex: variantIndex,
         }),
       });
       const data = await res.json();

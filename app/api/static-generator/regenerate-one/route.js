@@ -128,6 +128,58 @@ async function generateWithRetries({ initialPrompt, productImageBase64, productM
   throw lastErr || new Error("Image generation failed after 8 attempts");
 }
 
+// Preview-phase prompt: scene-only, no headline overlay. Mirrors the version
+// in route.js so a single-tile preview revise doesn't accidentally bake in
+// an empty headline string.
+function buildPreviewPrompt({ imagePrompt, brand, product, aspectRatio, hasReferenceImage = false, shot = "" }) {
+  const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
+  const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
+  const audience = brand?.audience_description ? `Target audience: ${brand.audience_description}.` : "";
+  const voice = brand?.voice_style?.length ? `Tone of voice: ${brand.voice_style.join(", ")}.` : "";
+  const shotLine = shot ? `Shot type: ${shot}.` : "";
+
+  if (hasReferenceImage) {
+    return `
+TASK: Create a high-quality preview scene image for static social ad approval. NO headline overlay, NO ad copy text — just the scene that an ad will be built on top of.
+
+CRITICAL — PRODUCT FIDELITY:
+- The first input is a reference photo of the EXACT product to feature.
+- Render the product EXACTLY as shown.
+- Do NOT redesign, restyle, or recolor the product.
+
+SCENE:
+${imagePrompt}
+
+${shotLine}
+${colors}
+${personality}
+${audience}
+${voice}
+
+FORMAT: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+STYLE: photorealistic, premium, on-brand. NO headline text. NO CTAs. NO badges.
+
+Use attached image as product reference.
+`.trim();
+  }
+  const productLine = product ? `Product: ${product.name}${product.description ? ` — ${product.description}` : ""}.` : "";
+  return `
+Create a high-quality preview scene image. NO headline overlay, NO ad copy.
+
+${productLine}
+${shotLine}
+${colors}
+${personality}
+${audience}
+${voice}
+
+Scene: ${imagePrompt}
+
+Format: ${aspectRatio === "9:16" ? "Vertical 9:16 social/Story format" : aspectRatio === "16:9" ? "Widescreen 16:9 format" : "Square 1:1 feed format"}.
+Style: photorealistic, premium, on-brand. NO headline text. NO CTAs.
+`.trim();
+}
+
 function buildPrompt({ headline, imagePrompt, brand, product, aspectRatio, hasReferenceImage = false }) {
   const colors = brand?.brand_colors ? `Brand colors: ${brand.brand_colors}.` : "";
   const personality = brand?.personality_tags?.length ? `Brand personality: ${brand.personality_tags.join(", ")}.` : "";
@@ -230,7 +282,9 @@ export async function POST(req) {
       jobId,
     } = body || {};
     if (!clientId) return Response.json({ error: "clientId required" }, { status: 400 });
-    if (!headline || !imagePrompt) return Response.json({ error: "headline and imagePrompt required" }, { status: 400 });
+    if (!imagePrompt) return Response.json({ error: "imagePrompt required" }, { status: 400 });
+    // headline is optional — empty headline means this is a preview-phase
+    // tile (no overlay) and we use buildPreviewPrompt below.
 
     const [{ data: brand }, { data: product }] = await Promise.all([
       supabase.from("brand_intake").select("*").eq("client_id", clientId).maybeSingle(),
@@ -240,10 +294,17 @@ export async function POST(req) {
     ]);
 
     const ref = referenceImageUrl ? await fetchUrlAsBase64(referenceImageUrl) : null;
-    const initialPrompt = buildPrompt({
-      headline, imagePrompt, brand, product, aspectRatio,
-      hasReferenceImage: !!ref?.base64,
-    });
+    const isPreview = !headline || !String(headline).trim();
+    const initialPrompt = isPreview
+      ? buildPreviewPrompt({
+          imagePrompt, brand, product, aspectRatio,
+          hasReferenceImage: !!ref?.base64,
+          shot: body.shot || "",
+        })
+      : buildPrompt({
+          headline, imagePrompt, brand, product, aspectRatio,
+          hasReferenceImage: !!ref?.base64,
+        });
 
     const img = await generateWithRetries({
       initialPrompt,
@@ -265,10 +326,24 @@ export async function POST(req) {
     if (!portalRow) return Response.json({ error: "portal not found" }, { status: 404 });
 
     const upload = await uploadBase64(img.base64, img.mime, portalRow.id);
+    // Preserve phase metadata so the UI's regen / approve / lightbox actions
+    // keep working on the swapped tile. Without these, a successful regen
+    // would strip out sceneIndex / scenePrompt / headline and break the next
+    // click. headline.slice(0,30) also used to crash on empty preview revise.
+    const ext = img.mime?.includes("png") ? "png" : "jpg";
+    const safeHeadline = String(headline || "").slice(0, 40);
     const newImage = {
       id: imageId || crypto.randomUUID(),
       url: upload.url,
-      name: `${headline.slice(0, 30)} - ${imagePrompt.slice(0, 30)}.${img.mime?.includes("png") ? "png" : "jpg"}`,
+      name: isPreview
+        ? `Preview ${body.shot || ""}.${ext}`.trim()
+        : `${body.shot ? body.shot + " - " : ""}${safeHeadline || "Variant"}.${ext}`,
+      phase: isPreview ? "preview" : "variants",
+      shot: body.shot || null,
+      sceneIndex: Number.isFinite(body.sceneIndex) ? body.sceneIndex : null,
+      headlineIndex: Number.isFinite(body.headlineIndex) ? body.headlineIndex : null,
+      scenePrompt: imagePrompt,
+      headline: safeHeadline || null,
     };
 
     // Swap in portal_projects.images by id
