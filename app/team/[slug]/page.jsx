@@ -1138,10 +1138,14 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
 
   // Revise a single preview scene — regenerate just that one preview with
   // the same scene prompt but a fresh attempt. Uses /regenerate-one with
-  // headline="" so the preview stays scene-only.
-  const revisePreview = async (sceneImg) => {
-    const sceneIndex = sceneImg.sceneIndex;
-    const scenePrompt = sceneImg.scenePrompt || previewPrompts?.[sceneIndex] || "";
+  // headline="" so the preview stays scene-only. Works whether or not the
+  // tile has finished its first render (`sceneImg` may be null during the
+  // initial loading state — we recover the scene prompt from previewPrompts
+  // which gets populated by /preview-start before the chunk worker fires).
+  const revisePreview = async (sceneImg, sceneIndexHint = null) => {
+    const sceneIndex = sceneImg?.sceneIndex ?? sceneIndexHint;
+    if (sceneIndex == null) { setError("Couldn't determine which scene to revise."); return; }
+    const scenePrompt = sceneImg?.scenePrompt || previewPrompts?.[sceneIndex] || "";
     if (!scenePrompt) { setError("Couldn't recover scene prompt to revise."); return; }
     if (previewAbortRef.current[sceneIndex]) {
       try { previewAbortRef.current[sceneIndex].abort(); } catch {}
@@ -1160,20 +1164,29 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
           productId: activeProduct?.id || null,
           headline: "", // preview = no headline
           imagePrompt: scenePrompt,
-          imageId: sceneImg.id,
+          imageId: sceneImg?.id, // may be undefined for refresh-during-loading
           aspectRatio,
           referenceImageUrl: productImageUrl || "",
           jobId: previewJobId,
-          shot: sceneImg.shot || previewShots?.[sceneIndex] || "",
+          shot: sceneImg?.shot || previewShots?.[sceneIndex] || "",
           sceneIndex,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setGenState((s) => ({
-        ...s,
-        previewImages: (s.previewImages || []).map((it) => (it.id === data.image.id ? { ...data.image, sceneIndex, shot: sceneImg.shot, scenePrompt } : it)),
-      }));
+      setGenState((s) => {
+        const list = s.previewImages || [];
+        const tagged = { ...data.image, sceneIndex, shot: sceneImg?.shot || previewShots?.[sceneIndex] || data.image.shot, scenePrompt };
+        // Try to swap by id first; fall back to swapping by sceneIndex; else
+        // append. Covers the refresh-during-loading case where the slot has
+        // no original tile yet and the chunk worker may also be writing to
+        // the same sceneIndex — last-write-wins is fine here.
+        const byId = list.findIndex((it) => it.id === data.image.id);
+        if (byId >= 0) { const u = [...list]; u[byId] = tagged; return { ...s, previewImages: u }; }
+        const bySceneIdx = list.findIndex((it) => it.sceneIndex === sceneIndex);
+        if (bySceneIdx >= 0) { const u = [...list]; u[bySceneIdx] = tagged; return { ...s, previewImages: u }; }
+        return { ...s, previewImages: [...list, tagged] };
+      });
     } catch (err) {
       if (err?.name === "AbortError") return;
       setError(`Revise failed: ${err.message}`);
@@ -1459,12 +1472,21 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                         <Loader2 size={20} style={{ animation: "spinKf 1s linear infinite" }} />
                       </div>
                     )}
-                    {/* Top-right buttons during loading: cancel-this-tile (X) */}
+                    {/* Top-right buttons during loading: refresh + cancel.
+                        Refresh fires /regenerate-one with the same scene
+                        prompt so a stuck slot can be retried by hand. */}
                     {!showImage && !isCancelled && (
-                      <button onClick={() => cancelPreviewSlot(idx)} title="Cancel this tile"
-                        style={{ position: "absolute", top: 6, right: 6, width: 26, height: 26, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <X size={12} />
-                      </button>
+                      <div style={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 4 }}>
+                        <button onClick={() => revisePreview(img, idx)} title="Refresh this tile"
+                          disabled={isRevising}
+                          style={{ width: 26, height: 26, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: isRevising ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <RefreshCw size={11} style={isRevising ? { animation: "spinKf 1s linear infinite" } : undefined} />
+                        </button>
+                        <button onClick={() => cancelPreviewSlot(idx)} title="Cancel this tile"
+                          style={{ width: 26, height: 26, padding: 0, background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: 999, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <X size={12} />
+                        </button>
+                      </div>
                     )}
                     {isRevising && (
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>

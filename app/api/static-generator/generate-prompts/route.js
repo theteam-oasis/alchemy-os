@@ -21,7 +21,19 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 // in-the-wild, lifestyle candid, plus the bold claim hero.
 export const SHOTS = ["BOLD CLAIM", "PRODUCT HERO", "SOCIAL PROOF", "EDITORIAL", "LIFESTYLE"];
 
-const STATIC_GEN_SYSTEM_PROMPT = `You generate 5 locked-order image-gen prompts for static social ads. Output reference: iklipse / Highsnobiety / Vogue / Apple campaign aesthetic. NEVER stock, NEVER Amazon-listing-on-white, NEVER tame.
+const STATIC_GEN_SYSTEM_PROMPT = `You generate 5 locked-order image-gen prompts for static social ads. Output reference: iklipse / David LaChapelle / Highsnobiety / Vogue Italia / Apple / Wallpaper* campaign aesthetic. NEVER stock-photo, NEVER Amazon-listing-on-white, NEVER tame, NEVER predictable.
+
+ABSOLUTE BANNED OUTPUT — IF YOUR PROMPT DESCRIBES ANY OF THESE, REWRITE IT:
+- Athlete running at sunset / golden-hour outdoor activity cliché
+- Person holding the product up to the camera while smiling
+- Plain bathroom shelf / kitchen counter "lifestyle" shot
+- Woman with towel turban applying product
+- Yoga mat with product placed neatly beside it
+- Smiling testimonial-style portrait against a soft background
+- Anything that could appear in a Shopify stock-photo library
+If the prompt could be Adobe Stock for a generic wellness/fitness/beauty brand, IT IS WRONG. Start over with a surreal device.
+
+EVERY PROMPT MUST EXPLICITLY NAME AT LEAST ONE OF DEVICES A-H BELOW AND USE IT VISIBLY. State the device by letter at the start of the visual description (e.g. "DEVICE A — SURREAL SCALE: ..."). If a reader can't tell which device you used, you didn't use one.
 
 PRODUCT DESCRIPTION RULE — CHECK WHICH MODE:
 The user message will tell you whether a product reference image is attached or not.
@@ -72,17 +84,20 @@ F. TOP-DOWN GOD VIEW — overhead drone perspective.
 G. ECCENTRIC / DISTINCTIVE CASTING — character, not generic stock face.
 H. ACTION-FROZEN PHYSICS — single impossible-feeling moment.
 
-THE 5 SHOTS (locked order):
+THE 5 SHOTS (locked order). Each prompt MUST visibly use 1-2 surreal devices from A-H, named explicitly in the prompt:
 
-1. BOLD CLAIM SCENE: Pick 2-3 creative devices in the brand's bucket. Build a heightened world AROUND the product. Specify model casting (or no model). Camera + lighting that match the surreal world. Tight composition. NO headline overlay — just the scene that a bold-claim headline will sit on top of later.
+1. BOLD CLAIM SCENE: Build a HEIGHTENED, SURREAL world around the product — not a real-world performance/lifestyle shot. REQUIRED: pick 2-3 devices from A-H and call them by letter. NO sunset-runner / gym-bro / sports-cliché unless you twist it with surreal scale (A) or impossible architecture (D). Camera + lighting match the surreal world (color-gel, hard cinematic single-source, theatrical dust beams). Tight composition. NO headline overlay text.
 
-2. PRODUCT HERO: Product is the hero in a surreal or world-built context that matches the brand bucket. Floating in dream physics (D), oversized at impossible scale (A), or unexpected elevated context (B). For clinical brands → pristine clean surrealism. For luxury → minimal poetic. For playful → wild. Tight composition, dramatic specific lighting. 1-2 contextual props. NO PEOPLE.
+2. PRODUCT HERO: Product is the hero in a world-built surreal context. REQUIRED device. Examples: floating in dream physics with halo of illustrated molecules (D), oversized to building-scale on a salt flat (A), wrapped in luxury fabric impossibly suspended (C), erupting from a cracked geode (E). For clinical brands → pristine clean surrealism with scientific elements (microscopy, anatomical, molecular halos). For luxury → minimal poetic single-device. For playful → full LaChapelle wild. 1-2 contextual props. NO PEOPLE. NO bathroom-shelf, NO marble-counter, NO Amazon-listing-on-white.
 
-3. SOCIAL PROOF SCENE: Real customer in real-life environment matching the brand customer (kitchen, bathroom, gym, car, café). 26mm f/1.8, JPEG warmth. iPhone-style real-customer feel, scene can be slightly elevated. NO testimonial overlay text — just the scene that a testimonial will sit on top of later. End with "Shot on iPhone energy."
+3. SOCIAL PROOF SCENE: Real customer in real-life environment, BUT push it past stock with a surreal lift (color-pop wardrobe in muted scene, action-frozen physics on a domestic moment, top-down god view of breakfast counter, etc.). Cast a CHARACTER (G) — older subject with weathered features, distinctive eccentric stylist, cultural specificity, sharp prosthetic-feel features — NOT a generic Shopify-stock smiling 30-year-old. 26mm f/1.8, JPEG warmth, "Shot on iPhone energy" but ELEVATED. NO product-on-shelf banality.
 
-4. EDITORIAL: High-end luxury magazine cover product shot. Think Kinfolk / Wallpaper* / Cereal / Vogue Italia / Nowness. The PRODUCT is the hero — no models, no portraits, no people holding it. Compose like a still life: refined editorial scene with luxurious materials and intentional props. Specify surface (raw linen drape, weathered marble, hand-thrown ceramic, charred oak, polished concrete, brushed brass tray, silk-lined velvet, tonal stone). Single sculptural light source. Real textural detail. Refined supporting props in the brand's color story. Tight or medium composition — product fills 50-70% of frame, off-center if dramatic. 100mm macro at f/4-5.6 OR 85mm at f/2.8.
+4. EDITORIAL: High-end luxury magazine cover product still-life. Think Kinfolk / Wallpaper* / Cereal / Vogue Italia / Nowness. The PRODUCT is the hero — no models, no portraits, no people holding it. Compose like a sculpture: refined editorial scene with luxurious materials. Specify surface (raw linen drape, weathered marble slab, hand-thrown ceramic platter, charred oak, polished concrete, brushed brass tray, silk-lined velvet box, tonal stone, fresh-cut botanicals, dripping wax). Single sculptural light source — hard sidelight, golden-hour rim, painterly window light, candlelit glow, color-gel cinematic. Real textural detail (paper grain, fabric weave, dewy moisture, condensation, smoke wisps). Apply at least one surreal device (e.g., D — product floats above the surface; F — top-down god view; C — product merges with one of the props). Tight composition, product fills 50-70% of frame. 100mm macro at f/4-5.6 OR 85mm at f/2.8.
 
-5. LIFESTYLE: Real environment matching how the product is actually used in the customer's real life. 1-2 people NOT looking at camera, mid-action candid moment. Cinematic or surreal lift on-brand (top-down god view, action-frozen physics, color-pop). On-brand wardrobe and styling. Natural or motivated cinematic light. Documentary feel but visually elevated. Product woven into the scene, not centerpiece. 35-50mm f/1.8.
+5. LIFESTYLE: Real environment matching how the product is actually used in the customer's real life — BUT lifted by a surreal device. NEVER a flat documentary stock-photo. Apply F (top-down god view of the moment), H (action-frozen physics — hair mid-toss, water mid-splash, fabric mid-fall), or B (contextual collision — formal-wear at a casual moment, traditional figure in modern sport). 1-2 people NOT looking at camera, mid-action candid. Cast a CHARACTER (G) — eccentric, specific, distinctive — never generic stock face. On-brand wardrobe. Natural or motivated cinematic light. Product woven into the scene, not centerpiece. 35-50mm f/1.8.
+
+SCROLL-STOP TEST — apply to every prompt before outputting:
+"If a stranger scrolling Instagram saw this image, would they STOP, or would they swipe past in 0.4 seconds?" If swipe-past, REWRITE with a stronger surreal device. The whole reason this brand is paying us is to get scrolls to STOP.
 
 PERMANENT RULES:
 1. Don't describe the product visually (when reference image attached).
@@ -142,7 +157,13 @@ export async function POST(req) {
 Brand context:
 ${ctx}
 
-Write 5 distinct SCENE prompts (no headlines, no ad copy overlays). They must be visually distinct from each other and on-brand for this audience.`;
+Write 5 distinct SCENE prompts. Hard requirements:
+- NO headlines, NO ad copy overlays. (Headlines are added later in a second pass.)
+- Each prompt MUST visibly use 1-2 surreal devices from A-H, named by letter at the start of the visual description.
+- Each prompt MUST pass the SCROLL-STOP TEST. If it could pass for generic Shopify / Adobe Stock / pharma-brand-website lifestyle photography, IT IS WRONG.
+- The 5 prompts must be visually distinct from each other (different camera, different environment, different lighting energy, different surreal device).
+- Cast CHARACTERS not stock faces (device G) when humans appear.
+- Bias toward LaChapelle / Highsnobiety / Vogue Italia energy, not "smiling person on white background."`;
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-5",
