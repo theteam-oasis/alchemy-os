@@ -927,12 +927,48 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
 
   // Available product images for the picker. Drawn from the active product's
   // product_image_urls; falls back to brand_intake.product_image_urls when a
-  // product hasn't seeded its own list yet.
-  const availableRefImages = (
-    activeProduct?.product_image_urls?.length
-      ? activeProduct.product_image_urls
-      : intake?.product_image_urls || []
-  ).filter(Boolean);
+  // product hasn't seeded its own list yet. Plus any user-uploaded images
+  // added during this session (so cycling through includes fresh uploads).
+  const [sessionUploads, setSessionUploads] = useState([]);
+  const availableRefImages = [
+    ...((activeProduct?.product_image_urls?.length
+        ? activeProduct.product_image_urls
+        : intake?.product_image_urls || []
+      ).filter(Boolean)),
+    ...sessionUploads,
+  ];
+
+  // Auto-populate: when the brand kit / product has product images and the
+  // team hasn't picked anything yet, default ALL headline rows to the first
+  // image. This makes the reference image opt-out (cycle / X) instead of
+  // opt-in. Triggers when availableRefImages first becomes non-empty.
+  useEffect(() => {
+    if (availableRefImages.length === 0) return;
+    const allEmpty = (headlineImageUrls || []).every((u) => !u);
+    if (allEmpty) {
+      setHeadlineImageUrls(headlines.map(() => availableRefImages[0]));
+    }
+    // We only want this to fire when the available list itself changes, not
+    // on every keystroke in the headlines.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableRefImages.join("|")]);
+
+  // Cycle a single row's reference image through the available list. dir = +1
+  // for next, -1 for prev. Wraps around at the ends.
+  const cycleRefImage = (rowIndex, dir) => {
+    const list = availableRefImages;
+    if (list.length === 0) return;
+    const current = headlineImageUrls?.[rowIndex] || "";
+    const idx = list.indexOf(current);
+    const nextIdx = idx < 0
+      ? (dir > 0 ? 0 : list.length - 1)
+      : (idx + dir + list.length) % list.length;
+    setHeadlineImageUrls((prev) => {
+      const next = [...(prev || ["", "", "", "", ""])];
+      next[rowIndex] = list[nextIdx];
+      return next;
+    });
+  };
 
   // Per-tile regenerate state. Each tile id maps to an in-flight AbortController
   // so a re-click cancels the previous attempt. Mirrors the proposal/create
@@ -1125,20 +1161,25 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
       {/* Headlines */}
       <div style={{ background: G.card, border: `1px solid ${G.cardBorder}`, boxShadow: G.cardShadow, borderRadius: 18, padding: 24, marginBottom: 16 }}>
         <p style={{ ...hd, fontSize: 22, color: G.text, marginBottom: 4 }}>Headlines <span style={{ ...mono, fontSize: 11, fontWeight: 500, color: G.textTer, marginLeft: 6 }}>optional</span></p>
-        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 16 }}>
+        <p style={{ fontSize: 12, color: G.textSec, marginBottom: 12 }}>
           Leave blank and we&apos;ll derive 5 from the brand kit. Anything you write here gives more control.
-          {availableRefImages.length > 0 && (
-            <> Optionally pick a product reference image per row — Gemini will use it as visual reference for that headline&apos;s ads.</>
-          )}
         </p>
+        {/* Column headers so the per-row reference image control is unmissable */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8, paddingLeft: 2 }}>
+          <p style={{ flex: 1, fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>Headline</p>
+          <p style={{ width: 100, textAlign: "center", fontSize: 10, color: G.textTer, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
+            Reference image
+          </p>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {headlines.map((h, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
+            <div key={i} style={{ display: "flex", gap: 12, alignItems: "stretch" }}>
               <input value={h}
                 onChange={(e) => setHeadlines((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))}
                 placeholder={`Headline ${i + 1}`}
                 style={{ ...inputBase, flex: 1 }} />
-              <RefImagePicker
+              <RefImageRow
+                rowIndex={i}
                 options={availableRefImages}
                 value={headlineImageUrls?.[i] || ""}
                 onChange={(url) => setHeadlineImageUrls((prev) => {
@@ -1146,6 +1187,8 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
                   next[i] = url;
                   return next;
                 })}
+                onUploaded={(url) => setSessionUploads((prev) => prev.includes(url) ? prev : [...prev, url])}
+                onCycle={(dir) => cycleRefImage(i, dir)}
                 clientId={client?.id}
               />
             </div>
@@ -1263,6 +1306,40 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
   );
 }
 
+// Per-headline reference image control. Big visible thumbnail with cycle
+// arrows on either side so the team can flip through the brand-kit photos
+// without opening a popover. Click the thumbnail to open the full picker
+// (paste URL / upload / explicit no-reference). Mirrors the proposal
+// `productRefUrl` UX but scoped per-row so each headline can use a
+// different reference photo.
+function RefImageRow({ rowIndex, options, value, onChange, onCycle, onUploaded, clientId }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+      {options.length > 1 && (
+        <button type="button" onClick={() => onCycle(-1)}
+          title="Previous reference image"
+          style={{ width: 22, height: 56, padding: 0, background: "transparent", border: "none", color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>
+          <ChevronLeft size={18} />
+        </button>
+      )}
+      <RefImagePicker
+        options={options}
+        value={value}
+        onChange={onChange}
+        onUploaded={onUploaded}
+        clientId={clientId}
+      />
+      {options.length > 1 && (
+        <button type="button" onClick={() => onCycle(1)}
+          title="Next reference image"
+          style={{ width: 22, height: 56, padding: 0, background: "transparent", border: "none", color: G.textSec, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6 }}>
+          <ChevronRight size={18} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Compact dropdown thumbnail picker for the per-headline product reference
 // image. Always renders so the team can attach a reference even when the
 // brand kit hasn't seeded any product images yet. The popover offers:
@@ -1270,7 +1347,7 @@ function StaticStudio({ client, activeProduct, intake, clientHubUrl, genState, s
 //   - a "no reference" choice (X)
 //   - paste-a-URL field
 //   - upload-a-file button (writes to Supabase brand-assets bucket)
-function RefImagePicker({ options, value, onChange, clientId }) {
+function RefImagePicker({ options, value, onChange, onUploaded, clientId }) {
   const [open, setOpen] = useState(false);
   const [pasteUrl, setPasteUrl] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -1290,6 +1367,7 @@ function RefImagePicker({ options, value, onChange, clientId }) {
       const url = await uploadProductImage(clientId, file);
       if (url) {
         onChange(url);
+        onUploaded?.(url);
         setOpen(false);
       }
     } finally {
@@ -1302,14 +1380,20 @@ function RefImagePicker({ options, value, onChange, clientId }) {
       <button onClick={() => setOpen((v) => !v)} type="button"
         title={value ? "Change reference image" : "Add a product reference image"}
         style={{
-          width: 40, height: 40, padding: 0, borderRadius: 10,
-          border: `1px solid ${G.border}`, background: value ? "#000" : G.bg,
-          cursor: "pointer", overflow: "hidden",
+          width: 56, height: 56, padding: 0, borderRadius: 12,
+          border: value ? `2px solid ${G.ink}` : `1px dashed ${G.border}`,
+          background: value ? "#000" : G.bg,
+          cursor: "pointer", overflow: "hidden", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
         {value
           ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <ImageIcon size={16} color={G.textTer} />
+          : (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              <ImageIcon size={16} color={G.textTer} />
+              <span style={{ fontSize: 9, color: G.textTer, fontWeight: 600, letterSpacing: "0.05em" }}>REF</span>
+            </div>
+          )
         }
       </button>
       {open && (
